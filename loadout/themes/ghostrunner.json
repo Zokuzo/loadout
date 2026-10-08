@@ -1,0 +1,84 @@
+{
+  "slug": "ghostrunner",
+  "name": "Ghostrunner",
+  "match": [
+    "ghostrunner"
+  ],
+  "isLight": false,
+  "terminal": {
+    "background": "#120608"
+  },
+  "avatar": {
+    "family": "cyber",
+    "variant": "red",
+    "skin": {
+      "primary": "#ff6158",
+      "bright": "#ffb9ad",
+      "body": "#6a1d22",
+      "shadow": "#34101a",
+      "dim": "#c0706a",
+      "cyan": "#5ef6ff",
+      "alert": "#ff1f47",
+      "value": "#ffd2cb",
+      "tint": "#1c080c",
+      "ink": "#0b0306"
+    }
+  },
+  "flow": {
+    "palette": {
+      "bg": "#120608",
+      "page": "#120608",
+      "fg": "#ffaca1",
+      "text2": "#cf8f88",
+      "text3": "#c3857f",
+      "text4": "#b77c77",
+      "border": "#6a2228",
+      "cardBorder": "#8a2c33",
+      "track": "#56212b",
+      "select": "#331017",
+      "cyan": "#2fb8c4",
+      "green": "#5ef6ff",
+      "yellow": "#ff6158",
+      "orange": "#ffd2cb",
+      "red": "#ff1f47",
+      "blue": "#8feaf2",
+      "violet": "#ff8a80",
+      "railDone": "#1f7f8a",
+      "railRun": "#8a2c33",
+      "tabActive": "#ff6158"
+    },
+    "steps": {
+      "header": { "style": "boxed", "prefix": "JOB // ", "color": "yellow", "frame": "cardBorder", "upper": true, "corners": "┌┐└╱" },
+      "layout": "list",
+      "meter": { "style": "bar", "fill": "▰", "empty": "▱" },
+      "states": {
+        "done": { "glyph": "✓", "color": "text4", "bold": false, "strike": true, "rail": "│", "railColor": "railDone", "edge": "▌", "edgeColor": "border" },
+        "active": { "glyph": "◈", "color": "green", "labelColor": "blue", "bold": true, "rail": "│", "railColor": "railDone", "edge": "█", "edgeColor": "green", "ground": "select" },
+        "pending": { "glyph": "◇", "color": "text2", "bold": false, "rail": "│", "railColor": "border", "edge": "▌", "edgeColor": "cardBorder" },
+        "blocked": { "glyph": "✕", "color": "red", "labelColor": "text3", "bold": false, "rail": "│", "railColor": "border", "edge": "▌", "edgeColor": "red" }
+      },
+      "cycle": { "glyphs": [ "◈", "◆" ], "ms": 600 },
+      "captions": { "title": "JOB", "active": "TRACKED", "blocked": "LOCKED", "optional": "OPTIONAL", "progress": "OBJECTIVE {i} OF {n} · {left} REMAINING", "idle": "NO OBJECTIVE TRACKED · {left} REMAINING" }
+    }
+  },
+  "spinner": {
+    "frames": ["╱", "─", "╲", "│"],
+    "ms": 120,
+    "verbs": [
+      "Wall-running",
+      "Slicing",
+      "Dashing",
+      "Sensory boosting",
+      "Deflecting",
+      "Grappling",
+      "Climbing Dharma Tower",
+      "Jacking into the Cybervoid",
+      "Blinking",
+      "Sharpening the katana",
+      "Hunting the Keymaster",
+      "Sliding",
+      "Tempesting",
+      "Listening to the Architect"
+    ]
+  }
+}

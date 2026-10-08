@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Theme pack",
+  "description": "One file per theme, themes/<slug>.json, read at run time by the Avatar mod (kirby-hud) and the Flow map mod (flow-map). Every colour is #rrggbb, lower or upper case. A colour 'token' is the name of a key of flow.palette. See ../THEMES.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["slug", "name", "isLight", "terminal", "avatar", "flow"],
+  "properties": {
+    "slug": {
+      "description": "The pack's key and its file name without .json. Compared with the active theme's name once normalised: trimmed, lower case, a leading 'custom:' removed, runs of spaces and underscores turned into '-'. 'default' is the pack of every theme no other pack serves.",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "name": { "description": "The theme's name for a person. Shown nowhere yet.", "type": "string", "minLength": 1, "maxLength": 40 },
+    "match": {
+      "description": "Other theme names this pack serves: the pack is taken when the normalised theme name CONTAINS one of these (already normalised) strings and no pack has that name as its slug. Between two packs that match, the longest matching string wins, then the slug first in alphabetical order.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" }
+    },
+    "isLight": { "description": "A light theme: the Avatar's stage is by day and its light-on-dark sprites are drawn darker.", "type": "boolean" },
+    "terminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["background"],
+      "properties": {
+        "background": {
+          "description": "The colour the Avatar mod gives the terminal (OSC 11) and its own pane. null: leave the terminal's own and paint no pane background.",
+          "anyOf": [{ "$ref": "#/$defs/color" }, { "type": "null" }]
+        }
+      }
+    },
+    "avatar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family"],
+      "properties": {
+        "family": { "description": "Which of the Avatar mod's families plays: its art, names and lines are code.", "enum": ["kirby", "clawd", "cyber", "initial-d"] },
+        "variant": { "description": "The cyber family's skin and world: 'red' (the Ghostrunner world: Jack, Hel, Mitra, Mara) or 'yellow' (the Edgerunners world: Lucy, David, Rebecca, Adam Smasher). The world and the session's model name the character (loadout/README.md).", "enum": ["red", "yellow"] },
+        "skin": { "$ref": "#/$defs/skin" }
+      },
+      "if": { "properties": { "family": { "const": "cyber" } } },
+      "then": { "required": ["variant"] },
+      "else": { "not": { "anyOf": [{ "required": ["variant"] }, { "required": ["skin"] }] } }
+    },
+    "flow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["palette", "steps"],
+      "properties": {
+        "palette": { "$ref": "#/$defs/palette" },
+        "steps": { "$ref": "#/$defs/steps" }
+      }
+    },
+    "spinner": {
+      "description": "The line that animates while Claude works: one of 'verbs' in place of Claude Code's own word (the same one for a whole turn), and before it an icon, the 'frames' in turn, each for 'ms'. Absent: Claude Code's own line.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frames", "ms", "verbs"],
+      "properties": {
+        "frames": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "#/$defs/cell" } },
+        "ms": { "type": "integer", "minimum": 100, "maximum": 2000 },
+        "verbs": { "type": "array", "minItems": 1, "maxItems": 40, "items": { "type": "string", "minLength": 1, "maxLength": 32 } }
+      }
+    }
+  },
+  "$defs": {
+    "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+    "token": {
+      "description": "The name of a flow.palette key.",
+      "enum": ["bg", "page", "fg", "text2", "text3", "text4", "border", "cardBorder", "track", "select", "cyan", "green", "yellow", "orange", "red", "blue", "violet", "railDone", "railRun", "tabActive"]
+    },
+    "cell": { "description": "One character that takes one terminal cell.", "type": "string", "minLength": 1, "maxLength": 1 },
+    "caption": { "type": "string", "maxLength": 16 },
+    "template": {
+      "description": "A line of words with numbers set in: {i} the active step's place, {n} how many steps, {done} how many are done, {left} how many are not. What stands before the first ' · ' is drawn strong, the rest dim.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60
+    },
+    "skin": {
+      "description": "The cyber family's text HUD colours (hud.ts Skin). Absent: the mod's own skin for the variant. Present: all ten.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "bright", "body", "shadow", "dim", "cyan", "alert", "value", "tint", "ink"],
+      "properties": {
+        "primary": { "$ref": "#/$defs/color", "description": "The interface's one colour: frames, titles, bars." },
+        "bright": { "$ref": "#/$defs/color", "description": "Its lit edge." },
+        "body": { "$ref": "#/$defs/color", "description": "The mask's body." },
+        "shadow": { "$ref": "#/$defs/color", "description": "The mask's shadow." },
+        "dim": { "$ref": "#/$defs/color", "description": "Captions and thin lines." },
+        "cyan": { "$ref": "#/$defs/color", "description": "What is live or selected." },
+        "alert": { "$ref": "#/$defs/color", "description": "Alarms." },
+        "value": { "$ref": "#/$defs/color", "description": "A count, money, what went well." },
+        "tint": { "$ref": "#/$defs/color", "description": "Background of a recess." },
+        "ink": { "$ref": "#/$defs/color", "description": "Text on a filled bar." }
+      }
+    },
+    "palette": {
+      "description": "Every colour the Flow map pane draws (palette.ts Palette). bg and page equal terminal.background where one is set.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bg", "page", "fg", "text2", "text3", "text4", "border", "cardBorder", "track", "select", "cyan", "green", "yellow", "orange", "red", "blue", "violet", "railDone", "railRun", "tabActive"],
+      "properties": {
+        "bg": { "$ref": "#/$defs/color", "description": "The pane's background." },
+        "page": { "$ref": "#/$defs/color", "description": "The ground around the pane (the handoff's page)." },
+        "fg": { "$ref": "#/$defs/color", "description": "Main text: names, figures, the percent." },
+        "text2": { "$ref": "#/$defs/color", "description": "Secondary text: done phases and steps, tool targets." },
+        "text3": { "$ref": "#/$defs/color", "description": "Captions: ETA, ELAPSED, counts." },
+        "text4": { "$ref": "#/$defs/color", "description": "The faintest text: pending items, hints." },
+        "border": { "$ref": "#/$defs/color", "description": "Boxes, and the rail under what has not started." },
+        "cardBorder": { "$ref": "#/$defs/color", "description": "A running agent's card." },
+        "track": { "$ref": "#/$defs/color", "description": "The empty part of a bar; the footer rule." },
+        "select": { "$ref": "#/$defs/color", "description": "Background of the selected agent row." },
+        "cyan": { "$ref": "#/$defs/color", "description": "Box titles; web tools; the start of the progress gradient." },
+        "green": { "$ref": "#/$defs/color", "description": "Done and finished marks; the end of the progress gradient." },
+        "yellow": { "$ref": "#/$defs/color", "description": "What runs: the active phase and step, the selected card, edit tools." },
+        "orange": { "$ref": "#/$defs/color", "description": "Over the estimate; wayfinder task tickets." },
+        "red": { "$ref": "#/$defs/color", "description": "Failed, stopped, blocked." },
+        "blue": { "$ref": "#/$defs/color", "description": "Tokens out, read tools, steering." },
+        "violet": { "$ref": "#/$defs/color", "description": "Shell tools; wayfinder grilling tickets." },
+        "railDone": { "$ref": "#/$defs/color", "description": "The rail under a done phase or step." },
+        "railRun": { "$ref": "#/$defs/color", "description": "The rail under the running one." },
+        "tabActive": { "$ref": "#/$defs/color", "description": "The active tab." }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["glyph", "color", "bold", "rail", "railColor"],
+      "properties": {
+        "glyph": { "$ref": "#/$defs/cell", "description": "The node before the label." },
+        "color": { "$ref": "#/$defs/token", "description": "The node's and the label's colour." },
+        "bold": { "type": "boolean" },
+        "rail": { "$ref": "#/$defs/cell", "description": "The rail character under this node, down to the next." },
+        "railColor": { "$ref": "#/$defs/token" },
+        "labelColor": { "$ref": "#/$defs/token", "description": "The label's colour when it is not the node's. Absent: 'color'." },
+        "strike": { "type": "boolean", "description": "The label struck through (a completed objective). Absent: false." },
+        "edge": { "$ref": "#/$defs/cell", "description": "List layout: the filled left edge of the row, and what the wayfinder map's tickets of this state stand behind. Absent: 'rail'." },
+        "edgeColor": { "$ref": "#/$defs/token", "description": "Absent: 'railColor'." },
+        "ground": { "$ref": "#/$defs/token", "description": "The background of the whole row of a step in this state: 'select' to band the active step. Absent: none." }
+      }
+    },
+    "steps": {
+      "description": "How the Steps list and the wayfinder map are drawn. In the wayfinder map: done = resolved tickets, active = 'here' (claimed), pending = 'next' (frontier), blocked = blocked.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["header", "states", "captions"],
+      "properties": {
+        "header": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["style", "prefix", "color", "frame"],
+          "properties": {
+            "style": {
+              "description": "boxed: a rounded box, the title set into its top border, the count at its right. plain: one title line, no frame. banner: one full-width title line in the pane's bg colour on a ground of 'color'. bracketed: the title between square brackets on a rule of 'frame', no sides. The body rows (step i of n, the meter) follow in every style.",
+              "enum": ["plain", "boxed", "banner", "bracketed"]
+            },
+            "prefix": { "$ref": "#/$defs/caption", "description": "Written before the title, as given (bring your own trailing space): 'QUEST // '. '' for none." },
+            "color": { "$ref": "#/$defs/token", "description": "The title's colour." },
+            "frame": { "$ref": "#/$defs/token", "description": "The box's, the brackets' or the rule's colour." },
+            "upper": { "type": "boolean", "description": "The title, and the wayfinder map's group names (here, next, blocked), in upper case. Absent: false." },
+            "corners": { "description": "boxed only: the box's four corners, top left, top right, bottom left, bottom right, one cell each. Absent: '╭╮╰╯'. '┌┐└╱' is a square frame with a cut corner.", "type": "string", "minLength": 4, "maxLength": 4 }
+          }
+        },
+        "layout": {
+          "description": "path: each step is a node and its label, with a rail row down to the next (a map of stages). list: one row per step, no row between: a filled left edge ('edge'), the node, the label (a list of objectives). Absent: path.",
+          "enum": ["path", "list"]
+        },
+        "meter": {
+          "description": "The progress row under the header. bar: 'fill' cells coloured from cyan to green, then 'empty' cells in the track colour, then the percent. pips: one mark per step, each its state's glyph and colour (the bar instead when they do not fit). Absent: a bar of ■.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["style", "fill", "empty"],
+          "properties": {
+            "style": { "enum": ["bar", "pips"] },
+            "fill": { "$ref": "#/$defs/cell" },
+            "empty": { "$ref": "#/$defs/cell" }
+          }
+        },
+        "states": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["done", "active", "pending", "blocked"],
+          "properties": {
+            "done": { "$ref": "#/$defs/state" },
+            "active": { "$ref": "#/$defs/state" },
+            "pending": { "$ref": "#/$defs/state" },
+            "blocked": { "$ref": "#/$defs/state" }
+          }
+        },
+        "cycle": {
+          "description": "The active node animated: these glyphs in turn, each for 'ms', in place of states.active.glyph; none may be the glyph of another state. Absent: the node is still.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["glyphs", "ms"],
+          "properties": {
+            "glyphs": { "type": "array", "minItems": 2, "maxItems": 8, "items": { "$ref": "#/$defs/cell" } },
+            "ms": { "type": "integer", "minimum": 100, "maximum": 2000 }
+          }
+        },
+        "captions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["title", "active", "blocked"],
+          "properties": {
+            "title": { "$ref": "#/$defs/caption", "description": "The header's title when the plan has none." },
+            "active": { "$ref": "#/$defs/caption", "description": "A word at the right of the active step, before its i/n: 'OBJECTIVE'. '' for none." },
+            "blocked": { "$ref": "#/$defs/caption", "description": "The word at the right of a blocked step." },
+            "optional": { "$ref": "#/$defs/caption", "description": "The tag, in square brackets, after a step whose label opens with 'optional' (that word is then left out of the label). Absent or '': no tag, the label as given." },
+            "progress": { "$ref": "#/$defs/template", "description": "The line under the title while a step is active. Absent: 'step {i} of {n} · {done} of {n} done'." },
+            "idle": { "$ref": "#/$defs/template", "description": "The same line with no step active. Absent: 'no step active · {done} of {n} done'." }
+          }
+        }
+      }
+    }
+  }
+}

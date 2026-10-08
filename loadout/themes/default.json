@@ -1,0 +1,66 @@
+{
+  "slug": "default",
+  "name": "Default",
+  "isLight": false,
+  "terminal": {
+    "background": null
+  },
+  "avatar": {
+    "family": "clawd"
+  },
+  "flow": {
+    "palette": {
+      "bg": "#262626",
+      "page": "#1c1c1c",
+      "fg": "#e4e4e4",
+      "text2": "#9e9e9e",
+      "text3": "#999999",
+      "text4": "#949494",
+      "border": "#4e4e4e",
+      "cardBorder": "#5a5a5a",
+      "track": "#3a3a3a",
+      "select": "#303030",
+      "cyan": "#5fd7ff",
+      "green": "#5fd75f",
+      "yellow": "#ffd75f",
+      "orange": "#ffaf5f",
+      "red": "#ff5f5f",
+      "blue": "#5fafff",
+      "violet": "#af87ff",
+      "railDone": "#5f875f",
+      "railRun": "#8a7a45",
+      "tabActive": "#d3c7ab"
+    },
+    "steps": {
+      "header": { "style": "boxed", "prefix": "", "color": "cyan", "frame": "border" },
+      "layout": "path",
+      "meter": { "style": "bar", "fill": "■", "empty": "■" },
+      "states": {
+        "done": { "glyph": "●", "color": "railDone", "labelColor": "text2", "bold": false, "rail": "│", "railColor": "railDone" },
+        "active": { "glyph": "◐", "color": "yellow", "labelColor": "fg", "bold": true, "rail": "┆", "railColor": "railRun", "ground": "select" },
+        "pending": { "glyph": "○", "color": "text4", "bold": false, "rail": "┆", "railColor": "border" },
+        "blocked": { "glyph": "■", "color": "red", "bold": true, "rail": "┆", "railColor": "border" }
+      },
+      "cycle": { "glyphs": [ "◐", "◓", "◑", "◒" ], "ms": 450 },
+      "captions": { "title": "steps", "active": "", "blocked": "blocked", "progress": "step {i} of {n} · {left} left", "idle": "no step active · {left} left" }
+    }
+  },
+  "spinner": {
+    "frames": ["·", "∘", "○", "∘"],
+    "ms": 250,
+    "verbs": [
+      "Scuttling",
+      "Pinching",
+      "Clacking claws",
+      "Sidestepping",
+      "Molting",
+      "Tide-pooling",
+      "Snipping",
+      "Burrowing",
+      "Shell-polishing",
+      "Crab-walking",
+      "Bubbling",
+      "Combing the beach"
+    ]
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "slug": "kirby",
+  "name": "Kirby",
+  "match": [
+    "kirby"
+  ],
+  "isLight": false,
+  "terminal": {
+    "background": "#1b2414"
+  },
+  "avatar": {
+    "family": "kirby"
+  },
+  "flow": {
+    "palette": {
+      "bg": "#1b2414",
+      "page": "#1b2414",
+      "fg": "#f2f5e6",
+      "text2": "#aebb9f",
+      "text3": "#a3b196",
+      "text4": "#98a68c",
+      "border": "#4c5e3a",
+      "cardBorder": "#627848",
+      "track": "#425534",
+      "select": "#2e3c22",
+      "cyan": "#63bbff",
+      "green": "#9be564",
+      "yellow": "#ffd23c",
+      "orange": "#ffaa4d",
+      "red": "#ff6f61",
+      "blue": "#7fdcf0",
+      "violet": "#c5befe",
+      "railDone": "#6a9a48",
+      "railRun": "#8f8232",
+      "tabActive": "#ffd23c"
+    },
+    "steps": {
+      "header": { "style": "banner", "prefix": "★ ", "color": "yellow", "frame": "border", "upper": true },
+      "layout": "path",
+      "meter": { "style": "pips", "fill": "■", "empty": "■" },
+      "states": {
+        "done": { "glyph": "★", "color": "yellow", "labelColor": "text2", "bold": false, "rail": "║", "railColor": "railDone" },
+        "active": { "glyph": "✦", "color": "yellow", "labelColor": "fg", "bold": true, "rail": "┊", "railColor": "railRun", "ground": "select" },
+        "pending": { "glyph": "○", "color": "blue", "labelColor": "text4", "bold": false, "rail": "┊", "railColor": "border" },
+        "blocked": { "glyph": "✕", "color": "red", "bold": true, "rail": "┊", "railColor": "border" }
+      },
+      "cycle": { "glyphs": [ "✦", "✧" ], "ms": 450 },
+      "captions": { "title": "dream land", "active": "<('.')>", "blocked": "locked", "progress": "stage {i} of {n} · {left} to go", "idle": "{done} of {n} stages cleared" }
+    }
+  },
+  "spinner": {
+    "frames": ["✧", "✦", "★", "✦"],
+    "ms": 220,
+    "verbs": [
+      "Inhaling",
+      "Floating",
+      "Copying an ability",
+      "Riding the Warp Star",
+      "Puffing up",
+      "Munching a Maxim Tomato",
+      "Star-spitting",
+      "Swallowing",
+      "Poyo-ing",
+      "Hovering over Green Greens",
+      "Dashing through Dream Land",
+      "Sword-slashing",
+      "Chasing King Dedede",
+      "Sucking it all in"
+    ]
+  }
+}

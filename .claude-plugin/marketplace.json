@@ -1,0 +1,14 @@
+{
+  "name": "zokuzo",
+  "owner": {
+    "name": "Zokuzo"
+  },
+  "description": "Loadout: themes, avatar, flow map and conversation frames for Claude Code",
+  "plugins": [
+    {
+      "name": "loadout",
+      "source": "./loadout",
+      "description": "One theme picks the whole kit: terminal colours and background, the Avatar pane, the Flow map, the frames around conversation rows and the working line. /loadout switches it."
+    }
+  ]
+}

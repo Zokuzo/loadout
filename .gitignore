@@ -1,0 +1,8 @@
+# Local backups and anything personal
+_backup-before-loadout/
+# Character footage: other people's work, never committed (loadout/README.md, "The pictures")
+loadout/assets/
+# Laid by Claude Code when the plugin loads: the engine's types, and the MCP tools of whoever loaded it
+loadout/.claude-plugin/types/
+__pycache__/
+node_modules/

@@ -1,0 +1,84 @@
+{
+  "slug": "cyberpunk-edgerunners",
+  "name": "Cyberpunk Edgerunners",
+  "match": [
+    "edgerunners"
+  ],
+  "isLight": false,
+  "terminal": {
+    "background": "#0b0b06"
+  },
+  "avatar": {
+    "family": "cyber",
+    "variant": "yellow",
+    "skin": {
+      "primary": "#fcee0a",
+      "bright": "#fffbb5",
+      "body": "#7d7605",
+      "shadow": "#3a3702",
+      "dim": "#b0a707",
+      "cyan": "#5ef6ff",
+      "alert": "#ff3d3d",
+      "value": "#3aa0ff",
+      "tint": "#121100",
+      "ink": "#060600"
+    }
+  },
+  "flow": {
+    "palette": {
+      "bg": "#0b0b06",
+      "page": "#0b0b06",
+      "fg": "#efe8b0",
+      "text2": "#b9b18a",
+      "text3": "#ada581",
+      "text4": "#a19a7a",
+      "border": "#4f4a24",
+      "cardBorder": "#665f2e",
+      "track": "#403d20",
+      "select": "#262410",
+      "cyan": "#5ef6ff",
+      "green": "#3ddc84",
+      "yellow": "#fcee0a",
+      "orange": "#ff9a04",
+      "red": "#ff5a4a",
+      "blue": "#39aef0",
+      "violet": "#bb78ff",
+      "railDone": "#2a8a55",
+      "railRun": "#8f860a",
+      "tabActive": "#fcee0a"
+    },
+    "steps": {
+      "header": { "style": "plain", "prefix": "◆ ", "color": "yellow", "frame": "border", "upper": true },
+      "layout": "list",
+      "meter": { "style": "bar", "fill": "━", "empty": "─" },
+      "states": {
+        "done": { "glyph": "✓", "color": "text4", "bold": false, "strike": true, "rail": "│", "railColor": "railDone", "edge": " ", "edgeColor": "border" },
+        "active": { "glyph": "◆", "color": "cyan", "bold": true, "rail": "│", "railColor": "railRun", "edge": "▸", "edgeColor": "yellow" },
+        "pending": { "glyph": "◇", "color": "text2", "bold": false, "rail": "│", "railColor": "border", "edge": " ", "edgeColor": "border" },
+        "blocked": { "glyph": "✕", "color": "red", "labelColor": "text3", "bold": false, "rail": "│", "railColor": "border", "edge": " ", "edgeColor": "border" }
+      },
+      "cycle": { "glyphs": [ "◆", "◈" ], "ms": 600 },
+      "captions": { "title": "CONNECTION", "active": "CURRENT", "blocked": "NO SIGNAL", "optional": "OPTIONAL", "progress": "OBJECTIVE {i}/{n} · {left} REMAINING", "idle": "STANDBY · {left} REMAINING" }
+    }
+  },
+  "spinner": {
+    "frames": ["◇", "◈", "◆", "◈"],
+    "ms": 200,
+    "verbs": [
+      "Jacking in",
+      "Netrunning",
+      "Chroming up",
+      "Breaching ICE",
+      "Running the edge",
+      "Quickhacking",
+      "Overclocking the Sandevistan",
+      "Slotting a shard",
+      "Dodging MaxTac",
+      "Burning chrome",
+      "Going to the moon",
+      "Flatlining daemons",
+      "Cruising Night City",
+      "Zeroing a corpo"
+    ]
+  }
+}

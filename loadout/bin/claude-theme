@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# claude-theme <theme> [claude arguments...]: the earlier name of `loadout`, kept for the lines already in use.
+exec "$(dirname "$0")/loadout" "$@"

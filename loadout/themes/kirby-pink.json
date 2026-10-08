@@ -1,0 +1,71 @@
+{
+  "slug": "kirby-pink",
+  "name": "Kirby Pink",
+  "match": [
+    "kirby-pink"
+  ],
+  "isLight": false,
+  "terminal": {
+    "background": "#2b1724"
+  },
+  "avatar": {
+    "family": "kirby"
+  },
+  "flow": {
+    "palette": {
+      "bg": "#2b1724",
+      "page": "#2b1724",
+      "fg": "#fbe8f0",
+      "text2": "#dcc3d0",
+      "text3": "#c4a8b7",
+      "text4": "#ad8fa0",
+      "border": "#6b4159",
+      "cardBorder": "#9c5f82",
+      "track": "#5a3350",
+      "select": "#4a2a3e",
+      "cyan": "#7fd8f0",
+      "green": "#7fe0a8",
+      "yellow": "#ffd75e",
+      "orange": "#ffa05c",
+      "red": "#ff6b7d",
+      "blue": "#8ccfff",
+      "violet": "#cbb4ff",
+      "railDone": "#4f9a72",
+      "railRun": "#b8963c",
+      "tabActive": "#ff9ec4"
+    },
+    "steps": {
+      "header": { "style": "banner", "prefix": "♥ ", "color": "tabActive", "frame": "border", "upper": true },
+      "layout": "path",
+      "meter": { "style": "pips", "fill": "■", "empty": "■" },
+      "states": {
+        "done": { "glyph": "★", "color": "yellow", "labelColor": "text2", "bold": false, "rail": "║", "railColor": "railDone" },
+        "active": { "glyph": "●", "color": "tabActive", "labelColor": "fg", "bold": true, "rail": "┊", "railColor": "railRun", "ground": "select" },
+        "pending": { "glyph": "○", "color": "violet", "labelColor": "text4", "bold": false, "rail": "┊", "railColor": "border" },
+        "blocked": { "glyph": "✕", "color": "red", "bold": true, "rail": "┊", "railColor": "border" }
+      },
+      "cycle": { "glyphs": [ "●", "◉" ], "ms": 600 },
+      "captions": { "title": "dream land", "active": "<('.')>", "blocked": "locked", "progress": "stage {i} of {n} · {left} to go", "idle": "{done} of {n} stages cleared" }
+    }
+  },
+  "spinner": {
+    "frames": ["♡", "♥"],
+    "ms": 600,
+    "verbs": [
+      "Daydreaming",
+      "Stargazing",
+      "Napping on a cloud",
+      "Blushing",
+      "Hugging a Waddle Dee",
+      "Humming Green Greens",
+      "Floating at dusk",
+      "Snacking on strawberry cake",
+      "Twirling",
+      "Poyo-ing softly",
+      "Counting warp stars",
+      "Puffing up",
+      "Inhaling gently",
+      "Drifting over Dream Land"
+    ]
+  }
+}

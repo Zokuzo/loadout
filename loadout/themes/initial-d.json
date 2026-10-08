@@ -1,0 +1,73 @@
+{
+  "slug": "initial-d",
+  "name": "Initial D",
+  "match": [
+    "initial-d"
+  ],
+  "isLight": false,
+  "terminal": {
+    "background": "#0e1117"
+  },
+  "avatar": {
+    "family": "initial-d"
+  },
+  "flow": {
+    "palette": {
+      "bg": "#0e1117",
+      "page": "#0e1117",
+      "fg": "#eef1f5",
+      "text2": "#b4bcc8",
+      "text3": "#a3acb9",
+      "text4": "#939cab",
+      "border": "#333c4a",
+      "cardBorder": "#56627a",
+      "track": "#262d38",
+      "select": "#1b2230",
+      "cyan": "#7fb4e6",
+      "green": "#6fd3a0",
+      "yellow": "#ffd23f",
+      "orange": "#ff9f43",
+      "red": "#ff5a52",
+      "blue": "#8fc1f0",
+      "violet": "#b9a4f0",
+      "railDone": "#4f7d92",
+      "railRun": "#8f7a22",
+      "tabActive": "#ffd23f"
+    },
+    "steps": {
+      "header": { "style": "bracketed", "prefix": "STAGE // ", "color": "yellow", "frame": "cardBorder", "upper": true },
+      "layout": "path",
+      "meter": { "style": "bar", "fill": "━", "empty": "┄" },
+      "states": {
+        "done": { "glyph": "⚑", "color": "cyan", "labelColor": "text2", "bold": false, "rail": "┃", "railColor": "railDone" },
+        "active": { "glyph": "◴", "color": "yellow", "labelColor": "fg", "bold": true, "rail": "┇", "railColor": "railRun", "ground": "select" },
+        "pending": { "glyph": "○", "color": "text4", "bold": false, "rail": "┆", "railColor": "border" },
+        "blocked": { "glyph": "✕", "color": "red", "bold": true, "rail": "┆", "railColor": "border" }
+      },
+      "cycle": { "glyphs": [ "◴", "◷", "◶", "◵" ], "ms": 300 },
+      "captions": { "title": "downhill", "active": "drifting", "blocked": "road closed", "optional": "side road", "progress": "corner {i} of {n} · {left} to go", "idle": "engine idling · {left} to go" }
+    }
+  },
+  "spinner": {
+    "frames": ["◴", "◷", "◶", "◵"],
+    "ms": 120,
+    "verbs": [
+      "Drifting",
+      "Running the gutter",
+      "Delivering tofu",
+      "Not spilling the cup of water",
+      "Heel-and-toeing",
+      "Clipping the hairpin",
+      "Charging downhill",
+      "Feathering the throttle",
+      "Counter-steering",
+      "Popping the headlights",
+      "Chasing tail lights",
+      "Hugging the guard rail",
+      "Braking late",
+      "Rev-matching",
+      "Cueing the eurobeat",
+      "Warming the tyres"
+    ]
+  }
+}

@@ -1,0 +1,229 @@
+#!/usr/bin/env bash
+# loadout [<theme>] [claude arguments...]
+#
+# Starts Claude Code with a theme of THIS terminal's own that can be switched while it runs.
+#
+# A running session keeps the theme it started with, but it watches that theme's file. So this
+# terminal gets a "live" theme file of its own, ~/.claude/themes/loadout-<tag>.json (<tag> is its
+# tty: pts3), and starts on it through `--settings`, which outranks ~/.claude/settings.json for that
+# one session. In the session, `/loadout <theme> here` rewrites that file (this terminal repaints,
+# the others keep theirs) and `/loadout <theme>` rewrites every terminal's.
+#
+#   loadout kirby                    a new session on the Kirby theme
+#   loadout edge                     a name is forgiving: "Cyberpunk Edgerunners", edgerunners, edge, cyberpunk
+#   loadout soft                     an old name still works: cyberpunk-soft and soft are cyberpunk-edgerunners,
+#                                    cyberpunk-classic and classic are ghostrunner
+#   loadout dark --resume <id>       an earlier conversation, on the built-in dark theme
+#   loadout                          this terminal's theme as it was left (the global look the first time)
+#   loadout --resume <id>            the same, with claude's own arguments (a first word with a dash is claude's)
+#   loadout --list                   lists the themes
+#
+# A live file is a copy of the theme under the name "Loadout: <theme>" (what /theme lists it as).
+# Before starting, the files of terminals that are gone (loadout-<tag>.json with no such tty) are
+# removed; the shared loadout.json never is. `auto` follows the terminal's ground and can be no file:
+# it is pinned as before, and so is any theme where there is no tty to name a file after.
+# To follow the global theme again, start without the launcher: `claude --resume <id>`.
+#
+# For the check (tests/launcher.sh): LOADOUT_TAG names the terminal in place of its tty (empty: no
+# tty), LOADOUT_DEV the folder its devices are looked for in.
+set -euo pipefail
+
+dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/themes"
+settings="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+dev="${LOADOUT_DEV:-/dev}"
+built_in="auto dark light light-daltonized dark-daltonized light-ansi dark-ansi"
+
+customs() {
+  local file
+  for file in "$dir"/*.json; do
+    # Only a name the settings can spell ("custom:<lower case, digits, dashes>"): any other file is no
+    # theme here, and its name never reaches the --settings JSON. A live file is no theme to pick either.
+    case "$(basename "$file" .json)" in
+      '' | *[!a-z0-9-]* | loadout | loadout-*) ;;
+      *) if [ -f "$file" ]; then basename "$file" .json; fi ;;
+    esac
+  done
+}
+
+list() {
+  echo "built-in: $built_in"
+  echo "custom:   $(customs | tr '\n' ' ')"
+}
+
+is_built_in() { printf ' %s ' "$built_in" | grep -q " $1 "; }
+
+# This terminal's tag: its controlling tty without the slash (pts/3 is pts3), empty where there is none.
+tag_of() {
+  local name
+  if [ -n "${LOADOUT_TAG+set}" ]; then
+    name=$LOADOUT_TAG
+  else
+    name=$(ps -o tty= -p $$ 2>/dev/null | tr -d ' /' | tr '[:upper:]' '[:lower:]' || true)
+  fi
+  case "$name" in
+    '' | *[!a-z0-9-]*) echo "" ;;
+    *) echo "$name" ;;
+  esac
+}
+
+# The device a tag was taken from, empty for a tag that is no tty's name (such a file is never removed).
+device_of() {
+  case "$1" in
+    pts*[!0-9]* | pts) echo "" ;;
+    pts*) echo "$dev/pts/${1#pts}" ;;
+    tty*[!a-z0-9]*) echo "" ;;
+    tty?*) echo "$dev/$1" ;;
+    *) echo "" ;;
+  esac
+}
+
+# The live files of terminals that are gone. Never the shared loadout.json, never this terminal's.
+sweep() {
+  local file gone
+  for file in "$dir"/loadout-*.json; do
+    [ -f "$file" ] || continue
+    gone=$(device_of "$(basename "$file" .json | sed 's/^loadout-//')")
+    if [ -n "$gone" ] && [ ! -e "$gone" ]; then rm -f -- "$file"; fi
+  done
+}
+
+# A live file's text on stdout: for a built-in theme (no file given) its own base and nothing
+# overridden; for a theme file its base and overrides; under the name "Loadout: <slug>".
+live_text() {
+  python3 -I -c '
+import json, sys
+slug, path = sys.argv[1], sys.argv[2]
+out = {"name": "Loadout: " + slug}
+if path == "":
+    out["base"] = slug
+    raw = {}
+else:
+    with open(path, encoding="utf-8") as file:
+        raw = json.load(file)
+    if not isinstance(raw, dict):
+        sys.exit(1)
+    if "base" in raw:
+        out["base"] = raw["base"]
+out["overrides"] = raw["overrides"] if isinstance(raw.get("overrides"), dict) else {}
+print(json.dumps(out, indent=2, ensure_ascii=False))
+' "$1" "$2"
+}
+
+# Writes stdin to a live file, atomically (a temporary file beside it, then a rename: the session's
+# watcher never reads half a file), and only where it says something else.
+put() {
+  local temp="$dir/.$1.$$.tmp"
+  cat > "$temp"
+  if [ -s "$temp" ] && ! cmp -s "$temp" "$dir/$1.json"; then mv -f -- "$temp" "$dir/$1.json"; else rm -f -- "$temp"; fi
+}
+
+# A theme setting ("dark", "custom:kirby") made this terminal's live file. Fails where its file is no theme.
+make_live() {
+  local slug=${1#custom:} text
+  case "$1" in
+    custom:*) text=$(live_text "$slug" "$dir/$slug.json") || return 1 ;;
+    *) text=$(live_text "$slug" "") || return 1 ;;
+  esac
+  printf '%s\n' "$text" | put "loadout-$tag"
+}
+
+# The "theme" of the user's settings file, empty where there is none to read.
+global_theme() {
+  python3 -I -c '
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as file:
+        theme = json.load(file).get("theme", "")
+except (OSError, ValueError, AttributeError):
+    theme = ""
+print(theme if isinstance(theme, str) else "")
+' "$settings"
+}
+
+case "${1:-}" in
+  --list) list; exit 0 ;;
+  --help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; list; exit 0 ;;
+esac
+
+tag=$(tag_of)
+mkdir -p "$dir"
+sweep
+
+# No theme named (no word, or claude's own arguments): this terminal's live file as it is. Where it
+# has none yet, the global look: a copy of the shared live file, or of the global theme.
+case "${1:-}" in
+  '' | -*)
+    if [ -z "$tag" ]; then exec claude "$@"; fi
+    if [ ! -f "$dir/loadout-$tag.json" ]; then
+      now=$(global_theme)
+      case "$now" in
+        custom:loadout) if [ -f "$dir/loadout.json" ]; then put "loadout-$tag" < "$dir/loadout.json"; fi ;;
+        *[!a-z0-9:-]* | custom:loadout-* | custom: | auto | '') ;;
+        custom:*) if [ -f "$dir/${now#custom:}.json" ]; then make_live "$now" || true; fi ;;
+        *) if is_built_in "$now"; then make_live "$now"; fi ;;
+      esac
+    fi
+    # (Nothing to copy: `auto`, no theme set, or one this launcher cannot name. It starts as claude would.)
+    if [ ! -f "$dir/loadout-$tag.json" ]; then exec claude "$@"; fi
+    exec claude --settings "{\"theme\":\"custom:loadout-$tag\"}" "$@"
+    ;;
+esac
+
+# The name as the settings spell it: lower case, `custom:` dropped, spaces and underscores as dashes.
+name=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -e 's/^[ ]*//' -e 's/[ ]*$//')
+shift
+only_custom=""
+case "$name" in custom:*) only_custom=1 ;; esac
+slug=$(printf '%s' "$name" | sed -e 's/^custom://' -e 's/[ _][ _]*/-/g')
+case "$slug" in
+  '' | *[!a-z0-9-]*) echo "loadout: not a theme name" >&2; list >&2; exit 2 ;;
+esac
+
+is_source() { case "$1" in loadout | loadout-*) return 1 ;; *) [ -f "$dir/$1.json" ] ;; esac; }
+
+# A slug as its setting: a built-in name, else a file of the themes folder (asked as custom:, the file alone).
+setting_of() {
+  if [ -z "$only_custom" ] && is_built_in "$1"; then
+    echo "$1"
+  elif is_source "$1"; then
+    echo "custom:$1"
+  fi
+}
+
+theme=$(setting_of "$slug")
+if [ -z "$theme" ]; then
+  # No theme of that exact name: the theme an old name now is, where its file is there.
+  case "$slug" in
+    cyberpunk-soft | soft) renamed=cyberpunk-edgerunners ;;
+    cyberpunk-classic | classic) renamed=ghostrunner ;;
+    *) renamed="" ;;
+  esac
+  if [ -n "$renamed" ] && [ -f "$dir/$renamed.json" ]; then theme="custom:$renamed"; fi
+fi
+if [ -z "$theme" ]; then
+  # Still none: the one theme whose name, or a word of it, begins with it.
+  hits=""
+  for one in $(customs) $([ -n "$only_custom" ] || echo "$built_in"); do
+    case "-$one" in *"-$slug"*) case " $hits " in *" $one "*) ;; *) hits="$hits $one" ;; esac ;; esac
+  done
+  set -- $hits -- "$@"
+  count=0
+  while [ "$1" != "--" ]; do count=$((count + 1)); first=${first:-$1}; shift; done
+  shift
+  if [ "$count" -eq 0 ]; then
+    echo "loadout: no theme \"$slug\"" >&2; list >&2; exit 2
+  elif [ "$count" -gt 1 ]; then
+    echo "loadout: \"$slug\" fits$hits: say which" >&2; exit 2
+  fi
+  theme=$(setting_of "$first")
+fi
+# Whatever found it, the name is checked again before it is written into JSON or a path.
+case "$theme" in
+  '' | *[!a-z0-9:-]*) echo "loadout: no theme \"$slug\"" >&2; list >&2; exit 2 ;;
+esac
+
+# `auto` can be no theme file, and without a tty there is no file to name: pinned, as before live files.
+if [ "$theme" = auto ] || [ -z "$tag" ]; then exec claude --settings "{\"theme\":\"$theme\"}" "$@"; fi
+
+if ! make_live "$theme"; then echo "loadout: $dir/${theme#custom:}.json could not be read as a theme" >&2; exit 2; fi
+exec claude --settings "{\"theme\":\"custom:loadout-$tag\"}" "$@"
