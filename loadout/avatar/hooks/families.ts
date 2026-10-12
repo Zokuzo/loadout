@@ -12,11 +12,13 @@ import { clawdMini, kirbyMini } from './hires'
 import type { MiniSet } from './hires'
 import { NAMES, SKINS, hex } from './hud'
 import type { Skin } from './hud'
+import type { Captions } from './hudpane'
 import type { Family, Form, Pixels } from './look'
 import { faceAt } from './mascot'
 import type { Mood } from './mascot'
 import { norm, resolve } from './packs'
 import type { Pack } from './packs'
+import { CAST } from './reel'
 import type { World } from './reel'
 import { KIRBY } from './sprite'
 import { TOUGE } from './touge'
@@ -55,8 +57,10 @@ export type Acting = ClawdMoment
  * A family drawn in text (hud.ts): its `skin` is the palette the whole pane takes, as a HUD, with
  * the mask and the agents' blocks in characters; `names` is the mask's name per model, `worry` how it puts what worries it.
  * `world` is where its characters come from: with a model's form it names the slot whose footage the camera feed plays (reel.ts).
+ * A world with `cars` has no mask and no `hero`: its HUD frames the camera feed alone, in its own `captions`, and wherever
+ * the feed does not play (no footage, no pictures, a style of text) the pane is the cars', as a sprite family draws it.
  */
-export type TextFamily = { key: FamilyName; skin: Skin; world: World; names: Readonly<Record<Form, string>>; speech: Speech; worry: Worry; hero: Hero }
+export type TextFamily = { key: FamilyName; skin: Skin; world: World; names: Readonly<Record<Form, string>>; speech: Speech; worry: Worry; hero?: Hero; cars?: SpriteFamily; captions?: Captions }
 
 /** A text family's Opus: a whole character (cyber.ts) in place of the mask, with its own name and voice. Drawn where the pane has its rows; the mask elsewhere. */
 export type Hero = { who: Who; name: string; speech: Speech; worry: Worry }
@@ -122,6 +126,7 @@ const CLAWD_FAMILY: SpriteFamily = {
 }
 
 // The cars of a night mountain pass, one per model, seen from the front: their headlights are their eyes. The helpers on stage are Clawd's minis.
+// (What the Initial D theme draws wherever its camera feed does not play: `touge`, below.)
 const TOUGE_FAMILY: SpriteFamily = {
   key: 'initial-d',
   forms: TOUGE,
@@ -129,6 +134,23 @@ const TOUGE_FAMILY: SpriteFamily = {
   blocks: 'clawd',
   speech: { idle: ['tofu loaded. engine warm.', 'claude'], working: ['drifting…', 'suggestion'], worried: ['', 'error'], happy: ['not a drop spilled ♥', 'success'] },
 }
+
+/** The night pass on camera: the drivers' footage in a HUD of its own colours and words, told as a stage is run; the cars where it does not play. */
+const touge = (skin: Skin): TextFamily => ({
+  key: 'initial-d',
+  skin,
+  world: 'initiald',
+  cars: TOUGE_FAMILY,
+  captions: { link: 'DOWNHILL', crew: 'CONVOY', unit: 'CARS', banner: 'STAGE', meters: 'TACHOMETER' },
+  names: { opus: CAST['initiald-opus'], sonnet: CAST['initiald-sonnet'], haiku: CAST['initiald-haiku'], fable: CAST['initiald-fable'] },
+  speech: {
+    idle: ['ENGINE WARM. WAITING.', hex(skin.primary)],
+    working: ['INTO THE HAIRPIN...', hex(skin.cyan)],
+    worried: ['', hex(skin.alert)],
+    happy: ['NOT A DROP SPILLED.', hex(skin.value)],
+  },
+  worry: { full: 'TYRES NEAR GONE. /clear', near: limit => `${limit.toUpperCase()} LIMIT AT REDLINE` },
+})
 
 /** The cyber family in one of its two palettes and worlds: Raijin, terse as a netrunner. The drawn ninja is Ghostrunner's Opus, the drawn thief Edgerunners'. */
 const cyber = (key: FamilyName, skin: Skin, who: Who): TextFamily => ({
@@ -161,7 +183,7 @@ const cyber = (key: FamilyName, skin: Skin, who: Who): TextFamily => ({
 
 /** The families that exist. One a theme calls for that is not here is played by Kirby. */
 export const FAMILIES: Partial<Record<FamilyName, FamilyDef>> = {
-  kirby: KIRBY_FAMILY, clawd: CLAWD_FAMILY, ghostrunner: cyber('ghostrunner', SKINS.red, 'ninja'), 'cyberpunk-edgerunners': cyber('cyberpunk-edgerunners', SKINS.yellow, 'thief'), 'initial-d': TOUGE_FAMILY,
+  kirby: KIRBY_FAMILY, clawd: CLAWD_FAMILY, ghostrunner: cyber('ghostrunner', SKINS.red, 'ninja'), 'cyberpunk-edgerunners': cyber('cyberpunk-edgerunners', SKINS.yellow, 'thief'), 'initial-d': touge(SKINS.night),
 }
 
 /**
@@ -246,14 +268,14 @@ export const isLightOf = (theme: string): boolean => groundOf(theme)?.isLight ==
 // The text family in a pack's own colours, made once per palette: a pane drawn twice draws from the same family.
 const skinned = new Map<string, TextFamily>()
 
-/** The family a pack calls for: a sprite family by its name; the text family in the pack's variant (red: the Ghostrunner world, yellow: Edgerunners), its colours the pack's where it brings them. */
+/** The family a pack calls for, by its name; the cyber family in the pack's variant (red: the Ghostrunner world, yellow: Edgerunners). A text family's colours are the pack's where it brings them. */
 function packFamily(pack: Pack): FamilyDef {
-  if (pack.family !== 'cyber') return FAMILIES[pack.family] ?? CLAWD_FAMILY
-  const [key, who] = pack.variant === 'yellow' ? (['cyberpunk-edgerunners', 'thief'] as const) : (['ghostrunner', 'ninja'] as const)
+  if (pack.family !== 'cyber' && pack.skin === undefined) return FAMILIES[pack.family] ?? CLAWD_FAMILY
+  const [key, who] = pack.family !== 'cyber' ? (['initial-d', undefined] as const) : pack.variant === 'yellow' ? (['cyberpunk-edgerunners', 'thief'] as const) : (['ghostrunner', 'ninja'] as const)
   const stock = FAMILIES[key] ?? KIRBY_FAMILY
   const mark = JSON.stringify(pack.skin)
   if (pack.skin === undefined || ('skin' in stock && JSON.stringify(stock.skin) === mark)) return stock
-  const made = skinned.get(mark) ?? cyber(key, pack.skin, who)
+  const made = skinned.get(mark) ?? (who === undefined ? touge(pack.skin) : cyber(key, pack.skin, who))
   skinned.set(mark, made)
 
   return made

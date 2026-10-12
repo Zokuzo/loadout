@@ -35,13 +35,17 @@
       "additionalProperties": false,
       "required": ["family"],
       "properties": {
-        "family": { "description": "Which of the Avatar mod's families plays: its art, names and lines are code.", "enum": ["kirby", "clawd", "cyber", "initial-d"] },
+        "family": { "description": "Which of the Avatar mod's families plays: its art, names and lines are code. 'initial-d' is the cars, and the camera feed of the 'initiald' world's drivers where there is footage (loadout/README.md).", "enum": ["kirby", "clawd", "cyber", "initial-d"] },
         "variant": { "description": "The cyber family's skin and world: 'red' (the Ghostrunner world: Jack, Hel, Mitra, Mara) or 'yellow' (the Edgerunners world: Lucy, David, Rebecca, Adam Smasher). The world and the session's model name the character (loadout/README.md).", "enum": ["red", "yellow"] },
         "skin": { "$ref": "#/$defs/skin" }
       },
       "if": { "properties": { "family": { "const": "cyber" } } },
       "then": { "required": ["variant"] },
-      "else": { "not": { "anyOf": [{ "required": ["variant"] }, { "required": ["skin"] }] } }
+      "else": {
+        "not": { "required": ["variant"] },
+        "if": { "properties": { "family": { "const": "initial-d" } } },
+        "else": { "not": { "required": ["skin"] } }
+      }
     },
     "flow": {
       "type": "object",
@@ -79,7 +83,7 @@
       "maxLength": 60
     },
     "skin": {
-      "description": "The cyber family's text HUD colours (hud.ts Skin). Absent: the mod's own skin for the variant. Present: all ten.",
+      "description": "A text HUD's colours (hud.ts Skin): the cyber family's, or the one around the initial-d family's camera feed. Absent: the mod's own skin. Present: all ten.",
       "type": "object",
       "additionalProperties": false,
       "required": ["primary", "bright", "body", "shadow", "dim", "cyan", "alert", "value", "tint", "ink"],

@@ -724,7 +724,7 @@ test('/loadout avatar and flow open that pane; frames, background and style are 
   expect(status.length).toBe(4)
   expect(status[0]).toBe('Theme: custom:ghostrunner (the global theme).')
   expect(status[1]).toMatch(/^Pack: the built-in table \(\w+ red, dark, background #[0-9a-f]{6}\)\. Packs: none found/)
-  expect(status[2]).toBe(`Pictures: not found. Footage: ${['ghostrunner', 'edgerunners'].flatMap(world => ['opus', 'sonnet', 'haiku', 'fable'].map(form => `${world}-${form} missing`)).join(', ')}.`)
+  expect(status[2]).toBe(`Pictures: not found. Footage: ${['ghostrunner', 'edgerunners', 'initiald'].flatMap(world => ['opus', 'sonnet', 'haiku', 'fable'].map(form => `${world}-${form} missing`)).join(', ')}.`)
   expect(status[3]).toBe('Avatar pane: open, style text, background on. Flow map: closed. Frames: on.')
 
   expect(await run('help')).toBe(HELP)

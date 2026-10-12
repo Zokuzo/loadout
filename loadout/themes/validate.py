@@ -7,7 +7,7 @@
   4. glyphs, rails, edges, meter cells and box corners take one terminal cell; the active node's cycle never shows
      another state's glyph; caption templates use only {i} {n} {done} {left};
   5. WCAG contrast on flow.palette.bg: text tokens and the steps' label colours 4.5 or more (on the row's ground too,
-     where a state has one), accent tokens and the steps' node colours 3 or more; the cyber skin's foreground colours
+     where a state has one), accent tokens and the steps' node colours 3 or more; a skin's foreground colours
      3 or more on the terminal background.
 
   6. ../loadout/flow/tests/packs.ts, the copy the plugin's tests draw from, is what the packs say (`--sync` writes it).
@@ -79,7 +79,7 @@ def check(value, rule, root, at='pack'):
     if 'anyOf' in rule and all(check(value, sub, root, at) for sub in rule['anyOf']):
         errors.append(f'{at}: {json.dumps(value, ensure_ascii=False)} fits none of the allowed forms')
     if 'not' in rule and not check(value, rule['not'], root, at):
-        errors.append(f'{at}: has a field this family does not take (variant and skin are the cyber family\'s)')
+        errors.append(f'{at}: has a field this family does not take (variant is the cyber family\'s; skin the cyber and initial-d families\')')
     if 'if' in rule:
         branch = rule.get('then') if not check(value, rule['if'], root, at) else rule.get('else')
         if branch is not None:

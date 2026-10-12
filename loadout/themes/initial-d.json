@@ -6,33 +6,45 @@
   ],
   "isLight": false,
   "terminal": {
-    "background": "#0e1117"
+    "background": "#08182a"
   },
   "avatar": {
-    "family": "initial-d"
+    "family": "initial-d",
+    "skin": {
+      "primary": "#d2e04e",
+      "bright": "#f4eeda",
+      "body": "#1f5068",
+      "shadow": "#122f48",
+      "dim": "#6f9fb8",
+      "cyan": "#ffb52e",
+      "alert": "#ff4d3d",
+      "value": "#f29a8e",
+      "tint": "#0c2236",
+      "ink": "#06121f"
+    }
   },
   "flow": {
     "palette": {
-      "bg": "#0e1117",
-      "page": "#0e1117",
-      "fg": "#eef1f5",
-      "text2": "#b4bcc8",
-      "text3": "#a3acb9",
-      "text4": "#939cab",
-      "border": "#333c4a",
-      "cardBorder": "#56627a",
-      "track": "#262d38",
-      "select": "#1b2230",
-      "cyan": "#7fb4e6",
-      "green": "#6fd3a0",
-      "yellow": "#ffd23f",
-      "orange": "#ff9f43",
-      "red": "#ff5a52",
-      "blue": "#8fc1f0",
-      "violet": "#b9a4f0",
-      "railDone": "#4f7d92",
-      "railRun": "#8f7a22",
-      "tabActive": "#ffd23f"
+      "bg": "#08182a",
+      "page": "#08182a",
+      "fg": "#f4eeda",
+      "text2": "#b9cad0",
+      "text3": "#a3b8c2",
+      "text4": "#8fa8b4",
+      "border": "#203e58",
+      "cardBorder": "#3f6a88",
+      "track": "#17344c",
+      "select": "#122c44",
+      "cyan": "#5fa6c0",
+      "green": "#5fae7b",
+      "yellow": "#d2e04e",
+      "orange": "#f2a65e",
+      "red": "#ff4d3d",
+      "blue": "#7fb6d6",
+      "violet": "#f08fa0",
+      "railDone": "#2f7890",
+      "railRun": "#8a9632",
+      "tabActive": "#ffb52e"
     },
     "steps": {
       "header": { "style": "bracketed", "prefix": "STAGE // ", "color": "yellow", "frame": "cardBorder", "upper": true },

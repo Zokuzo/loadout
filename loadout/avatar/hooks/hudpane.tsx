@@ -11,10 +11,16 @@ import type { Mood } from './mascot'
 /** The rows the HUD takes besides the mask and the agents: a caption, the banner's three, the name, the controls, a rule, the cost, three meters of two, the frame's foot. */
 export const HUD_ROWS = 15
 
+/** A HUD's own words: what heads the pane, the agents' rule and what it counts them as, the banner's head, the meters' rule. */
+export type Captions = { link: string; crew: string; unit: string; banner: string; meters: string }
+const CAPTIONS: Captions = { link: 'CONNECTION', crew: 'SUBNET', unit: 'PROC', banner: 'PROTOCOL', meters: 'MONITOR' }
+
 export type Meter = { label: string; percent: number | undefined; isAlert: boolean; detail: string }
 
 export type HudView = {
   skin: Skin
+  /** The family's own words, where it has them: the cyber ones otherwise. */
+  captions?: Captions
   /** The pane's own background and how many columns it fills, for a theme that brings one. */
   ground?: { color: string; columns: number }
   /** The columns everything is laid out in, and the pane's rows. */
@@ -55,6 +61,7 @@ const SIGNS: Readonly<Record<Mood, string>> = { idle: ':', working: '~', worried
 
 export function hudTree({ Box, Button, Text }: ElementTable, view: HudView): RenderElement {
   const { skin, columns } = view
+  const words = view.captions ?? CAPTIONS
   const [primary, dim, cyan, alert, value, ink, shadow] = [skin.primary, skin.dim, skin.cyan, skin.alert, skin.value, skin.ink, skin.shadow].map(hex) as [string, string, string, string, string, string, string]
   // A rule that opens a block: cut at its left end, cornered at its right, the caption on it.
   const rule = (caption: string) => (
@@ -101,14 +108,14 @@ export function hudTree({ Box, Button, Text }: ElementTable, view: HudView): Ren
   return (
     <Box flexDirection="column" height={view.height} justifyContent="flex-end" {...(view.ground === undefined ? {} : { width: view.ground.columns, backgroundColor: view.ground.color })}>
       <Box width={columns} justifyContent="space-between">
-        <Text color={dim} wrap="truncate-end">CONNECTION{addressOf(view.session)}</Text>
+        <Text color={dim} wrap="truncate-end">{words.link}{addressOf(view.session)}</Text>
         {columns >= 30 && <Text color={dim}>{clock}</Text>}
       </Box>
-      {view.agents !== null && rule(`SUBNET // ${pad2(view.alive)} PROC`)}
+      {view.agents !== null && rule(`${words.crew} // ${pad2(view.alive)} ${words.unit}`)}
       {view.agents}
       <Text wrap="truncate-end">
         <Text color={tone}>┌─┐ </Text>
-        <Text color={dim}>PROTOCOL // {view.title.toUpperCase()}</Text>
+        <Text color={dim}>{words.banner} // {view.title.toUpperCase()}</Text>
       </Text>
       <Text wrap="truncate-end">
         <Text color={tone}>│</Text>
@@ -135,7 +142,7 @@ export function hudTree({ Box, Button, Text }: ElementTable, view: HudView): Ren
         <Button key="pet" label="PET" hotkey="p" variant="primary" onPress={view.onPet} />
         <Text color={value}>[ ♥ {view.petted} ]</Text>
       </Box>
-      {rule('MONITOR')}
+      {rule(words.meters)}
       <Box width={columns} justifyContent="space-between">
         <Text color={dim}>SESSION COST</Text>
         <Text color={value} bold>{view.cost}</Text>

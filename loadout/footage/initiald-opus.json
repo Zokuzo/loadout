@@ -1,0 +1,111 @@
+{
+ "name": "TAKUMI",
+ "speech": {
+  "idle": "TOFU LOADED. CUP IS FULL.",
+  "working": "INERTIA DRIFT.",
+  "happy": "NOT A DROP SPILLED.",
+  "worried": "THE TYRES ARE GONE..."
+ },
+ "clips": {
+  "headlights-approach": {
+   "frames": 26,
+   "ms": 90,
+   "what": "the eight-six comes up the pass, fog lights on"
+  },
+  "seaside-roll": {
+   "frames": 26,
+   "ms": 90,
+   "what": "rolls along the sea in daylight"
+  },
+  "at-the-wheel": {
+   "frames": 26,
+   "ms": 90,
+   "what": "one hand on the wheel, unbothered"
+  },
+  "fog-run": {
+   "frames": 17,
+   "ms": 90,
+   "what": "headlights cut through the mist"
+  },
+  "hairpin-exit": {
+   "frames": 12,
+   "ms": 90,
+   "what": "slides out of a hairpin, seen from behind"
+  },
+  "tofu-door": {
+   "frames": 20,
+   "ms": 90,
+   "what": "the tofu shop door sweeps past the camera"
+  },
+  "inertia-drift": {
+   "frames": 22,
+   "ms": 90,
+   "what": "drifts through the corner, lights blazing"
+  },
+  "lights-drift": {
+   "frames": 24,
+   "ms": 90,
+   "what": "sideways, headlights flaring"
+  },
+  "gutter-run": {
+   "frames": 24,
+   "ms": 90,
+   "what": "dives to the inside of the corner"
+  },
+  "water-cup": {
+   "frames": 26,
+   "ms": 90,
+   "what": "the cup of water beside the tachometer"
+  },
+  "wings": {
+   "frames": 26,
+   "ms": 90,
+   "what": "white wings open behind the car"
+  },
+  "wings-rise": {
+   "frames": 24,
+   "ms": 90,
+   "what": "the wings rise over the road"
+  },
+  "cup-sip": {
+   "frames": 26,
+   "ms": 90,
+   "what": "a quiet drink at the wheel"
+  },
+  "startled": {
+   "frames": 9,
+   "ms": 90,
+   "what": "a startled look"
+  },
+  "wide-eyed": {
+   "frames": 22,
+   "ms": 90,
+   "what": "eyes wide over a drink"
+  }
+ },
+ "moods": {
+  "idle": [
+   "headlights-approach",
+   "seaside-roll",
+   "at-the-wheel",
+   "fog-run"
+  ],
+  "working": [
+   "hairpin-exit",
+   "tofu-door",
+   "inertia-drift",
+   "lights-drift",
+   "gutter-run",
+   "water-cup"
+  ],
+  "happy": [
+   "wings",
+   "wings-rise",
+   "cup-sip"
+  ],
+  "worried": [
+   "startled",
+   "wide-eyed"
+  ]
+ }
+}

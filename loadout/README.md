@@ -85,14 +85,14 @@ To add a theme, see `THEMES.md`.
 
 ## The characters: one per theme and model
 
-The Ghostrunner and Cyberpunk Edgerunners themes show a framed camera feed of a character, and which one follows the session's model. A character's place is a slot, `<world>-<form>`: the world is the theme's, the form the model's.
+The Ghostrunner, Cyberpunk Edgerunners and Initial D themes show a framed camera feed of a character where its footage is on the machine (none is shipped: see "The pictures"), and which one follows the session's model. A character's place is a slot, `<world>-<form>`: the world is the theme's, the form the model's.
 
-| Model | Ghostrunner (`ghostrunner-…`) | Cyberpunk Edgerunners (`edgerunners-…`) |
-|---|---|---|
-| Opus (`…-opus`) | Jack | Lucy |
-| Sonnet (`…-sonnet`) | Hel | David Martinez |
-| Haiku (`…-haiku`) | Mitra | Rebecca |
-| Fable (`…-fable`) | Mara the Keymaster | Adam Smasher |
+| Model | Ghostrunner (`ghostrunner-…`) | Cyberpunk Edgerunners (`edgerunners-…`) | Initial D (`initiald-…`) |
+|---|---|---|---|
+| Opus (`…-opus`) | Jack | Lucy | Takumi |
+| Sonnet (`…-sonnet`) | Hel | David Martinez | Ryosuke |
+| Haiku (`…-haiku`) | Mitra | Rebecca | Keisuke |
+| Fable (`…-fable`) | Mara the Keymaster | Adam Smasher | Bunta |
 
 Footage for a slot is a folder, `assets/<slot>/`, with a `manifest.json` and one folder of frames per loop (`<clip>/000.png`, `001.png`, ...; every picture 400 by 340, so the feed's box is one size whoever is in it):
 
@@ -116,8 +116,9 @@ Where a slot has no manifest:
 
 - Opus shows its still portrait frames if the folder has them (`assets/<slot>/<mood>-NN.png`, twelve per mood), else the drawn character: the ninja for Ghostrunner, the thief for Edgerunners.
 - Sonnet, Haiku and Fable show Raijin, the mask, in that model's variant.
+- On Initial D, every model shows its pixel car (Eight-Six, Twin Rotor, Red Hatch, Night Coupe) in the pane the cars always had: never the mask or a drawn character, which belong to the other two worlds. The pane becomes the feed, in a HUD worded as a downhill stage, when the slot's folder lands (on a pane too small for the box, that HUD without a picture).
 
-The same holds where the terminal draws no pictures (anything but kitty or Ghostty, or inside tmux) and with `/loadout style text`: no footage, the drawn character for Opus, the mask for the others.
+The same holds where the terminal draws no pictures (anything but kitty or Ghostty, or inside tmux) and with `/loadout style text`: no footage, the drawn character for Opus, the mask for the others, the cars on Initial D.
 
 ## Install
 
@@ -151,4 +152,4 @@ python3 themes/validate.py
 
 ## The pictures
 
-Everything in this repository is drawn in code or as data: the sprites, the text characters, the mask. The camera feed of the Ghostrunner and Cyberpunk Edgerunners themes plays footage from `assets/<slot>/`, and no footage is shipped: it would be other people's work. Without it those two themes draw their built-in characters and the mask. `FOOTAGE.md` says how to rebuild the author's feeds from a video of your own: the recipe of each is shipped (`footage/<slot>.json`), and `bin/footage` cuts the frames. `assets/` is ignored by git.
+Everything in this repository is drawn in code or as data: the sprites, the text characters, the mask. The camera feed of the Ghostrunner, Cyberpunk Edgerunners and Initial D themes plays footage from `assets/<slot>/`, and no footage is shipped: it would be other people's work. Without it the first two draw their built-in characters and the mask, and Initial D its pixel cars. `FOOTAGE.md` says how to rebuild the author's feeds from a video of your own: the recipe of each is shipped (`footage/<slot>.json`), and `bin/footage` cuts the frames. `assets/` is ignored by git.

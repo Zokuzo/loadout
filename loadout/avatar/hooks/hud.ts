@@ -11,7 +11,7 @@ import type { Act, Agent } from './stage'
 /** The terminal's default colour, in a cell. */
 export const NONE = 0x01000000
 
-export type Variant = 'red' | 'yellow'
+export type Variant = 'red' | 'yellow' | 'night'
 
 /**
  * One skin's palette, 0xRRGGBB: the interface's one colour (`primary`), its lit edge, the mask's
@@ -25,10 +25,13 @@ export type Skin = { variant: Variant; primary: number; bright: number; body: nu
  * Red on red-black as the game's inventory is, and nothing but red, dark red and its light blue: a
  * count is a pale red, an alarm a hotter one (told by its stripes and its filled tag too, not by its
  * hue alone). Yellow on black as its HUD is, what one may do in its blue and an alarm in red. Cyan is the same in both.
+ * Night is a mountain pass in a cel of the nineties: the street lamps' yellow-green on a teal-navy dark, captions in
+ * moonlit blue-green, what is live in the fog lights' yellow, an alarm a tail light, a count the pink of dusk.
  */
 export const SKINS: Readonly<Record<Variant, Skin>> = {
   red: { variant: 'red', primary: 0xff6158, bright: 0xffb9ad, body: 0x6a1d22, shadow: 0x34101a, dim: 0xc0706a, cyan: 0x5ef6ff, alert: 0xff1f47, value: 0xffd2cb, tint: 0x1c080c, ink: 0x0b0306 },
   yellow: { variant: 'yellow', primary: 0xfcee0a, bright: 0xfffbb5, body: 0x7d7605, shadow: 0x3a3702, dim: 0xb0a707, cyan: 0x5ef6ff, alert: 0xff3d3d, value: 0x3aa0ff, tint: 0x121100, ink: 0x060600 },
+  night: { variant: 'night', primary: 0xd2e04e, bright: 0xf4eeda, body: 0x1f5068, shadow: 0x122f48, dim: 0x6f9fb8, cyan: 0xffb52e, alert: 0xff4d3d, value: 0xf29a8e, tint: 0x0c2236, ink: 0x06121f },
 }
 
 export const hex = (color: number): string => `#${color.toString(16).padStart(6, '0')}`

@@ -1,10 +1,10 @@
 import type { Form } from './look'
 import { FORMS } from './look'
 
-/** The two worlds a cyber theme can be set in, and the eight characters' places: a slot is a world and a model's form. */
-export type World = 'ghostrunner' | 'edgerunners'
+/** The three worlds a text family can be set in, and the twelve characters' places: a slot is a world and a model's form. */
+export type World = 'ghostrunner' | 'edgerunners' | 'initiald'
 export type Slot = `${World}-${Form}`
-export const WORLDS: readonly World[] = ['ghostrunner', 'edgerunners']
+export const WORLDS: readonly World[] = ['ghostrunner', 'edgerunners', 'initiald']
 export const slotOf = (world: World, form: Form): Slot => `${world}-${form}`
 export const SLOTS: readonly Slot[] = WORLDS.flatMap(world => FORMS.map(form => slotOf(world, form)))
 
@@ -12,6 +12,7 @@ export const SLOTS: readonly Slot[] = WORLDS.flatMap(world => FORMS.map(form => 
 export const CAST: Readonly<Record<Slot, string>> = {
   'ghostrunner-opus': 'JACK', 'ghostrunner-sonnet': 'HEL', 'ghostrunner-haiku': 'MITRA', 'ghostrunner-fable': 'MARA',
   'edgerunners-opus': 'LUCY', 'edgerunners-sonnet': 'DAVID', 'edgerunners-haiku': 'REBECCA', 'edgerunners-fable': 'ADAM SMASHER',
+  'initiald-opus': 'TAKUMI', 'initiald-sonnet': 'RYOSUKE', 'initiald-haiku': 'KEISUKE', 'initiald-fable': 'BUNTA',
 }
 
 /** Every picture of the camera feed is this shape (400 by 340), so its box is one size whoever is in it. */

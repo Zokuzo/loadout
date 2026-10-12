@@ -7,13 +7,13 @@ import type { Canvas } from '../hooks/canvas'
 import { BLEND_MS, CALM_MS, CYCLE_MS, FLOURISH_NAMES, HERO_ROWS, beatAfter, flourishAt, flourishOf, heroCanvas, heroGrid, heroPose, isAtRest } from '../hooks/cyber'
 import type { Beat, Moment, Who } from '../hooks/cyber'
 import { FAMILIES, GROUNDS, familyOf, frameOf, framesOf, groundOf, isLightOf, nameOf, pixelsOf, themed, wantedOf } from '../hooks/families'
-import type { Look, SpriteFamily } from '../hooks/families'
+import type { Look, SpriteFamily, TextFamily } from '../hooks/families'
 import { INKS } from '../hooks/gamesprites'
 import { HI, clawdMini, kirbyMini } from '../hooks/hires'
-import { FEED_SHAPE, SLOTS, frameAt, reelOf, slotOf } from '../hooks/reel'
+import { CAST, FEED_SHAPE, SLOTS, frameAt, reelOf, slotOf } from '../hooks/reel'
 import type { Slot } from '../hooks/reel'
 import { MASK_COLUMNS, MASK_LEAST, MASK_ROWS, NONE, SKINS, TAGS, agentRows, blockRowsOf, hex, maskFrame, modelTag, stateOf, textOf } from '../hooks/hud'
-import type { Grid, Runner } from '../hooks/hud'
+import type { Grid, Runner, Skin } from '../hooks/hud'
 import type { Pose as HiPose } from '../hooks/hires'
 import { CHROME_ROWS, laidOut, laidOutArt, mascotBlocks } from '../hooks/layout'
 import { FORMS, formOf } from '../hooks/look'
@@ -932,12 +932,14 @@ test('a theme picks the family: kirby, the cyber one in red for Ghostrunner or i
   expect([SKINS.red.alert, SKINS.yellow.alert]).toEqual([0xff1f47, 0xff3d3d])
   for (const skin of Object.values(SKINS)) expect(new Set([skin.primary, skin.alert, skin.value, skin.cyan]).size).toBe(4)
   expect(SKINS.red.cyan).toBe(SKINS.yellow.cyan)
-  for (const family of Object.values(FAMILIES)) {
-    if ('skin' in family) continue
+  // (A world with cars is a text family too: its cars are sprites as any.)
+  for (const one of Object.values(FAMILIES)) {
+    const family = 'skin' in one ? one.cars : one
+    if (family === undefined) continue
     for (const form of FORMS) expect(family.forms[form].frames.length).toBeGreaterThan(0)
     expect(Object.keys(family.mini(0).poses).length).toBe(20)
   }
-  expect(Object.values(FAMILIES).map(family => ('skin' in family ? 'text' : family.blocks))).toEqual(['kirby', 'clawd', 'text', 'text', 'clawd'])
+  expect(Object.values(FAMILIES).map(family => ('skin' in family ? family.cars?.blocks ?? 'text' : family.blocks))).toEqual(['kirby', 'clawd', 'text', 'text', 'clawd'])
 })
 
 const MOODS: Mood[] = ['idle', 'working', 'happy', 'worried']
@@ -2059,7 +2061,7 @@ for (const theme of ['custom:kirby', 'custom:kirby-pink', 'dark']) {
 // --- forms are never blended ----------------------------------------------------
 
 test('every mascot form at every pane height is its own pixels, each a whole number of times: whole, or cut clean at the foot', () => {
-  const sprites = Object.values(FAMILIES).filter((family): family is SpriteFamily => !('skin' in family))
+  const sprites = Object.values(FAMILIES).map(family => ('skin' in family ? family.cars : family)).filter(family => family !== undefined)
   const wrong: string[] = []
   const cellOf = { kitty: { w: 9, h: 21 }, unknown: ASSUMED }
   for (const family of sprites) {
@@ -2898,10 +2900,11 @@ test('a reel plays its mood\'s loops in rotation, each held a while, and survive
 
 // --- one character per model: the slots -----------------------------------------------
 
-test('a slot is a world and a model: each of the eight comes from its theme and the session\'s model', () => {
+test('a slot is a world and a model: each of the twelve comes from its theme and the session\'s model', () => {
   expect(SLOTS).toEqual([
     'ghostrunner-opus', 'ghostrunner-sonnet', 'ghostrunner-haiku', 'ghostrunner-fable',
     'edgerunners-opus', 'edgerunners-sonnet', 'edgerunners-haiku', 'edgerunners-fable',
+    'initiald-opus', 'initiald-sonnet', 'initiald-haiku', 'initiald-fable',
   ])
   const MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5', 'claude-fable-5']
   const slotsOf = (theme: string, packs: readonly Pack[] = []) => MODELS.map(model => {
@@ -2911,16 +2914,19 @@ test('a slot is a world and a model: each of the eight comes from its theme and 
   })
   // By the tables and by the packs alike; a pack of the cyber family is set in the world of its variant.
   for (const packs of [[], PACKS]) {
-    expect([...slotsOf('custom:ghostrunner', packs), ...slotsOf('custom:cyberpunk-edgerunners', packs)]).toEqual([...SLOTS])
+    expect([...slotsOf('custom:ghostrunner', packs), ...slotsOf('custom:cyberpunk-edgerunners', packs)]).toEqual(SLOTS.slice(0, 8))
     expect(slotsOf('custom:kirby', packs)).toEqual([undefined, undefined, undefined, undefined])
   }
+  // The third world is the Initial D pack's (the tables do not know the theme): its drivers, and no drawn character or mask of its own but its cars.
+  expect(slotsOf('custom:initial-d', PACKS)).toEqual(SLOTS.slice(8))
+  expect(SLOTS.slice(8).map(slot => CAST[slot])).toEqual(['TAKUMI', 'RYOSUKE', 'KEISUKE', 'BUNTA'])
   const mine = packsIn({ ...PACK_TEXTS, 'sunset.json': packText('sunset', { family: 'cyber', variant: 'yellow' }, '#101820'), 'dawn.json': packText('dawn', { family: 'cyber', variant: 'red' }, '#101820') }).packs
   expect([slotsOf('custom:sunset', mine)[1], slotsOf('custom:dawn', mine)[3]]).toEqual(['edgerunners-sonnet', 'ghostrunner-fable'])
   // The drawn characters stay the ninja for Ghostrunner and the thief for Edgerunners.
   expect(['custom:ghostrunner', 'custom:cyberpunk-edgerunners'].map(theme => {
     const family = familyOf(theme)
 
-    return 'skin' in family ? [family.world, family.hero.who, family.hero.name] : []
+    return 'skin' in family ? [family.world, family.hero?.who, family.hero?.name] : []
   })).toEqual([['ghostrunner', 'ninja', 'Jack'], ['edgerunners', 'thief', 'Lucy']])
 })
 
@@ -3071,6 +3077,7 @@ test('the camera feed plays the slot of the theme and the model: its manifest\'s
   expect(/Footage: ([^.]*)\./.exec(status)?.[1]?.split(', ')).toEqual([
     'ghostrunner-opus JACK (2 loops)', 'ghostrunner-sonnet HEL (2 loops)', 'ghostrunner-haiku missing', 'ghostrunner-fable missing',
     'edgerunners-opus missing', 'edgerunners-sonnet missing', 'edgerunners-haiku REBECCA [no name in its manifest] (2 loops)', 'edgerunners-fable ADAM SMASHER (2 loops)',
+    'initiald-opus missing', 'initiald-sonnet missing', 'initiald-haiku missing', 'initiald-fable missing',
   ])
   expect(status).toMatch(/Pictures: \S+\/assets\./)
 
@@ -3083,9 +3090,9 @@ test('the camera feed plays the slot of the theme and the model: its manifest\'s
   expect([drawn.kind, drawn.named, drawn.box]).toEqual([['<Raster kirby>'], '─┤ LUCY // OPUS-5-5 ├─', [33, HERO_ROWS]])
   await $.command.run(typed('style auto'))
 
-  // The manifests still missing are asked for again and again; once all eight are found, never more.
+  // The manifests still missing are asked for again and again; once all twelve are found, never more.
   const missing = SLOTS.filter(slot => manifests[slot] === undefined)
-  expect(missing.length).toBe(4)
+  expect(missing.length).toBe(8)
   asked.length = 0
   await clock.advance(31_000)
   expect(new Set(asked)).toEqual(new Set(missing))
@@ -3122,7 +3129,8 @@ test('where the terminal draws no pictures a manifest changes nothing: the drawn
 
 const FLOW = { palette: {}, steps: {} } // the Flow map's part of a pack: not this mod's to read
 const packText = (slug: string, avatar: object, background: string | null, more: object = {}) => JSON.stringify({ slug, name: slug, isLight: false, terminal: { background }, avatar, flow: FLOW, ...more })
-const RED_SKIN = Object.fromEntries(Object.entries(SKINS.red).filter(([key]) => key !== 'variant').map(([key, color]) => [key, hex(color as number)]))
+const skinText = (skin: Skin) => Object.fromEntries(Object.entries(skin).filter(([key]) => key !== 'variant').map(([key, color]) => [key, hex(color as number)]))
+const RED_SKIN = skinText(SKINS.red)
 /** The six packs as the themes folder holds them, today's values. */
 const PACK_TEXTS: Record<string, string> = {
   'default.json': packText('default', { family: 'clawd' }, null),
@@ -3130,7 +3138,7 @@ const PACK_TEXTS: Record<string, string> = {
   'kirby-pink.json': packText('kirby-pink', { family: 'kirby' }, '#2b1724', { match: ['kirby-pink'] }),
   'ghostrunner.json': packText('ghostrunner', { family: 'cyber', variant: 'red', skin: RED_SKIN }, '#120608', { match: ['ghostrunner'] }),
   'cyberpunk-edgerunners.json': packText('cyberpunk-edgerunners', { family: 'cyber', variant: 'yellow' }, '#0b0b06', { match: ['edgerunners'] }),
-  'initial-d.json': packText('initial-d', { family: 'initial-d' }, '#0e1117', { match: ['initial-d'] }),
+  'initial-d.json': packText('initial-d', { family: 'initial-d', skin: skinText(SKINS.night) }, '#08182a', { match: ['initial-d'] }),
 }
 const packsIn = (texts: Record<string, string | null>) => packsOf(new Map(Object.entries(texts)))
 const PACKS: Pack[] = packsIn(PACK_TEXTS).packs
@@ -3172,7 +3180,7 @@ test('a pack is read whole or not at all, and the pack that serves a theme is it
     'a.json': 'not json {', 'b.json': '[]', 'c.json': packText('other', { family: 'kirby' }, null), 'd.json': packText('d', { family: 'dragon' }, null),
     'e.json': packText('e', { family: 'kirby', variant: 'red' }, null), 'f.json': packText('f', { family: 'cyber' }, null), 'g.json': packText('g', { family: 'kirby' }, 'green'),
     'h.json': packText('h', { family: 'cyber', variant: 'red', skin: { ...RED_SKIN, ink: 'black' } }, null), 'i.json': JSON.stringify({ slug: 'i', isLight: 'no', terminal: { background: null }, avatar: { family: 'kirby' } }),
-    'j.json': packText('j', { family: 'kirby' }, null, { match: 'kirby' }), 'k.json': JSON.stringify({ slug: 'k', isLight: false, avatar: { family: 'kirby' } }),
+    'j.json': packText('j', { family: 'kirby' }, null, { match: 'kirby' }), 'l.json': packText('l', { family: 'initial-d', variant: 'red' }, null), 'm.json': packText('m', { family: 'clawd', skin: RED_SKIN }, null), 'k.json': JSON.stringify({ slug: 'k', isLight: false, avatar: { family: 'kirby' } }),
   }
   for (const [file, text] of Object.entries(bad)) expect([file, typeof packOf(text, file)]).toEqual([file, 'string'])
   const mixed = packsIn({ ...bad, ...PACK_TEXTS, 'gone.json': null })
@@ -3211,7 +3219,7 @@ test('with the packs a theme is what its pack says; without any, or without its 
     'default.json': packText('default', { family: 'kirby' }, '#202020'),
   }).packs
   const sunset = themed('custom:sunset', mine)
-  expect(['skin' in sunset.family && [sunset.family.key, sunset.family.skin.variant, sunset.family.skin.primary, sunset.family.hero.who], sunset.ground, sunset.isLight])
+  expect(['skin' in sunset.family && [sunset.family.key, sunset.family.skin.variant, sunset.family.skin.primary, sunset.family.hero?.who], sunset.ground, sunset.isLight])
     .toEqual([['cyberpunk-edgerunners', 'yellow', 0xff9900, 'thief'], { terminal: 0x101820, pane: 0x101820, isLight: true }, true])
   expect(themed('custom:sunset', mine).family).toBe(sunset.family)
   expect([themed('custom:kirby', mine).family === FAMILIES.clawd, themed('custom:kirby', mine).ground?.terminal]).toEqual([true, 0x223311])
@@ -3235,8 +3243,13 @@ test('with the packs a theme is what its pack says; without any, or without its 
 
 test('the Initial D pack brings its own family: a car per model, seen from the front, its headlights for eyes', async ($, on) => {
   expect(['custom:initial-d', 'Initial D', 'custom:initial-d-night'].map(theme => resolve(theme, PACKS)?.slug)).toEqual(['initial-d', 'initial-d', 'initial-d'])
-  const family = FAMILIES['initial-d'] as SpriteFamily
-  for (const theme of ['custom:initial-d', 'Initial D']) expect([theme, themed(theme, PACKS).family === family, themed(theme, PACKS).ground?.terminal]).toEqual([theme, true, 0x0e1117])
+  // (The family is the camera feed's, in the pack's colours or the mod's own; its cars are what is drawn without footage.)
+  const feed = FAMILIES['initial-d'] as TextFamily
+  const family = feed.cars!
+  for (const theme of ['custom:initial-d', 'Initial D']) expect([theme, themed(theme, PACKS).family === feed, themed(theme, PACKS).ground?.terminal]).toEqual([theme, true, 0x08182a])
+  expect([feed.world, feed.hero, feed.skin, PACKS.find(pack => pack.slug === 'initial-d')?.skin]).toEqual(['initiald', undefined, SKINS.night, SKINS.night])
+  const dusk = themed('custom:initial-d', packsIn({ ...PACK_TEXTS, 'initial-d.json': packText('initial-d', { family: 'initial-d', skin: { ...skinText(SKINS.night), primary: '#ff9900' } }, '#08182a') }).packs).family as TextFamily
+  expect([dusk.skin.primary, dusk.skin.variant, dusk.cars === family, themed('custom:initial-d', packsIn({ ...PACK_TEXTS, 'initial-d.json': packText('initial-d', { family: 'initial-d' }, null) }).packs).family === feed]).toEqual([0xff9900, 'night', true, true])
   // Without its pack the theme is anybody's: the tables do not know it.
   expect(themed('custom:initial-d').family).toBe(FAMILIES.clawd)
   expect(FORMS.map(form => nameOf({ family, form }))).toEqual(['Eight-Six', 'Twin Rotor', 'Red Hatch', 'Night Coupe'])
@@ -3260,7 +3273,104 @@ test('the Initial D pack brings its own family: a car per model, seen from the f
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount(TALL)
   expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).toContain('Eight-Six')
-  expect((await rootOf(ui)).backgroundColor).toBe('#0e1117')
+  expect((await rootOf(ui)).backgroundColor).toBe('#08182a')
+  const car = await ui.find({ type: 'Raster' })
+  expect([car?.props.columns, car?.props.rows]).toEqual([22, 9])
+  await ui.unmount()
+})
+
+test('the Initial D pane is the camera feed where its slot has footage and the terminal draws pictures, in a HUD of its own words; the cars everywhere else, never the mask', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  store(on, {}, 'custom:initial-d', 'claude-opus-5-5')
+  kitty(on)
+  on('session.usage', () => ({ value: { ...USAGE, rateLimits: [] } }))
+  on('command.run', () => ({ text: '' }))
+  on('ui.blit', () => ({ value: {} }))
+  const manifests: Partial<Record<Slot, string>> = { 'initiald-opus': manifestOf('THE DRIVER', { idle: 'CUP FULL. ROAD EMPTY.' }), 'ghostrunner-sonnet': manifestOf('HEL') }
+  // (One folder for both: the packs' files and the slots' manifests.)
+  on('fs.list', (_$, e) => {
+    if (!e.path.endsWith('/themes') || e.path.endsWith('/.claude/themes')) throw new Error('ENOENT')
+
+    return { value: Object.entries(PACK_TEXTS).map(([name, text], i) => ({ name, kind: 'file' as const, size: text.length, mtimeMs: 1000 + i, isLink: false })) }
+  })
+  on('fs.read', (_$, e) => {
+    const text = e.path.includes('/themes/') && !e.path.includes('/.claude/themes/') ? PACK_TEXTS[e.path.split('/').pop() ?? ''] : manifests[/\/assets\/([a-z-]+)\/manifest\.json$/.exec(e.path)?.[1] as Slot]
+    if (text === undefined) throw new Error('ENOENT')
+
+    return { value: text }
+  })
+  on('fs.exists', () => ({ value: false }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(TALL)
+  const seen = async () => {
+    const lines = flow(under(await ui.drawn()))
+    const picture = (await ui.find({ key: 'kirby' }))?.props
+
+    return { kind: lines.filter(line => line.startsWith('<')), box: [picture?.columns, picture?.rows], file: (picture?.source as { file?: string } | undefined)?.file ?? '', named: lines.find(line => line.startsWith('─┤ ')) ?? '', text: lines.join('\n') }
+  }
+
+  // Opus, its manifest there: the feed in the box the other worlds' has, under the manifest's name, saying its line, the HUD in touge words.
+  const driver = await seen()
+  expect([driver.kind, driver.named, driver.box]).toEqual([['<Image kirby>'], '─┤ THE DRIVER // OPUS-5-5 ├─', [33, 12]])
+  expect(driver.file).toMatch(/\/assets\/initiald-opus\/calm\/000\.png$/)
+  for (const said of ['CUP FULL. ROAD EMPTY.', 'DOWNHILL', 'STAGE // IDLE', '╱─ TACHOMETER ─']) expect(driver.text).toContain(said)
+  for (const word of ['CONNECTION', 'PROTOCOL', 'MONITOR', 'RAIJIN', 'Eight-Six']) expect(driver.text).not.toContain(word)
+  expect(coloursIn(await ui.drawn())).toContain(hex(SKINS.night.primary))
+
+  // A model whose slot has none: its car, in the pane the cars always had (the bubble, the name under it), not the mask of another world.
+  sessionModel = 'claude-sonnet-5-5'
+  await clock.advance(4400)
+  const car = await seen()
+  expect(car.kind.filter(kind => kind.endsWith(' kirby>'))).toEqual(['<Image kirby>'])
+  expect([car.file, car.named]).toEqual(['', ''])
+  expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).toContain('Twin Rotor')
+  for (const word of ['RAIJIN', 'TACHOMETER', 'RYOSUKE']) expect(car.text).not.toContain(word)
+  // Its footage arrives later: the pane switches from the car to the feed. A manifest without a name plays under the slot's driver's, in the family's lines.
+  manifests['initiald-sonnet'] = manifestOf(undefined)
+  await clock.advance(16_000)
+  const late = await seen()
+  expect([late.kind, late.named, late.box]).toEqual([['<Image kirby>'], '─┤ RYOSUKE // SONNET-5-5 ├─', driver.box])
+  expect(late.file).toContain('/assets/initiald-sonnet/calm/')
+  expect(late.text).toContain('ENGINE WARM. WAITING.')
+
+  // With the style "text" no feed plays: the car again, manifest or not.
+  await $.command.run(typed('style text'))
+  expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).toContain('Twin Rotor')
+  expect((await seen()).text).not.toContain('TACHOMETER')
+  await $.command.run(typed('style auto'))
+  expect((await seen()).named).toBe('─┤ RYOSUKE // SONNET-5-5 ├─')
+
+  // The other worlds fall back as they did: on Ghostrunner a model without footage is the mask, in the cyber HUD's words.
+  sessionTheme = 'custom:ghostrunner'
+  sessionModel = 'claude-haiku-4-5'
+  await clock.advance(4400)
+  const mask = await seen()
+  expect([mask.kind, mask.named, mask.box]).toEqual([['<Raster kirby>'], '─┤ RAIJIN PING // HAIKU-4-5 ├─', [33, MASK_ROWS]])
+  for (const said of ['CONNECTION', 'PROTOCOL // IDLE', 'MONITOR']) expect(mask.text).toContain(said)
+  await ui.unmount()
+})
+
+test('where the terminal draws no pictures the Initial D pane is the cars, manifest or not', async ($, on) => {
+  mock.clock(on, { now: NOW })
+  store(on, {}, 'custom:initial-d', 'claude-opus-5-5')
+  on('session.usage', () => ({ value: USAGE }))
+  on('ui.blit', () => ({ value: {} }))
+  on('fs.list', (_$, e) => {
+    if (!e.path.endsWith('/themes') || e.path.endsWith('/.claude/themes')) throw new Error('ENOENT')
+
+    return { value: Object.entries(PACK_TEXTS).map(([name, text], i) => ({ name, kind: 'file' as const, size: text.length, mtimeMs: 1000 + i, isLink: false })) }
+  })
+  on('fs.read', (_$, e) => {
+    const text = e.path.includes('/themes/') && !e.path.includes('/.claude/themes/') ? PACK_TEXTS[e.path.split('/').pop() ?? ''] : e.path.endsWith('/assets/initiald-opus/manifest.json') ? manifestOf('THE DRIVER') : undefined
+    if (text === undefined) throw new Error('ENOENT')
+
+    return { value: text }
+  })
+  on('fs.exists', () => ({ value: false }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(TALL)
+  expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).toContain('Eight-Six')
+  expect(flow(under(await ui.drawn())).join('\n')).not.toContain('THE DRIVER')
   const car = await ui.find({ type: 'Raster' })
   expect([car?.props.columns, car?.props.rows]).toEqual([22, 9])
   await ui.unmount()

@@ -61,8 +61,9 @@ dir="$out/$slot/$loop"
 mkdir -p "$dir"
 rm -f "$dir"/[0-9][0-9][0-9].png
 # Every picture 400 by 340, so the feed's box is one size whoever is in it: filled, then cut at the centre.
+# One palette of 255 colours per loop: a frame is a fifth of its size in full colour, and looks the same in the pane.
 ffmpeg -loglevel error -y -ss "$start" -i "$video" \
-  -vf "${crop:+crop=$crop,}fps=1000/$ms,scale=400:340:force_original_aspect_ratio=increase,crop=400:340" \
+  -vf "${crop:+crop=$crop,}fps=1000/$ms,scale=400:340:force_original_aspect_ratio=increase,crop=400:340,split[a][b];[a]palettegen=max_colors=255[p];[b][p]paletteuse" \
   -frames:v "$frames" -start_number 0 "$dir/%03d.png"
 got="$(ls "$dir" | wc -l)"
 [ "$got" -eq "$frames" ] || { echo "Only $got of $frames frames: the video ends too soon after $start." >&2; exit 1; }

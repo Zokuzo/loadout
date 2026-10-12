@@ -9,7 +9,7 @@ export type PackFamily = 'kirby' | 'clawd' | 'cyber' | 'initial-d'
 /**
  * A pack as this mod keeps it: the theme names it serves (`slug`, and the `match` substrings),
  * whether the theme is a light one, the one colour of terminal and pane (null: the terminal's own),
- * the mascot family, and for the text family its variant and, where the pack brings them, its colours.
+ * the mascot family, for the cyber family its variant and, where the pack brings them, a text family's colours.
  */
 export type Pack = {
   slug: string
@@ -59,16 +59,18 @@ export function packOf(text: string, file: string): Pack | string {
   const variant = avatar['variant']
   if (family === 'cyber' ? variant !== 'red' && variant !== 'yellow' : variant !== undefined) return 'avatar.variant: red or yellow, for cyber alone'
   const pack: Pack = { slug, name: typeof name === 'string' && name !== '' ? name : slug, match: (match as string[] | undefined) ?? [], isLight, background, family }
-  if (family !== 'cyber') return avatar['skin'] === undefined ? pack : 'avatar.skin is for cyber alone'
   const worn = avatar['skin']
-  if (worn === undefined) return { ...pack, variant: variant as Variant }
+  // (The cars' HUD has one palette, `night`: no variant to name.)
+  const told = family === 'cyber' ? { variant: variant as Variant } : {}
+  if (family !== 'cyber' && family !== 'initial-d') return worn === undefined ? pack : 'avatar.skin is for cyber and initial-d alone'
+  if (worn === undefined) return { ...pack, ...told }
   if (!isRecord(worn)) return 'avatar.skin is not an object'
   const colours = SKIN_KEYS.map(key => colourOf(worn[key]))
   const missing = SKIN_KEYS.find((_key, i) => colours[i] === undefined)
   if (missing !== undefined) return `avatar.skin.${missing} is not #rrggbb`
-  const skin = Object.fromEntries([['variant', variant], ...SKIN_KEYS.map((key, i) => [key, colours[i]])]) as Skin
+  const skin = Object.fromEntries([['variant', variant ?? 'night'], ...SKIN_KEYS.map((key, i) => [key, colours[i]])]) as Skin
 
-  return { ...pack, variant: variant as Variant, skin }
+  return { ...pack, ...told, skin }
 }
 
 /**

@@ -1,0 +1,87 @@
+{
+ "name": "RYOSUKE",
+ "speech": {
+  "idle": "THE THEORY IS COMPLETE.",
+  "working": "EXACTLY AS SIMULATED.",
+  "happy": "A PERFECT LINE.",
+  "worried": "OUTSIDE MY CALCULATIONS."
+ },
+ "clips": {
+  "coffee": {
+   "frames": 26,
+   "ms": 90,
+   "what": "drinks coffee, eyes closed"
+  },
+  "cup-down": {
+   "frames": 26,
+   "ms": 90,
+   "what": "lowers the cup, thinking"
+  },
+  "night-profile": {
+   "frames": 22,
+   "ms": 90,
+   "what": "in profile against the trees"
+  },
+  "blue-aura": {
+   "frames": 26,
+   "ms": 90,
+   "what": "the white coupe in a blue aura"
+  },
+  "smoke-exit": {
+   "frames": 22,
+   "ms": 90,
+   "what": "leaves the corner in tyre smoke"
+  },
+  "top-drift": {
+   "frames": 26,
+   "ms": 90,
+   "what": "drifts, seen from above"
+  },
+  "chase-cam": {
+   "frames": 26,
+   "ms": 90,
+   "what": "tail lights from the chase car"
+  },
+  "smirk": {
+   "frames": 24,
+   "ms": 90,
+   "what": "looks up with a thin smile"
+  },
+  "mirror-glance": {
+   "frames": 18,
+   "ms": 90,
+   "what": "a calm glance as the coupe passes"
+  },
+  "sharp-look": {
+   "frames": 20,
+   "ms": 90,
+   "what": "a hard look, half in light"
+  },
+  "pale": {
+   "frames": 10,
+   "ms": 90,
+   "what": "pale under the night sky"
+  }
+ },
+ "moods": {
+  "idle": [
+   "coffee",
+   "cup-down",
+   "night-profile"
+  ],
+  "working": [
+   "blue-aura",
+   "smoke-exit",
+   "top-drift",
+   "chase-cam"
+  ],
+  "happy": [
+   "smirk",
+   "mirror-glance"
+  ],
+  "worried": [
+   "sharp-look",
+   "pale"
+  ]
+ }
+}

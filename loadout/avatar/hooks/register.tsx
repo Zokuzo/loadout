@@ -251,7 +251,7 @@ let reelsTriedAt = -Infinity
 /**
  * Looks for the slots' manifests (and the Opus slots' stills) not found yet. Footage can arrive
  * after the session began, a folder at a time: looked for again a few times a minute, until all
- * eight manifests are found. Never throws.
+ * twelve manifests are found. Never throws.
  */
 async function findAssets($: EngineInterface) {
   if (reels.size >= SLOTS.length) return
@@ -1452,7 +1452,7 @@ export const register: Register = on => {
     const working = await read($, isWorking)
     const call = last(await read($, calls))
     const alive = await read($, helpers)
-    const session = await sessionLook($)
+    const wanted = await sessionLook($)
     const look = themed(await read($, theme), packs)
     const paneGround = look.ground?.pane
     const ground = paneGround ?? NONE
@@ -1462,10 +1462,13 @@ export const register: Register = on => {
     // A pane of another size may be a terminal of another font: the cell is measured again.
     // A text family's character is a picture too, where the terminal draws them and the person has not asked for text.
     await quiet(findAssets($)) // a reload mid-session raises no session.start
-    const hero = 'skin' in session.family && session.form === 'opus' ? session.family.hero : undefined
     // The camera feed: the pictures of the slot the theme's world and the session's model name, where there are any.
-    const slot = 'skin' in session.family ? slotOf(session.family.world, session.form) : undefined
+    const slot = 'skin' in wanted.family ? slotOf(wanted.family.world, wanted.form) : undefined
     const feed = slot !== undefined && hasPictures(slot) ? slot : undefined
+    // A world with cars is theirs wherever its feed does not play: they are drawn as any sprite family, never the mask.
+    const cars = 'skin' in wanted.family && !(canPicture === true && table !== undefined && style !== 'text' && feed !== undefined) ? wanted.family.cars : undefined
+    const session = cars === undefined ? wanted : { family: cars, form: wanted.form }
+    const hero = 'skin' in session.family && session.form === 'opus' ? session.family.hero : undefined
     const isArt = canPicture === true && table !== undefined && ('skin' in session.family ? style !== 'text' && (hero !== undefined || feed !== undefined) : true)
     if (isArt && shape !== `${width}x${bodyRows}`) {
       shape = `${width}x${bodyRows}`
@@ -1601,6 +1604,7 @@ export const register: Register = on => {
     const limit = (label: string, l: KirbyHudLimit | undefined) => ({ label, percent: l?.percentUsed, isAlert: (l?.percentUsed ?? 0) >= LIMIT_NEAR, detail: reset(l) })
     const tree = 'skin' in family ? hudTree($.ui.resolve(e), {
       skin: family.skin,
+      ...(family.captions === undefined ? {} : { captions: family.captions }),
       ...(paneGround === undefined ? {} : { ground: { color: hex(paneGround), columns: width } }),
       columns: bubbleColumns,
       height: bodyRows - headRows,

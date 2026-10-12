@@ -1,0 +1,75 @@
+{
+ "name": "KEISUKE",
+ "speech": {
+  "idle": "ENGINE WARM. WHO IS NEXT?",
+  "working": "FULL THROTTLE.",
+  "happy": "THAT IS HOW IT IS DONE.",
+  "worried": "TCH. LOSING GRIP."
+ },
+ "clips": {
+  "waiting": {
+   "frames": 26,
+   "ms": 90,
+   "what": "waits, arms loose, crew behind"
+  },
+  "window-lean": {
+   "frames": 26,
+   "ms": 90,
+   "what": "leans on the car window"
+  },
+  "fd-side": {
+   "frames": 24,
+   "ms": 90,
+   "what": "the yellow coupe flat out, from the side"
+  },
+  "tail-slide": {
+   "frames": 26,
+   "ms": 90,
+   "what": "slides, tail out, in tyre smoke"
+  },
+  "blue-spark": {
+   "frames": 16,
+   "ms": 90,
+   "what": "blue sparks around the car"
+  },
+  "grip": {
+   "frames": 9,
+   "ms": 90,
+   "what": "both hands on the wheel"
+  },
+  "tea": {
+   "frames": 26,
+   "ms": 90,
+   "what": "a cup of tea by the window"
+  },
+  "backfire": {
+   "frames": 20,
+   "ms": 90,
+   "what": "flame from the exhaust"
+  },
+  "grim": {
+   "frames": 26,
+   "ms": 90,
+   "what": "a grim look over the wheel"
+  }
+ },
+ "moods": {
+  "idle": [
+   "waiting",
+   "window-lean"
+  ],
+  "working": [
+   "fd-side",
+   "tail-slide",
+   "blue-spark",
+   "grip"
+  ],
+  "happy": [
+   "tea"
+  ],
+  "worried": [
+   "backfire",
+   "grim"
+  ]
+ }
+}

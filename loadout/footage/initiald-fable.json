@@ -1,0 +1,47 @@
+{
+ "name": "BUNTA",
+ "speech": {
+  "idle": "HM. GO DELIVER THE TOFU.",
+  "working": "ONE HAND IS ENOUGH.",
+  "happy": "NOT BAD.",
+  "worried": "TIME TO CHANGE THE SETUP."
+ },
+ "clips": {
+  "smoke-break": {
+   "frames": 26,
+   "ms": 90,
+   "what": "smokes outside the shop, eyes shut"
+  },
+  "lighting-up": {
+   "frames": 16,
+   "ms": 90,
+   "what": "lights a cigarette in the dark"
+  },
+  "blue-pass": {
+   "frames": 20,
+   "ms": 90,
+   "what": "the blue sedan from behind, at speed"
+  },
+  "night-run": {
+   "frames": 26,
+   "ms": 90,
+   "what": "the blue sedan at night, from the side"
+  },
+  "one-hand": {
+   "frames": 18,
+   "ms": 90,
+   "what": "drives with one hand, smoking"
+  }
+ },
+ "moods": {
+  "idle": [
+   "smoke-break",
+   "lighting-up"
+  ],
+  "working": [
+   "blue-pass",
+   "night-run",
+   "one-hand"
+  ]
+ }
+}

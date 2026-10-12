@@ -1,10 +1,10 @@
 # The camera feeds: getting the author's render
 
-On the Ghostrunner and Cyberpunk Edgerunners themes, the Avatar pane shows a framed camera feed of a character, one per model. The author's feeds are cut from the games and the anime, so they are not in this repository: that footage belongs to its owners. Without it the two themes draw their built-in characters and a mask, and everything else (colours, Flow map, frames, working line, the other themes) is already identical to the author's.
+On three themes, Ghostrunner, Cyberpunk Edgerunners and Initial D, the Avatar pane shows a framed camera feed of a character, one per model. The author's feeds are cut from the games and the anime, so they are not in this repository: that footage belongs to its owners. Without it the first two draw their built-in characters and a mask, Initial D its four pixel cars, and everything else (colours, Flow map, frames, working line, the other themes) is already identical to the author's.
 
 What is shipped is the recipe of each feed: `footage/<slot>.json` names every loop, how many frames it has, how long a frame shows, what the loop shows in a few words, and the character's name and lines. With a video of your own and `bin/footage`, you rebuild the same feed.
 
-## The eight feeds
+## The twelve feeds
 
 | Slot | Theme | Model | Character | Loops | Frames |
 |---|---|---|---|---|---|
@@ -16,10 +16,14 @@ What is shipped is the recipe of each feed: `footage/<slot>.json` names every lo
 | `edgerunners-sonnet` | Cyberpunk Edgerunners | Sonnet | David Martinez | 12 | 252 |
 | `edgerunners-haiku` | Cyberpunk Edgerunners | Haiku | Rebecca | 13 | 221 |
 | `edgerunners-fable` | Cyberpunk Edgerunners | Fable | Adam Smasher | 9 | 184 |
+| `initiald-opus` | Initial D | Opus | Takumi | 15 | 330 |
+| `initiald-sonnet` | Initial D | Sonnet | Ryosuke | 11 | 246 |
+| `initiald-haiku` | Initial D | Haiku | Keisuke | 9 | 199 |
+| `initiald-fable` | Initial D | Fable | Bunta | 5 | 106 |
 
 ## Rebuild one
 
-You need `ffmpeg`, `python3`, a terminal that draws pictures (kitty or Ghostty), and a video you are entitled to use: your own capture of the game, or a release you own.
+You need `ffmpeg`, `python3`, a terminal that draws pictures (kitty or Ghostty), and a video you are entitled to use: your own capture of the game, or a release of the anime you own.
 
 1. List a slot's loops and what each shows:
 
@@ -43,7 +47,7 @@ You need `ffmpeg`, `python3`, a terminal that draws pictures (kitty or Ghostty),
 
 3. Repeat for each loop. `bin/footage <slot>` marks the ones that are cut. When the last one is, the script writes the slot's manifest and a running session starts the feed within a few seconds.
 
-A loop of 22 frames at 90 ms is two seconds of video. A slot is 8 to 13 loops: about a quarter of an hour once you know where the scenes are.
+A loop of 22 frames at 90 ms is two seconds of video. A slot is 5 to 15 loops: about a quarter of an hour once you know where the scenes are.
 
 `bin/footage` is in the installed copy too: `~/.claude/plugins/marketplaces/zokuzo/loadout/bin/footage`.
 
