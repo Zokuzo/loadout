@@ -1,0 +1,74 @@
+{
+ "name": "JACK",
+ "speech": {
+  "idle": "BLADE SHEATHED. WATCHING.",
+  "working": "CUTTING THROUGH ICE...",
+  "happy": "ONE CUT. CLEAN."
+ },
+ "clips": {
+  "hooded-stare": {
+   "frames": 20,
+   "ms": 90,
+   "what": "hooded mask stares ahead"
+  },
+  "mask-neon-lights": {
+   "frames": 20,
+   "ms": 90,
+   "what": "city lights sweep his mask"
+  },
+  "shuriken-leap": {
+   "frames": 17,
+   "ms": 90,
+   "what": "leaps and throws a shuriken"
+  },
+  "bike-jump": {
+   "frames": 23,
+   "ms": 90,
+   "what": "motorbike launches off the tower"
+  },
+  "bike-wall-ride": {
+   "frames": 22,
+   "ms": 90,
+   "what": "rides bike down tower wall"
+  },
+  "deflect-lunge": {
+   "frames": 22,
+   "ms": 90,
+   "what": "deflects gunfire then lunges"
+  },
+  "landing": {
+   "frames": 19,
+   "ms": 90,
+   "what": "lands crouched with katana"
+  },
+  "finishing-cut": {
+   "frames": 22,
+   "ms": 90,
+   "what": "finishing slash, blade held ready"
+  },
+  "red-eyes-wake": {
+   "frames": 21,
+   "ms": 90,
+   "what": "surrounded as masked eyes ignite"
+  }
+ },
+ "moods": {
+  "idle": [
+   "hooded-stare",
+   "mask-neon-lights"
+  ],
+  "working": [
+   "shuriken-leap",
+   "bike-jump",
+   "bike-wall-ride",
+   "deflect-lunge"
+  ],
+  "happy": [
+   "landing",
+   "finishing-cut"
+  ],
+  "worried": [
+   "red-eyes-wake"
+  ]
+ }
+}

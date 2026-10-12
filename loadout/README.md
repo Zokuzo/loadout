@@ -151,4 +151,4 @@ python3 themes/validate.py
 
 ## The pictures
 
-Everything in this repository is drawn in code or as data: the sprites, the text characters, the mask. The camera feed of the Ghostrunner and Cyberpunk Edgerunners themes plays footage from `assets/<slot>/`, and no footage is shipped: it would be other people's work. Without it those two themes draw their built-in characters and the mask. To add your own, drop a folder per character as "The characters" above describes; `assets/` is ignored by git.
+Everything in this repository is drawn in code or as data: the sprites, the text characters, the mask. The camera feed of the Ghostrunner and Cyberpunk Edgerunners themes plays footage from `assets/<slot>/`, and no footage is shipped: it would be other people's work. Without it those two themes draw their built-in characters and the mask. `FOOTAGE.md` says how to rebuild the author's feeds from a video of your own: the recipe of each is shipped (`footage/<slot>.json`), and `bin/footage` cuts the frames. `assets/` is ignored by git.

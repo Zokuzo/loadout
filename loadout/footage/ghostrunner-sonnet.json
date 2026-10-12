@@ -1,0 +1,87 @@
+{
+ "name": "HEL",
+ "speech": {
+  "idle": "TARGETS. GIVE ME TARGETS.",
+  "working": "CUTTING THROUGH.",
+  "happy": "CLEAN CUT. NEXT.",
+  "worried": "RAGE CORE UNSTABLE."
+ },
+ "clips": {
+  "mask-stare": {
+   "frames": 20,
+   "ms": 90,
+   "what": "red mask stares from dark"
+  },
+  "stalks-guard": {
+   "frames": 22,
+   "ms": 90,
+   "what": "looms behind an unaware guard"
+  },
+  "arena-stance": {
+   "frames": 24,
+   "ms": 90,
+   "what": "holds low stance in arena"
+  },
+  "wall-run": {
+   "frames": 17,
+   "ms": 90,
+   "what": "sprints along a wall"
+  },
+  "blade-advance": {
+   "frames": 22,
+   "ms": 90,
+   "what": "advances with glowing blade"
+  },
+  "blade-drive": {
+   "frames": 18,
+   "ms": 90,
+   "what": "drives her blade forward"
+  },
+  "cable-swing": {
+   "frames": 22,
+   "ms": 90,
+   "what": "swings through the city air"
+  },
+  "rises-armed": {
+   "frames": 24,
+   "ms": 90,
+   "what": "lands then rises, blade out"
+  },
+  "after-strike": {
+   "frames": 22,
+   "ms": 90,
+   "what": "poised close-up after striking"
+  },
+  "laser-graze": {
+   "frames": 22,
+   "ms": 90,
+   "what": "laser sweeps past her mask"
+  },
+  "signal-glitch": {
+   "frames": 18,
+   "ms": 90,
+   "what": "feed glitches over her mask"
+  }
+ },
+ "moods": {
+  "idle": [
+   "mask-stare",
+   "stalks-guard",
+   "arena-stance"
+  ],
+  "working": [
+   "wall-run",
+   "blade-advance",
+   "blade-drive",
+   "cable-swing"
+  ],
+  "happy": [
+   "rises-armed",
+   "after-strike"
+  ],
+  "worried": [
+   "laser-graze",
+   "signal-glitch"
+  ]
+ }
+}

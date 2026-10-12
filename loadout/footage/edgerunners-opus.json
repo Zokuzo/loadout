@@ -1,0 +1,93 @@
+{
+ "name": "LUCY",
+ "speech": {
+  "idle": "CASING THE JOINT. QUIET.",
+  "working": "FINGERS IN THE VAULT...",
+  "happy": "GOT IT. NEVER HERE."
+ },
+ "clips": {
+  "hood-rooftop": {
+   "frames": 20,
+   "ms": 90,
+   "what": "hooded, watching the city"
+  },
+  "smoking": {
+   "frames": 30,
+   "ms": 90,
+   "what": "smoking, exhaling slowly"
+  },
+  "lighting-up": {
+   "frames": 28,
+   "ms": 90,
+   "what": "lighting a cigarette"
+  },
+  "moon-breeze": {
+   "frames": 26,
+   "ms": 90,
+   "what": "hair drifting on moon"
+  },
+  "quickhack": {
+   "frames": 24,
+   "ms": 90,
+   "what": "quick-hacking, eyes glowing red"
+  },
+  "ice-bath-dive": {
+   "frames": 25,
+   "ms": 90,
+   "what": "netrunning in ice bath"
+  },
+  "monowire": {
+   "frames": 22,
+   "ms": 90,
+   "what": "holding the monowire taut"
+  },
+  "shard-scan": {
+   "frames": 26,
+   "ms": 90,
+   "what": "scanning a metro mark"
+  },
+  "laughing": {
+   "frames": 24,
+   "ms": 90,
+   "what": "laughing at the bar"
+  },
+  "moon-smile": {
+   "frames": 26,
+   "ms": 90,
+   "what": "laughing on the moon"
+  },
+  "alarmed": {
+   "frames": 22,
+   "ms": 90,
+   "what": "alarmed look, eyes wide"
+  },
+  "running": {
+   "frames": 17,
+   "ms": 90,
+   "what": "running along the rail"
+  }
+ },
+ "moods": {
+  "idle": [
+   "hood-rooftop",
+   "smoking",
+   "lighting-up",
+   "moon-breeze"
+  ],
+  "working": [
+   "quickhack",
+   "ice-bath-dive",
+   "monowire",
+   "shard-scan"
+  ],
+  "happy": [
+   "moon-breeze",
+   "laughing",
+   "moon-smile"
+  ],
+  "worried": [
+   "alarmed",
+   "running"
+  ]
+ }
+}

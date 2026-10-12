@@ -1,0 +1,99 @@
+{
+ "name": "REBECCA",
+ "speech": {
+  "idle": "BORED. GIMME A TARGET.",
+  "working": "EAT LEAD, GONKS!",
+  "happy": "HAHA! NOVA! AGAIN!",
+  "worried": "OH, THAT AIN'T GOOD."
+ },
+ "clips": {
+  "hood-up": {
+   "frames": 22,
+   "ms": 90,
+   "what": "still: hooded, city lights"
+  },
+  "car-smirk": {
+   "frames": 23,
+   "ms": 90,
+   "what": "smirking chatter, leaning back"
+  },
+  "side-eye": {
+   "frames": 18,
+   "ms": 90,
+   "what": "glares, shuts eyes, turns"
+  },
+  "lounging": {
+   "frames": 22,
+   "ms": 90,
+   "what": "lounges cradling her gun"
+  },
+  "cannon-fire": {
+   "frames": 24,
+   "ms": 90,
+   "what": "fires the giant pink cannon"
+  },
+  "leap-guns": {
+   "frames": 13,
+   "ms": 90,
+   "what": "leaps firing two guns"
+  },
+  "pistols": {
+   "frames": 12,
+   "ms": 90,
+   "what": "blasts pistols, eyes blazing"
+  },
+  "shotgun-snarl": {
+   "frames": 11,
+   "ms": 90,
+   "what": "snarls down her shotgun"
+  },
+  "muzzle-blast": {
+   "frames": 11,
+   "ms": 90,
+   "what": "hammers fire straight down"
+  },
+  "manic-laugh": {
+   "frames": 14,
+   "ms": 90,
+   "what": "cackles while shooting wildly"
+  },
+  "fists-up": {
+   "frames": 22,
+   "ms": 90,
+   "what": "throws both big fists up"
+  },
+  "wink": {
+   "frames": 16,
+   "ms": 90,
+   "what": "winks beside her pistol"
+  },
+  "startled": {
+   "frames": 13,
+   "ms": 90,
+   "what": "gasps wide-eyed at screen"
+  }
+ },
+ "moods": {
+  "idle": [
+   "hood-up",
+   "car-smirk",
+   "side-eye",
+   "lounging"
+  ],
+  "working": [
+   "cannon-fire",
+   "leap-guns",
+   "pistols",
+   "shotgun-snarl",
+   "muzzle-blast"
+  ],
+  "happy": [
+   "manic-laugh",
+   "fists-up",
+   "wink"
+  ],
+  "worried": [
+   "startled"
+  ]
+ }
+}

@@ -1,0 +1,76 @@
+{
+ "name": "SMASHER",
+ "speech": {
+  "idle": "STANDING BY. BARELY.",
+  "working": "TARGET ACQUIRED. ENGAGING.",
+  "happy": "ADEQUATE. FOR MEAT.",
+  "worried": "SYSTEM FAULT. IRRELEVANT."
+ },
+ "clips": {
+  "seated-dark": {
+   "frames": 24,
+   "ms": 90,
+   "what": "sits waiting in the dark"
+  },
+  "cold-stare": {
+   "frames": 16,
+   "ms": 90,
+   "what": "metal face stares down"
+  },
+  "red-eye": {
+   "frames": 22,
+   "ms": 90,
+   "what": "still: red eye glowing"
+  },
+  "smoke-stride": {
+   "frames": 21,
+   "ms": 90,
+   "what": "strides out of green smoke"
+  },
+  "dash": {
+   "frames": 20,
+   "ms": 90,
+   "what": "lunges forward in a blur"
+  },
+  "launchers-open": {
+   "frames": 17,
+   "ms": 90,
+   "what": "shoulder launchers unfold, armed"
+  },
+  "looms-up": {
+   "frames": 25,
+   "ms": 90,
+   "what": "rises, looming overhead"
+  },
+  "face-glitch": {
+   "frames": 21,
+   "ms": 90,
+   "what": "face glitches under hack"
+  },
+  "red-alert": {
+   "frames": 18,
+   "ms": 90,
+   "what": "still: red flicker, glitch"
+  }
+ },
+ "moods": {
+  "idle": [
+   "seated-dark",
+   "cold-stare",
+   "red-eye"
+  ],
+  "working": [
+   "smoke-stride",
+   "dash",
+   "launchers-open"
+  ],
+  "happy": [
+   "red-eye",
+   "looms-up"
+  ],
+  "worried": [
+   "face-glitch",
+   "red-alert"
+  ]
+ }
+}

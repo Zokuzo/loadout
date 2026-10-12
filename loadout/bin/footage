@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Cuts one loop of a character's camera feed out of a video you have, as the frames Loadout plays.
+# The recipes are footage/<slot>.json: each names its loops, how many frames each has and how long
+# a frame shows. No footage is shipped; FOOTAGE.md says which scenes the recipes describe.
+#
+#   footage --list                     the slots, their loops and what each shows
+#   footage <slot>                     one slot's loops, and which are already cut
+#   footage <slot> <loop> <video> <start> [<crop>]
+#                                      cuts the loop from <video> at <start> (seconds, or h:mm:ss.ms);
+#                                      <crop> is an ffmpeg crop (w:h:x:y) taken before the fit, for a
+#                                      face in a wide shot
+#
+# Frames land in ${LOADOUT_ASSETS:-<config>/plugins/cache/zokuzo/loadout/assets}/<slot>/<loop>/, a folder
+# beside the installed copies that plugin updates leave alone. Needs ffmpeg and python3.
+set -euo pipefail
+
+here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+recipes="$here/footage"
+out="${LOADOUT_ASSETS:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/cache/zokuzo/loadout/assets}"
+
+field() { python3 - "$recipes/$1.json" "$2" "$3" <<'PY'
+import json, sys
+clip = json.load(open(sys.argv[1]))['clips'].get(sys.argv[2])
+print(clip[sys.argv[3]] if clip else '')
+PY
+}
+
+show() { python3 - "$recipes" "$out" "$@" <<'PY'
+import json, os, sys
+recipes, out, slots = sys.argv[1], sys.argv[2], sys.argv[3:]
+for file in sorted(os.listdir(recipes)):
+    slot = file[:-5]
+    if slots and slot not in slots: continue
+    recipe = json.load(open(os.path.join(recipes, file)))
+    print(f"{slot}  ({recipe.get('name', slot)})")
+    for mood, loops in recipe['moods'].items():
+        for loop in loops:
+            clip = recipe['clips'][loop]
+            cut = os.path.isfile(os.path.join(out, slot, loop, f"{clip['frames'] - 1:03d}.png"))
+            print(f"  {'✔' if cut else '·'} {mood:<8} {loop:<20} {clip['frames']:>3} frames x {clip['ms']} ms  {clip.get('what', '')}")
+PY
+}
+
+case "${1:-}" in
+  ''|-h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  --list) show; exit 0 ;;
+esac
+
+slot="$1"
+[ -f "$recipes/$slot.json" ] || { echo "No slot \"$slot\". Slots: $(ls "$recipes" | sed 's/\.json$//' | tr '\n' ' ')" >&2; exit 1; }
+[ $# -ge 2 ] || { show "$slot"; exit 0; }
+[ $# -ge 4 ] || { echo "Usage: footage <slot> <loop> <video> <start> [<crop>]" >&2; exit 1; }
+loop="$2" video="$3" start="$4" crop="${5:-}"
+frames="$(field "$slot" "$loop" frames)"
+ms="$(field "$slot" "$loop" ms)"
+[ -n "$frames" ] || { echo "No loop \"$loop\" in $slot. Run: footage $slot" >&2; exit 1; }
+[ -f "$video" ] || { echo "No such video: $video" >&2; exit 1; }
+command -v ffmpeg >/dev/null || { echo "ffmpeg is not installed." >&2; exit 1; }
+
+dir="$out/$slot/$loop"
+mkdir -p "$dir"
+rm -f "$dir"/[0-9][0-9][0-9].png
+# Every picture 400 by 340, so the feed's box is one size whoever is in it: filled, then cut at the centre.
+ffmpeg -loglevel error -y -ss "$start" -i "$video" \
+  -vf "${crop:+crop=$crop,}fps=1000/$ms,scale=400:340:force_original_aspect_ratio=increase,crop=400:340" \
+  -frames:v "$frames" -start_number 0 "$dir/%03d.png"
+got="$(ls "$dir" | wc -l)"
+[ "$got" -eq "$frames" ] || { echo "Only $got of $frames frames: the video ends too soon after $start." >&2; exit 1; }
+echo "$slot/$loop: $frames frames in $dir"
+# The recipe becomes the slot's manifest once every loop it names is cut: the feed plays whole, or not at all.
+left="$(show "$slot" | grep -c '^  ·' || true)"
+if [ "$left" -eq 0 ]; then
+  cp "$recipes/$slot.json" "$out/$slot/manifest.json"
+  echo "$slot is complete: its feed plays within a few seconds in a running session."
+else
+  echo "$left loops of $slot left to cut (footage $slot lists them)."
+fi

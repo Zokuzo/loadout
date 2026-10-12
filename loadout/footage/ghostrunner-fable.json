@@ -1,0 +1,75 @@
+{
+ "name": "MARA",
+ "speech": {
+  "idle": "THE TOWER OBEYS ME.",
+  "working": "I HOLD EVERY KEY.",
+  "happy": "ORDER, PERFECTLY KEPT.",
+  "worried": "YOU DARE TOUCH ME?"
+ },
+ "clips": {
+  "cold-glare": {
+   "frames": 20,
+   "ms": 90,
+   "what": "glowing eyes glare down close"
+  },
+  "shadow-looms": {
+   "frames": 18,
+   "ms": 90,
+   "what": "tentacled shadow stretches over floor"
+  },
+  "hologram-watch": {
+   "frames": 20,
+   "ms": 90,
+   "what": "giant hologram face watches arena"
+  },
+  "tentacles-unfurl": {
+   "frames": 20,
+   "ms": 90,
+   "what": "mechanical tentacles reach forward"
+  },
+  "strike-ready": {
+   "frames": 20,
+   "ms": 90,
+   "what": "tentacle arches up to strike"
+  },
+  "ascends": {
+   "frames": 22,
+   "ms": 90,
+   "what": "rises aloft on tentacle arms"
+  },
+  "surveys-prey": {
+   "frames": 20,
+   "ms": 90,
+   "what": "stands composed over her captive"
+  },
+  "guard-crossed": {
+   "frames": 20,
+   "ms": 90,
+   "what": "braces behind crossed arms"
+  },
+  "tackled": {
+   "frames": 22,
+   "ms": 90,
+   "what": "struck mid-air by glowing runner"
+  }
+ },
+ "moods": {
+  "idle": [
+   "cold-glare",
+   "shadow-looms",
+   "hologram-watch"
+  ],
+  "working": [
+   "tentacles-unfurl",
+   "strike-ready"
+  ],
+  "happy": [
+   "ascends",
+   "surveys-prey"
+  ],
+  "worried": [
+   "guard-crossed",
+   "tackled"
+  ]
+ }
+}

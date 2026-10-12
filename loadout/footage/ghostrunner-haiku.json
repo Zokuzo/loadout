@@ -1,0 +1,69 @@
+{
+ "name": "MITRA",
+ "speech": {
+  "idle": "STASIS TAUGHT ME PATIENCE.",
+  "working": "UNMAKING THEIR TOWER.",
+  "happy": "SIX HANDS. ONE WILL.",
+  "worried": "MY SIGNAL... FRACTURES."
+ },
+ "clips": {
+  "eye-opens": {
+   "frames": 24,
+   "ms": 90,
+   "what": "blue eye glows in stasis"
+  },
+  "stasis-dormant": {
+   "frames": 22,
+   "ms": 90,
+   "what": "hangs wired in stasis chamber"
+  },
+  "arms-spread": {
+   "frames": 24,
+   "ms": 90,
+   "what": "six arms held spread wide"
+  },
+  "blades-advance": {
+   "frames": 24,
+   "ms": 90,
+   "what": "advances swinging many blades"
+  },
+  "cape-cast": {
+   "frames": 18,
+   "ms": 90,
+   "what": "gestures a red energy attack"
+  },
+  "rises-again": {
+   "frames": 24,
+   "ms": 90,
+   "what": "awakens, arms unfolding in light"
+  },
+  "core-flicker": {
+   "frames": 28,
+   "ms": 90,
+   "what": "STILL: head glitching red"
+  },
+  "signal-tear": {
+   "frames": 30,
+   "ms": 90,
+   "what": "STILL: red form glitch-torn"
+  }
+ },
+ "moods": {
+  "idle": [
+   "eye-opens",
+   "stasis-dormant",
+   "arms-spread"
+  ],
+  "working": [
+   "blades-advance",
+   "cape-cast"
+  ],
+  "happy": [
+   "rises-again"
+  ],
+  "worried": [
+   "core-flicker",
+   "signal-tear"
+  ]
+ }
+}

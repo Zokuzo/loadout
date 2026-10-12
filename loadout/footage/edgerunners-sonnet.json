@@ -1,0 +1,94 @@
+{
+ "name": "DAVID",
+ "speech": {
+  "idle": "NIGHT CITY CAN WAIT.",
+  "working": "SANDY'S HOT. MOVING.",
+  "happy": "PREEM. WE DID IT, CHOOM.",
+  "worried": "THAT WAS TOO CLOSE."
+ },
+ "clips": {
+  "city-watch": {
+   "frames": 22,
+   "ms": 90,
+   "what": "jacket on, watching the city"
+  },
+  "side-glance": {
+   "frames": 26,
+   "ms": 90,
+   "what": "glances over his shoulder"
+  },
+  "jacket-turn": {
+   "frames": 22,
+   "ms": 90,
+   "what": "turns in the EMT jacket"
+  },
+  "moon-dream": {
+   "frames": 20,
+   "ms": 90,
+   "what": "sits on the moon"
+  },
+  "sandevistan-trail": {
+   "frames": 23,
+   "ms": 90,
+   "what": "Sandevistan after-images fan out"
+  },
+  "sandevistan-sprint": {
+   "frames": 15,
+   "ms": 90,
+   "what": "sprints trailing blue after-images"
+  },
+  "taking-aim": {
+   "frames": 17,
+   "ms": 90,
+   "what": "levels his pistol, steady"
+  },
+  "hard-turn": {
+   "frames": 22,
+   "ms": 90,
+   "what": "wrenches the steering wheel"
+  },
+  "ride-grin": {
+   "frames": 22,
+   "ms": 90,
+   "what": "grins from the rover"
+  },
+  "thumbs-up": {
+   "frames": 24,
+   "ms": 90,
+   "what": "cheers beside a thumbs-up"
+  },
+  "masked-alarm": {
+   "frames": 17,
+   "ms": 90,
+   "what": "wide eyes behind the mask"
+  },
+  "shocked": {
+   "frames": 22,
+   "ms": 90,
+   "what": "stares in shock, hair whipping"
+  }
+ },
+ "moods": {
+  "idle": [
+   "city-watch",
+   "side-glance",
+   "jacket-turn",
+   "moon-dream"
+  ],
+  "working": [
+   "sandevistan-trail",
+   "sandevistan-sprint",
+   "taking-aim",
+   "hard-turn"
+  ],
+  "happy": [
+   "moon-dream",
+   "ride-grin",
+   "thumbs-up"
+  ],
+  "worried": [
+   "masked-alarm",
+   "shocked"
+  ]
+ }
+}

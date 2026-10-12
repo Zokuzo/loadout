@@ -55,7 +55,7 @@ A theme is two JSON files and no code: Claude Code's colours, and a "pack" (back
 
 - Pictures need a terminal with the kitty graphics protocol (kitty, Ghostty). Elsewhere a text version is drawn.
 - The plugin is written against Claude Code's plugin hooks (`ui.render`, panes). It needs a recent Claude Code.
-- No footage is shipped for the Ghostrunner and Edgerunners camera feeds; those themes draw their built-in characters. You can add your own (`loadout/README.md`, "The characters").
+- No footage is shipped for the Ghostrunner and Edgerunners camera feeds: it belongs to its owners, and those themes draw their built-in characters without it. To get the same feeds as the author, follow [`loadout/FOOTAGE.md`](loadout/FOOTAGE.md): each feed's recipe is shipped, and one script cuts the frames from a video of your own.
 
 ## Checks
 
