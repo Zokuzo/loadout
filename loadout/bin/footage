@@ -21,7 +21,7 @@ out="${LOADOUT_ASSETS:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/cache/zokuzo/
 field() { python3 - "$recipes/$1.json" "$2" "$3" <<'PY'
 import json, sys
 clip = json.load(open(sys.argv[1]))['clips'].get(sys.argv[2])
-print(clip[sys.argv[3]] if clip else '')
+print(clip.get(sys.argv[3], '') if clip else '')
 PY
 }
 
@@ -53,6 +53,10 @@ slot="$1"
 loop="$2" video="$3" start="$4" crop="${5:-}"
 frames="$(field "$slot" "$loop" frames)"
 ms="$(field "$slot" "$loop" ms)"
+# A loop marked "bounce" plays there and back, so it never jumps at its end: half of its frames (and one) are cut, the rest are those again in reverse.
+bounce="$(field "$slot" "$loop" bounce)"
+taken="$frames"
+[ "$bounce" = True ] && taken=$(( (frames + 2) / 2 ))
 [ -n "$frames" ] || { echo "No loop \"$loop\" in $slot. Run: footage $slot" >&2; exit 1; }
 [ -f "$video" ] || { echo "No such video: $video" >&2; exit 1; }
 command -v ffmpeg >/dev/null || { echo "ffmpeg is not installed." >&2; exit 1; }
@@ -63,9 +67,12 @@ rm -f "$dir"/[0-9][0-9][0-9].png
 # Every picture 400 by 340, so the feed's box is one size whoever is in it: filled, then cut at the centre.
 # One palette of 255 colours per loop: a frame is a fifth of its size in full colour, and looks the same in the pane.
 # (Only the loop's own stretch is read: the palette is made from every frame the filter is given, and without an end that is the rest of the video.)
-ffmpeg -loglevel error -y -ss "$start" -t "$(python3 -c "print($frames * $ms / 1000 + 0.5)")" -i "$video" \
+ffmpeg -loglevel error -y -ss "$start" -t "$(python3 -c "print($taken * $ms / 1000 + 0.5)")" -i "$video" \
   -vf "${crop:+crop=$crop,}fps=1000/$ms,scale=400:340:force_original_aspect_ratio=increase,crop=400:340,split[a][b];[a]palettegen=max_colors=255[p];[b][p]paletteuse" \
-  -frames:v "$frames" -start_number 0 "$dir/%03d.png"
+  -frames:v "$taken" -start_number 0 "$dir/%03d.png"
+if [ "$bounce" = True ]; then
+  for ((i = 1; i < taken - 1; i++)); do cp "$dir/$(printf '%03d' $((taken - 1 - i))).png" "$dir/$(printf '%03d' $((taken - 1 + i))).png"; done
+fi
 got="$(ls "$dir" | wc -l)"
 [ "$got" -eq "$frames" ] || { echo "Only $got of $frames frames: the video ends too soon after $start." >&2; exit 1; }
 echo "$slot/$loop: $frames frames in $dir"

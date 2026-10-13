@@ -22,10 +22,10 @@ What is shipped is the recipe of each feed: `footage/<slot>.json` names every lo
 | `initiald-sonnet` | Initial D | Sonnet | Ryosuke | 11 | 246 |
 | `initiald-haiku` | Initial D | Haiku | Keisuke | 9 | 199 |
 | `initiald-fable` | Initial D | Fable | Bunta | 5 | 106 |
-| `halo-opus` | Halo | Opus | Cortana | 12 | 222 |
-| `halodark-opus` | Halo Dark | Opus | Master Chief | 12 | 250 |
+| `halo-opus` | Halo | Opus | Cortana | 12 | 722 |
+| `halodark-opus` | Halo Dark | Opus | Master Chief | 12 | 812 |
 
-The two Halo feeds have loops for kinds of tool call too, beside the four moods: a recipe's `moods` may name `scan` (a read), `edit`, `exec` (a shell command), `net` (the web), `call` (subagents), `load` (a skill), `ask` and `tool`, and such a loop plays while a call of that kind runs. Any slot's manifest may.
+The two Halo feeds are cut at 45 ms a frame, twice as fine as the others, and their calm shots are marked `"bounce": true` in the recipe: `bin/footage` cuts half of such a loop's frames and writes them again in reverse, so the loop plays there and back and never jumps at its end. They have loops for kinds of tool call too, beside the four moods: a recipe's `moods` may name `scan` (a read), `edit`, `exec` (a shell command), `net` (the web), `call` (subagents), `load` (a skill), `ask` and `tool`, and such a loop plays while a call of that kind runs. Any slot's manifest may.
 
 ## Rebuild one
 

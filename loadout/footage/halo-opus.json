@@ -7,64 +7,71 @@
  },
  "clips": {
   "bright-bust": {
-   "frames": 22,
-   "ms": 90,
-   "what": "faces the camera, bright sky behind her"
+   "frames": 86,
+   "ms": 45,
+   "what": "faces the camera, bright sky behind her",
+   "bounce": true
   },
   "rings": {
-   "frames": 20,
-   "ms": 90,
-   "what": "among holographic rings"
+   "frames": 78,
+   "ms": 45,
+   "what": "among holographic rings",
+   "bounce": true
   },
   "look-up": {
-   "frames": 20,
-   "ms": 90,
-   "what": "looks up, speaking"
+   "frames": 78,
+   "ms": 45,
+   "what": "looks up, speaking",
+   "bounce": true
   },
   "hand-to-chest": {
-   "frames": 22,
-   "ms": 90,
-   "what": "a hand at her chest, in the data rain"
+   "frames": 86,
+   "ms": 45,
+   "what": "a hand at her chest, in the data rain",
+   "bounce": true
   },
   "wall-panel": {
-   "frames": 22,
-   "ms": 90,
+   "frames": 44,
+   "ms": 45,
    "what": "works a wall panel, seen from behind"
   },
   "console": {
-   "frames": 10,
-   "ms": 90,
+   "frames": 20,
+   "ms": 45,
    "what": "types at a holographic console"
   },
   "reactivate": {
-   "frames": 9,
-   "ms": 90,
+   "frames": 18,
+   "ms": 45,
    "what": "her hand presses REACTIVATE"
   },
   "sphere": {
-   "frames": 20,
-   "ms": 90,
-   "what": "beside a holographic sphere, looking back"
+   "frames": 78,
+   "ms": 45,
+   "what": "beside a holographic sphere, looking back",
+   "bounce": true
   },
   "copies": {
-   "frames": 22,
-   "ms": 90,
+   "frames": 44,
+   "ms": 45,
    "what": "splits into copies of herself"
   },
   "arrive": {
-   "frames": 13,
-   "ms": 90,
+   "frames": 26,
+   "ms": 45,
    "what": "appears on her pedestal out of a beam of light"
   },
   "laugh": {
-   "frames": 20,
-   "ms": 90,
-   "what": "laughs, in the data rain"
+   "frames": 78,
+   "ms": 45,
+   "what": "laughs, in the data rain",
+   "bounce": true
   },
   "tears": {
-   "frames": 22,
-   "ms": 90,
-   "what": "close up, in tears"
+   "frames": 86,
+   "ms": 45,
+   "what": "close up, in tears",
+   "bounce": true
   }
  },
  "moods": {
