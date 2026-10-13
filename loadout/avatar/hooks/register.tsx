@@ -4,13 +4,13 @@ import type { EngineInterface, Register, SessionMeasureInput } from 'claude-code
 import { ASSUMED, sourceOf } from './canvas'
 import type { Cell } from './canvas'
 import { beatAfter, heroCanvas, heroGrid, isAtRest } from './cyber'
-import { CAST, SLOTS, frameAt, reelOf, slotOf } from './reel'
+import { CAST, frameAt, playedOf, reelOf, slotOf, SLOTS } from './reel'
 import type { Reel, Slot } from './reel'
 import type { Beat, Moment } from './cyber'
 import { frameOf, nameOf, themed } from './families'
 import type { Acting, FamilyDef, Worry } from './families'
 import { chromeFrame, isChrome } from './chrome'
-import { haloLive, isHalo } from './halo'
+import { cueOf, haloLive, isHalo } from './halo'
 import { haloTree } from './halopane'
 import { NONE, STATES, agentRows, hex, maskFrame } from './hud'
 import type { Grid, State } from './hud'
@@ -249,7 +249,7 @@ const reels = new Map<Slot, Reel>()
 // The slots with still portrait frames (`<slot>/<mood>-NN.png`, twelve a loop): what an Opus without a manifest shows.
 const stills = new Set<Slot>()
 // When the mood on screen began and whose it is, so a mood's loops start from their first frame, and again when the character changes.
-let reelMood: { slot: Slot; mood: Mood; since: number } | null = null
+let reelMood: { slot: Slot; mood: string; since: number } | null = null
 let reelsTriedAt = -Infinity
 
 /**
@@ -280,11 +280,13 @@ async function findAssets($: EngineInterface) {
 const hasPictures = (slot: Slot): boolean => assets !== null && (reels.has(slot) || stills.has(slot))
 
 /** The feed's frame at `now`: the slot's loop for the mood, from the first frame of a mood or a character new on screen; without footage its still portrait, a happy one played from the cheer's start, the others looping on the clock. */
-function portraitOf(slot: Slot, mood: Mood, now: number, happyUntil: number): { file: string; format: 'png' } {
+function portraitOf(slot: Slot, mood: Mood, now: number, happyUntil: number, doing: State | undefined = undefined): { file: string; format: 'png' } {
   const reel = reels.get(slot)
   if (reel !== undefined) {
-    if (reelMood === null || reelMood.mood !== mood || reelMood.slot !== slot) reelMood = { slot, mood, since: now }
-    const at = frameAt(reel, mood, now - reelMood.since)
+    // (A reel may have loops for a kind of call too, under its state's name: `scan`, `edit`, `exec`... They play while such a call runs.)
+    const played = playedOf(reel, mood, cueOf(mood, doing))
+    if (reelMood === null || reelMood.mood !== played || reelMood.slot !== slot) reelMood = { slot, mood: played, since: now }
+    const at = frameAt(reel, played, now - reelMood.since)
     if (at !== null) return { file: `${assets}/${slot}/${at.clip}/${String(at.frame).padStart(3, '0')}.png`, format: 'png' }
   }
   const step = mood === 'happy' ? Math.min(PORTRAIT_FRAMES - 1, Math.max(0, Math.floor((now - (happyUntil - HAPPY_MS)) / PORTRAIT_MS.happy))) : Math.floor(now / PORTRAIT_MS[mood]) % PORTRAIT_FRAMES
@@ -297,7 +299,7 @@ type Picture = { cells: string } | { source: ReturnType<typeof sourceOf> | { fil
 
 /** The mascot at `now`: a true-pixel frame where the layout has them (clear where nothing is drawn: the pane's ground shows through), else the cell-block step of that moment on `ground`. */
 function mascotPicture(drawn: Layout, mood: Mood, now: number, ground: number, isBusy = false, happyUntil = 0, isLight = false, doing: State | undefined = undefined): Picture {
-  if ('text' in drawn && drawn.feed !== undefined) return { source: portraitOf(drawn.feed, mood, now, happyUntil) }
+  if ('text' in drawn && drawn.feed !== undefined) return { source: portraitOf(drawn.feed, mood, now, happyUntil, doing) }
   if ('text' in drawn && drawn.hero !== undefined) {
     const moment = momentOf(mood, now, isBusy, happyUntil)
 

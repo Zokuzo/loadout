@@ -62,7 +62,8 @@ mkdir -p "$dir"
 rm -f "$dir"/[0-9][0-9][0-9].png
 # Every picture 400 by 340, so the feed's box is one size whoever is in it: filled, then cut at the centre.
 # One palette of 255 colours per loop: a frame is a fifth of its size in full colour, and looks the same in the pane.
-ffmpeg -loglevel error -y -ss "$start" -i "$video" \
+# (Only the loop's own stretch is read: the palette is made from every frame the filter is given, and without an end that is the rest of the video.)
+ffmpeg -loglevel error -y -ss "$start" -t "$(python3 -c "print($frames * $ms / 1000 + 0.5)")" -i "$video" \
   -vf "${crop:+crop=$crop,}fps=1000/$ms,scale=400:340:force_original_aspect_ratio=increase,crop=400:340,split[a][b];[a]palettegen=max_colors=255[p];[b][p]paletteuse" \
   -frames:v "$frames" -start_number 0 "$dir/%03d.png"
 got="$(ls "$dir" | wc -l)"

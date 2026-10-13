@@ -1,12 +1,12 @@
 # The camera feeds: getting the author's render
 
-On three themes, Ghostrunner, Cyberpunk Edgerunners and Initial D, the Avatar pane shows a framed camera feed of a character, one per model. The author's feeds are cut from the games and the anime, so they are not in this repository: that footage belongs to its owners. Without it the first two draw their built-in characters and a mask, Initial D its four pixel cars, and everything else (colours, Flow map, frames, working line, the other themes) is already identical to the author's.
+On five themes, Ghostrunner, Cyberpunk Edgerunners, Initial D, Halo and Halo Dark, the Avatar pane shows a framed camera feed of a character, one per model. The author's feeds are cut from the games and the anime, so they are not in this repository: that footage belongs to its owners. Without it the first two draw their built-in characters and a mask, Initial D its four pixel cars, the Halo themes their figures in ASCII, and everything else (colours, Flow map, frames, working line, the other themes) is already identical to the author's.
 
 What is shipped is the recipe of each feed: `footage/<slot>.json` names every loop, how many frames it has, how long a frame shows, what the loop shows in a few words, and the character's name and lines. With a video of your own and `bin/footage`, you rebuild the same feed.
 
 (The Y2K themes are not part of this: their objects are drawn in ASCII by code, `avatar/hooks/chrome.ts`.)
 
-## The twelve feeds
+## The fourteen feeds
 
 | Slot | Theme | Model | Character | Loops | Frames |
 |---|---|---|---|---|---|
@@ -22,6 +22,10 @@ What is shipped is the recipe of each feed: `footage/<slot>.json` names every lo
 | `initiald-sonnet` | Initial D | Sonnet | Ryosuke | 11 | 246 |
 | `initiald-haiku` | Initial D | Haiku | Keisuke | 9 | 199 |
 | `initiald-fable` | Initial D | Fable | Bunta | 5 | 106 |
+| `halo-opus` | Halo | Opus | Cortana | 12 | 222 |
+| `halodark-opus` | Halo Dark | Opus | Master Chief | 12 | 250 |
+
+The two Halo feeds have loops for kinds of tool call too, beside the four moods: a recipe's `moods` may name `scan` (a read), `edit`, `exec` (a shell command), `net` (the web), `call` (subagents), `load` (a skill), `ask` and `tool`, and such a loop plays while a call of that kind runs. Any slot's manifest may.
 
 ## Rebuild one
 

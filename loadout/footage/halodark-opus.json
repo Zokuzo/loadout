@@ -1,0 +1,104 @@
+{
+ "name": "MASTER CHIEF",
+ "speech": {
+  "idle": "WAKE ME WHEN YOU NEED ME.",
+  "working": "FINISHING THIS FIGHT...",
+  "happy": "CHECKPOINT... DONE."
+ },
+ "clips": {
+  "helmet-front": {
+   "frames": 22,
+   "ms": 90,
+   "what": "helmet close up, facing the camera"
+  },
+  "deck-watch": {
+   "frames": 22,
+   "ms": 90,
+   "what": "watches from the deck, Cortana beside him"
+  },
+  "cave-stance": {
+   "frames": 22,
+   "ms": 90,
+   "what": "stands in the cave's orange light"
+  },
+  "hall-rifle": {
+   "frames": 22,
+   "ms": 90,
+   "what": "walks the blue hall, rifle ready"
+  },
+  "holo-ring": {
+   "frames": 16,
+   "ms": 90,
+   "what": "beside Cortana's holographic ring"
+  },
+  "rain-profile": {
+   "frames": 22,
+   "ms": 90,
+   "what": "head bowed in the data rain"
+  },
+  "hall-walk": {
+   "frames": 20,
+   "ms": 90,
+   "what": "strides down the teal hall, rifle up"
+  },
+  "rain-turn": {
+   "frames": 22,
+   "ms": 90,
+   "what": "turns to face the camera in the data rain"
+  },
+  "teal-room": {
+   "frames": 16,
+   "ms": 90,
+   "what": "three-quarter view in the teal light of the bridge"
+  },
+  "bridge-closeup": {
+   "frames": 22,
+   "ms": 90,
+   "what": "helmet close up, speaking to the captain"
+  },
+  "final-closeup": {
+   "frames": 22,
+   "ms": 90,
+   "what": "helmet close up in the blue light"
+  },
+  "crawl": {
+   "frames": 22,
+   "ms": 90,
+   "what": "down on the deck, pushing himself up"
+  }
+ },
+ "moods": {
+  "idle": [
+   "helmet-front",
+   "deck-watch"
+  ],
+  "working": [
+   "cave-stance",
+   "hall-rifle"
+  ],
+  "happy": [
+   "final-closeup"
+  ],
+  "worried": [
+   "crawl"
+  ],
+  "scan": [
+   "holo-ring"
+  ],
+  "edit": [
+   "rain-profile"
+  ],
+  "exec": [
+   "hall-walk"
+  ],
+  "net": [
+   "rain-turn"
+  ],
+  "call": [
+   "teal-room"
+  ],
+  "ask": [
+   "bridge-closeup"
+  ]
+ }
+}

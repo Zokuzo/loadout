@@ -1,0 +1,106 @@
+{
+ "name": "CORTANA",
+ "speech": {
+  "idle": "STANDING BY, CHIEF.",
+  "working": "CRUNCHING THE NUMBERS...",
+  "happy": "I KNEW YOU COULD DO IT."
+ },
+ "clips": {
+  "bright-bust": {
+   "frames": 22,
+   "ms": 90,
+   "what": "faces the camera, bright sky behind her"
+  },
+  "rings": {
+   "frames": 20,
+   "ms": 90,
+   "what": "among holographic rings"
+  },
+  "look-up": {
+   "frames": 20,
+   "ms": 90,
+   "what": "looks up, speaking"
+  },
+  "hand-to-chest": {
+   "frames": 22,
+   "ms": 90,
+   "what": "a hand at her chest, in the data rain"
+  },
+  "wall-panel": {
+   "frames": 22,
+   "ms": 90,
+   "what": "works a wall panel, seen from behind"
+  },
+  "console": {
+   "frames": 10,
+   "ms": 90,
+   "what": "types at a holographic console"
+  },
+  "reactivate": {
+   "frames": 9,
+   "ms": 90,
+   "what": "her hand presses REACTIVATE"
+  },
+  "sphere": {
+   "frames": 20,
+   "ms": 90,
+   "what": "beside a holographic sphere, looking back"
+  },
+  "copies": {
+   "frames": 22,
+   "ms": 90,
+   "what": "splits into copies of herself"
+  },
+  "arrive": {
+   "frames": 13,
+   "ms": 90,
+   "what": "appears on her pedestal out of a beam of light"
+  },
+  "laugh": {
+   "frames": 20,
+   "ms": 90,
+   "what": "laughs, in the data rain"
+  },
+  "tears": {
+   "frames": 22,
+   "ms": 90,
+   "what": "close up, in tears"
+  }
+ },
+ "moods": {
+  "idle": [
+   "bright-bust",
+   "rings"
+  ],
+  "working": [
+   "look-up"
+  ],
+  "happy": [
+   "laugh"
+  ],
+  "worried": [
+   "tears"
+  ],
+  "scan": [
+   "wall-panel"
+  ],
+  "edit": [
+   "console"
+  ],
+  "exec": [
+   "reactivate"
+  ],
+  "net": [
+   "sphere"
+  ],
+  "call": [
+   "copies"
+  ],
+  "load": [
+   "arrive"
+  ],
+  "ask": [
+   "hand-to-chest"
+  ]
+ }
+}

@@ -10,7 +10,7 @@ import { FAMILIES, GROUNDS, familyOf, frameOf, framesOf, groundOf, isLightOf, na
 import type { Look, SpriteFamily, TextFamily } from '../hooks/families'
 import { INKS } from '../hooks/gamesprites'
 import { HI, clawdMini, kirbyMini } from '../hooks/hires'
-import { CAST, FEED_SHAPE, SLOTS, frameAt, reelOf, slotOf } from '../hooks/reel'
+import { CAST, FEED_SHAPE, SLOTS, frameAt, playedOf, reelOf, slotOf } from '../hooks/reel'
 import type { Slot } from '../hooks/reel'
 import { MASK_COLUMNS, MASK_LEAST, MASK_ROWS, NONE, SKINS, TAGS, agentRows, blockRowsOf, hex, maskFrame, modelTag, stateOf, textOf } from '../hooks/hud'
 import type { Grid, Runner, Skin, State } from '../hooks/hud'
@@ -3297,6 +3297,13 @@ test('the Initial D pack brings its own family: a car per model, seen from the f
   const car = await ui.find({ type: 'Raster' })
   expect([car?.props.columns, car?.props.rows]).toEqual([22, 9])
   await ui.unmount()
+})
+
+test('a reel may have loops for a kind of call: they play while such a call runs, the mood\'s loops otherwise', () => {
+  const reel = reelOf(JSON.stringify({ clips: { rest: { frames: 4, ms: 90 }, work: { frames: 4, ms: 90 }, read: { frames: 4, ms: 90 } }, moods: { idle: ['rest'], working: ['work'], scan: ['read'], nothing: ['gone'] } }))!
+  // A kind the reel names is played; one it does not name (or names with no loop it has) leaves the mood's.
+  expect([playedOf(reel, 'working', cueOf('working', 'scan')), playedOf(reel, 'working', cueOf('working', 'edit')), playedOf(reel, 'idle', cueOf('idle')), playedOf(reel, 'working', 'nothing')]).toEqual(['scan', 'working', 'idle', 'working'])
+  expect([frameAt(reel, playedOf(reel, 'working', 'scan'), 100)?.clip, frameAt(reel, playedOf(reel, 'working', 'edit'), 100)?.clip, frameAt(reel, playedOf(reel, 'happy', 'happy'), 100)?.clip]).toEqual(['read', 'work', 'rest'])
 })
 
 test('the Halo pane is the game\'s HUD: a comm line, the figure, the context left as a shield bar, a motion tracker, a magazine per limit; nothing wider than the pane, and an alarm when the context is critical', async ($, on) => {

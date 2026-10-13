@@ -69,6 +69,9 @@ export function reelOf(text: string): Reel | null {
   }
 }
 
+/** Which of a reel's sets of loops plays: the one named after the kind of call that runs (`scan`, `edit`, `exec`...) where the reel has it, else the mood's. */
+export const playedOf = (reel: Reel, mood: string, cue: string): string => (Object.hasOwn(reel.moods, cue) ? cue : mood)
+
 /**
  * The frame to show `elapsed` ms into a mood: its loops in rotation, each repeated whole until it has
  * held about HOLD_MS. A mood the reel lacks plays the idle loops (a reel read by `reelOf` has them); null where there are none either.
