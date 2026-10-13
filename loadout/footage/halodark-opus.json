@@ -7,71 +7,71 @@
  },
  "clips": {
   "helmet-front": {
-   "frames": 86,
-   "ms": 45,
+   "frames": 118,
+   "ms": 33,
    "what": "helmet close up, facing the camera",
    "bounce": true
   },
   "deck-watch": {
-   "frames": 86,
-   "ms": 45,
+   "frames": 118,
+   "ms": 33,
    "what": "watches from the deck, Cortana beside him",
    "bounce": true
   },
   "cave-stance": {
-   "frames": 86,
-   "ms": 45,
+   "frames": 118,
+   "ms": 33,
    "what": "stands in the cave's orange light",
    "bounce": true
   },
   "hall-rifle": {
-   "frames": 44,
-   "ms": 45,
+   "frames": 60,
+   "ms": 33,
    "what": "walks the blue hall, rifle ready"
   },
   "holo-ring": {
-   "frames": 62,
-   "ms": 45,
+   "frames": 86,
+   "ms": 33,
    "what": "beside Cortana's holographic ring",
    "bounce": true
   },
   "rain-profile": {
-   "frames": 86,
-   "ms": 45,
+   "frames": 118,
+   "ms": 33,
    "what": "head bowed in the data rain",
    "bounce": true
   },
   "hall-walk": {
-   "frames": 40,
-   "ms": 45,
+   "frames": 55,
+   "ms": 33,
    "what": "strides down the teal hall, rifle up"
   },
   "rain-turn": {
-   "frames": 44,
-   "ms": 45,
+   "frames": 60,
+   "ms": 33,
    "what": "turns to face the camera in the data rain"
   },
   "teal-room": {
-   "frames": 62,
-   "ms": 45,
+   "frames": 86,
+   "ms": 33,
    "what": "three-quarter view in the teal light of the bridge",
    "bounce": true
   },
   "bridge-closeup": {
-   "frames": 86,
-   "ms": 45,
+   "frames": 118,
+   "ms": 33,
    "what": "helmet close up, speaking to the captain",
    "bounce": true
   },
   "final-closeup": {
-   "frames": 86,
-   "ms": 45,
+   "frames": 118,
+   "ms": 33,
    "what": "helmet close up in the blue light",
    "bounce": true
   },
   "crawl": {
-   "frames": 44,
-   "ms": 45,
+   "frames": 60,
+   "ms": 33,
    "what": "down on the deck, pushing himself up"
   }
  },

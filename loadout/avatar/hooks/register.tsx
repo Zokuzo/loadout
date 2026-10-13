@@ -60,6 +60,7 @@ const PANE_COLUMNS = 34 // Sword Kirby, the widest form, and a column to spare
 const OPEN = { id: PANE, title: 'Avatar', columns: PANE_COLUMNS }
 const FRAME_MS = 90 // the pictures' clock: eleven frames a second
 const FEED_MS = 45 // half of it: what moves finer than that clock (a camera feed cut so, an object in ASCII) gets a frame of its own between two
+const FILM_MS = 30 // a camera feed cut finer still (a video's own thirty frames a second) has a clock of its own, started when one first plays
 const CALM_EVERY = 3 // idle, alone and at rest, one frame in three
 const SLOW_MS = 4000 // between re-reads of the usage figures, the model, the theme and the agents
 const STUCK_FRAMES = 22 // a frame not drawn after two seconds no longer holds the next ones back
@@ -752,19 +753,27 @@ function frame($: EngineInterface) {
 
 // The beats of the clock (FEED_MS): the even ones are the pictures' frames.
 let beats = 0
+// Whether the finer clock (FILM_MS) runs: it starts with the first feed cut finer than FEED_MS, and then draws that feed alone.
+let isFilming = false
 
 /**
  * Between two frames, what is cut finer than the pictures' clock, and nothing else: the camera feed's next picture where
- * its footage has such a loop, and the chrome skins' object and the Halo skins' figure, which move in ASCII. Twenty-two frames a second.
+ * its footage has such a loop, and the chrome skins' object and the Halo skins' figure, which move in ASCII. Twenty-two frames a second; thirty-three for a feed cut finer than FEED_MS.
  */
-function between($: EngineInterface) {
+function between($: EngineInterface, isFilmBeat = false) {
   if (!isPaneUp || drawing !== 0) return
   const mounted = shown
   if (mounted === null || !('text' in mounted.layout) || !mounted.keys.has('kirby')) return
   const { feed, hero, text } = mounted.layout
   const reel = feed === undefined ? undefined : reels.get(feed)
   const isFine = feed === undefined ? hero === undefined && (isChrome(text.skin) || isHalo(text.skin)) : reel !== undefined && Object.values(reel.clips).some(clip => clip.ms < FRAME_MS)
-  if (!isFine) return
+  const isFilm = reel !== undefined && Object.values(reel.clips).some(clip => clip.ms < FEED_MS)
+  if (isFilm && !isFilming) {
+    isFilming = true
+    $.clock.every(FILM_MS, () => between($, true))
+  }
+  // (Each clock draws its own: a feed cut that fine is the finer clock's, everything else this one's.)
+  if (!isFine || isFilm !== isFilmBeat) return
   const mine = (turn += 1)
   drawing = mine
   waited = 0

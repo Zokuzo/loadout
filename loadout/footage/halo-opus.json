@@ -7,69 +7,69 @@
  },
  "clips": {
   "bright-bust": {
-   "frames": 86,
-   "ms": 45,
+   "frames": 118,
+   "ms": 33,
    "what": "faces the camera, bright sky behind her",
    "bounce": true
   },
   "rings": {
-   "frames": 78,
-   "ms": 45,
+   "frames": 108,
+   "ms": 33,
    "what": "among holographic rings",
    "bounce": true
   },
   "look-up": {
-   "frames": 78,
-   "ms": 45,
+   "frames": 108,
+   "ms": 33,
    "what": "looks up, speaking",
    "bounce": true
   },
   "hand-to-chest": {
-   "frames": 86,
-   "ms": 45,
+   "frames": 118,
+   "ms": 33,
    "what": "a hand at her chest, in the data rain",
    "bounce": true
   },
   "wall-panel": {
-   "frames": 44,
-   "ms": 45,
+   "frames": 60,
+   "ms": 33,
    "what": "works a wall panel, seen from behind"
   },
   "console": {
-   "frames": 20,
-   "ms": 45,
+   "frames": 27,
+   "ms": 33,
    "what": "types at a holographic console"
   },
   "reactivate": {
-   "frames": 18,
-   "ms": 45,
+   "frames": 25,
+   "ms": 33,
    "what": "her hand presses REACTIVATE"
   },
   "sphere": {
-   "frames": 78,
-   "ms": 45,
+   "frames": 108,
+   "ms": 33,
    "what": "beside a holographic sphere, looking back",
    "bounce": true
   },
   "copies": {
-   "frames": 44,
-   "ms": 45,
+   "frames": 60,
+   "ms": 33,
    "what": "splits into copies of herself"
   },
   "arrive": {
-   "frames": 26,
-   "ms": 45,
+   "frames": 35,
+   "ms": 33,
    "what": "appears on her pedestal out of a beam of light"
   },
   "laugh": {
-   "frames": 78,
-   "ms": 45,
+   "frames": 108,
+   "ms": 33,
    "what": "laughs, in the data rain",
    "bounce": true
   },
   "tears": {
-   "frames": 86,
-   "ms": 45,
+   "frames": 118,
+   "ms": 33,
    "what": "close up, in tears",
    "bounce": true
   }
