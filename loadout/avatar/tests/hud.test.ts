@@ -16,7 +16,7 @@ import { MASK_COLUMNS, MASK_LEAST, MASK_ROWS, NONE, SKINS, TAGS, agentRows, bloc
 import type { Grid, Runner, Skin, State } from '../hooks/hud'
 import { sheen } from '../hooks/hudpane'
 import { OBJECT_ROWS, chromeFrame, isChrome } from '../hooks/chrome'
-import { cueOf, haloFrame, haloLive, isHalo } from '../hooks/halo'
+import { HALO_ROWS, cueOf, haloFrame, haloLive, isHalo } from '../hooks/halo'
 import { TRACKER_COLUMNS, trackerRows } from '../hooks/halopane'
 import type { Pose as HiPose } from '../hooks/hires'
 import { CHROME_ROWS, laidOut, laidOutArt, laidOutText, mascotBlocks } from '../hooks/layout'
@@ -3316,7 +3316,7 @@ test('the Halo pane is the game\'s HUD: a comm line, the figure, the context lef
   let usage: unknown = { ...USAGE, rateLimits: [], context: { tokens: 50_000, window: 200_000, percent: 25 } }
   on('session.usage', () => ({ value: usage as typeof USAGE }))
   on('ui.blit', () => ({ value: {} }))
-  themesFolder(on, { ...PACK_TEXTS, 'halo.json': packText('halo', { family: 'halo' }, '#f1f0fa', { isLight: true }), 'halo-dark.json': packText('halo-dark', { family: 'halo' }, '#0b100d') })
+  themesFolder(on, { ...PACK_TEXTS, 'halo.json': packText('halo', { family: 'halo', variant: 'cortana', film: false }, '#0b0a1e'), 'halo-dark.json': packText('halo-dark', { family: 'halo', variant: 'mjolnir' }, '#0b100d') })
   const pane = (bodyColumns: number) => ({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns, scroll: { offset: 0, bodyRows: 60 } } })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   for (const columns of [34, 44, 54]) {
@@ -3332,7 +3332,7 @@ test('the Halo pane is the game\'s HUD: a comm line, the figure, the context lef
     expect(widest(await ui.drawn())).toBe(columns - 1)
     // The figure has the pane's width and its own rows, and is drawn in his skin.
     const figure = await ui.find({ key: 'kirby' })
-    expect([figure?.props.columns, figure?.props.rows]).toEqual([columns - 1, OBJECT_ROWS])
+    expect([figure?.props.columns, figure?.props.rows]).toEqual([columns - 1, HALO_ROWS])
     const colours = new Set((await ui.findAll({ type: 'Text' })).flatMap(t => [t.props.color, t.props.backgroundColor]))
     expect([colours.has(hex(SKINS.mjolnir.primary)), colours.has(hex(SKINS.mjolnir.value)), colours.has(hex(SKINS.red.primary))]).toEqual([true, true, false])
     await ui.unmount()
@@ -3956,17 +3956,17 @@ test('the Halo skins draw their figure in ASCII as the chrome ones do: Cortana b
     expect(haloFrame(skin, 'opus', 'working', 5000, 52, OBJECT_ROWS, 'ask', { cue: 'idle', at: 1000 }).words).toEqual(there.words)
     // Any size is drawn, none throws.
     expect([textOf(haloFrame(skin, 'opus', 'idle', 0, 30, 6)).length, haloFrame(skin, 'opus', 'idle', 0, 30, 0).words.length]).toEqual([6, 0])
-    expect(laidOutText({ skin, form: 'opus' }, 0, 53, 60, true).size).toEqual({ columns: 52, rows: OBJECT_ROWS })
+    expect(laidOutText({ skin, form: 'opus' }, 0, 53, 60, true).size).toEqual({ columns: 52, rows: HALO_ROWS })
   }
   // Each cue is its own picture, for her and for him.
   expect(seen.size).toBe(2 * CUES.length)
   // The pane's own drawing remembers the cue before: the first frame after a change is still near the old pose.
   haloLive(SKINS.mjolnir, 'opus', 'idle', 9000, 52, OBJECT_ROWS)
   expect(textOf(haloLive(SKINS.mjolnir, 'opus', 'working', 9010, 52, OBJECT_ROWS, 'net'))).not.toEqual(textOf(haloFrame(SKINS.mjolnir, 'opus', 'working', 9010, 52, OBJECT_ROWS, 'net')))
-  // A light pack of the family is Cortana and her kind, a dark one the Chief and Blue Team, each in its skin.
-  const packs = packsIn({ ...PACK_TEXTS, 'halo.json': packText('halo', { family: 'halo' }, '#f1f0fa', { isLight: true }), 'halo-dark.json': packText('halo-dark', { family: 'halo', skin: skinText(SKINS.mjolnir) }, '#0b100d') }).packs
+  // A pack of the family names who it shows: Cortana and her kind, or the Chief and Blue Team, each in its skin. Hers keeps the drawn figure even with footage.
+  const packs = packsIn({ ...PACK_TEXTS, 'halo.json': packText('halo', { family: 'halo', variant: 'cortana', film: false }, '#0b0a1e'), 'halo-dark.json': packText('halo-dark', { family: 'halo', variant: 'mjolnir', skin: skinText(SKINS.mjolnir) }, '#0b100d') }).packs
   const [day, dark] = ['custom:halo', 'custom:halo-dark'].map(theme => themed(theme, packs)) as [ReturnType<typeof themed>, ReturnType<typeof themed>]
-  expect([day.family === FAMILIES.halo, dark.family === FAMILIES['halo-dark'], day.isLight, dark.isLight]).toEqual([true, true, true, false])
+  expect([day.family === FAMILIES.halo, dark.family === FAMILIES['halo-dark'], day.isLight, dark.isLight, day.pack?.film, dark.pack?.film]).toEqual([true, true, false, false, false, undefined])
   expect(FORMS.map(form => [nameOf({ family: day.family, form }), nameOf({ family: dark.family, form })])).toEqual([['CORTANA', 'MASTER CHIEF'], ['THE WEAPON', 'KELLY-087'], ['SERINA', 'LINDA-058'], ['ISABEL', 'FRED-104']])
-  expect(packOf(packText('x', { family: 'halo', variant: 'red' }, '#000000'), 'x.json')).toBe('avatar.variant: red or yellow, for cyber alone')
+  expect([packText('x', { family: 'halo', variant: 'red' }, '#000000'), packText('x', { family: 'halo' }, '#000000'), packText('x', { family: 'y2k', variant: 'cortana' }, '#000000')].map(text => packOf(text, 'x.json'))).toEqual(Array(3).fill('avatar.variant: red or yellow for cyber, cortana or mjolnir for halo, none elsewhere'))
 })

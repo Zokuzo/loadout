@@ -29,7 +29,7 @@ export type Skin = { variant: Variant; primary: number; bright: number; body: nu
  * moonlit blue-green, what is live in the fog lights' yellow, an alarm a tail light, a count the pink of dusk.
  * Chrome is a phone advert of the year 2000: cobalt on ice white, navy print, what is live in glass teal, a count in the violet of an oil film;
  * midnight is the same room with the lights off, periwinkle and aqua on blue-black. (On these two the pane's bars are shaded as polished metal: hudpane.tsx.)
- * Cortana is a hologram printed on lavender paper: indigo and violet, what is live in the projector's blue, a count in orchid;
+ * Cortana is a hologram in the dark: the projector's blue on violet-black, what is live in violet, a count in orchid;
  * Mjolnir is the armour at night: its olive green on green-black, what is live in the visor's gold, a count in the blue of a shield bar.
  */
 export const SKINS: Readonly<Record<Variant, Skin>> = {
@@ -37,7 +37,7 @@ export const SKINS: Readonly<Record<Variant, Skin>> = {
   yellow: { variant: 'yellow', primary: 0xfcee0a, bright: 0xfffbb5, body: 0x7d7605, shadow: 0x3a3702, dim: 0xb0a707, cyan: 0x5ef6ff, alert: 0xff3d3d, value: 0x3aa0ff, tint: 0x121100, ink: 0x060600 },
   chrome: { variant: 'chrome', primary: 0x1c3fd6, bright: 0x0d1638, body: 0x9fb4d8, shadow: 0xd3dcec, dim: 0x5c6f94, cyan: 0x00857a, alert: 0xd81e2c, value: 0xa23bb5, tint: 0xe4eaf4, ink: 0xffffff },
   midnight: { variant: 'midnight', primary: 0x7da2ff, bright: 0xffffff, body: 0x2a3970, shadow: 0x18213f, dim: 0x8793b5, cyan: 0x5fe6d6, alert: 0xff5468, value: 0xd9a3ff, tint: 0x0b1126, ink: 0x050813 },
-  cortana: { variant: 'cortana', primary: 0x4a35c9, bright: 0x1a1245, body: 0xa9a3e0, shadow: 0xd6d3f0, dim: 0x6a6796, cyan: 0x006aa6, alert: 0xd4203a, value: 0xa0288f, tint: 0xe6e3f5, ink: 0xffffff },
+  cortana: { variant: 'cortana', primary: 0x6fb6ff, bright: 0xf2f8ff, body: 0x2c4a9a, shadow: 0x1a2458, dim: 0x7f8fc8, cyan: 0x8f7cff, alert: 0xff5470, value: 0xe08cff, tint: 0x0e0d28, ink: 0x070616 },
   mjolnir: { variant: 'mjolnir', primary: 0xa3b86c, bright: 0xeaf2c9, body: 0x4a5c2c, shadow: 0x222d17, dim: 0x86957a, cyan: 0xffb238, alert: 0xff4f3a, value: 0x74c7ff, tint: 0x121a12, ink: 0x080c08 },
   night: { variant: 'night', primary: 0xd2e04e, bright: 0xf4eeda, body: 0x1f5068, shadow: 0x122f48, dim: 0x6f9fb8, cyan: 0xffb52e, alert: 0xff4d3d, value: 0xf29a8e, tint: 0x0c2236, ink: 0x06121f },
 }

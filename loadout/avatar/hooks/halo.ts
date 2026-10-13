@@ -1,7 +1,7 @@
 // The Halo themes' mascots, drawn in ASCII as the Y2K objects are (chrome.ts): each cell is one ray marched to a surface, and
-// what is near and lit is a heavy character in a strong colour. By day it is Cortana, a hologram standing on her pedestal,
-// who acts out what the session does: she reads a panel, types, points, listens, sends her fragments out. By night it is
-// the Master Chief's helmet, which turns to look, nods, tilts, and whose visor and shield tell the same things.
+// what is near and lit is a heavy character in a strong colour. One is Cortana, close: her head under its bob, her shoulders,
+// a hologram that looks where the work is, with a panel, an orb or her fragments about her. The other is the Master
+// Chief's helmet, which turns to look, nods, tilts, and whose visor and shield tell the same things.
 // A surface has a material, and a material its own colours: the armour's green and the visor's gold never run together.
 // Pure: a grid is derived from (skin, form, mood, what is done, now, size) alone; `haloLive` alone remembers the pose before, to ease out of it.
 import { hash, smin } from './chrome'
@@ -12,6 +12,9 @@ import type { Mood } from './mascot'
 
 /** Whether a skin is one of the two these figures are drawn in: `cortana` is hers, `mjolnir` the Chief's. */
 export const isHalo = (skin: Skin): boolean => skin.variant === 'cortana' || skin.variant === 'mjolnir'
+
+/** The rows a figure takes where the pane has them: more than a chrome object's, for the definition of a face. */
+export const HALO_ROWS = 28
 
 /** What a figure acts out: the kind of the call that runs, else the turn's mood. */
 export type Cue = Mood | 'scan' | 'edit' | 'exec' | 'net' | 'call' | 'load' | 'ask' | 'tool'
@@ -182,145 +185,82 @@ const HOSE: readonly [V, V] = [[0.36, -0.56, 0.62], [0.2, -0.95, 0.3]]
 
 // --- Cortana ------------------------------------------------------------------
 
-/** Her pose, fifteen numbers: turned (to the left, in radians), her hips aside, her head aside; then the elbow and the hand of the arm at the left of the picture, and of the one at its right. */
-type Pose = readonly number[]
-
-const HANG = [0.38, 0.28, -0.02, 0.4, -0.04, 0.06] // an arm at rest, as the right of the picture has it (the left is its mirror)
-const HIP = [0.56, 0.3, -0.08, 0.3, 0, 0.1] // a hand on the hip
-const left = (arm: readonly number[]) => arm.map((n, i) => (i % 3 === 0 ? -n : n))
-const pose = (yaw: number, sway: number, head: number, armLeft: readonly number[], armRight: readonly number[]): Pose => [yaw, sway, head, ...armLeft, ...armRight]
-
-const POSES: Readonly<Record<Cue, Pose>> = {
-  idle: pose(0.1, 0.05, 0, left(HANG), HIP), // a hand on her hip
-  working: pose(0.15, 0, 0.02, [-0.3, 0.3, 0.14, 0.16, 0.33, 0.2], [0.34, 0.42, 0.2, 0.1, 0.8, 0.2]), // a hand at her chin, the other arm across
-  scan: pose(0.32, 0.03, -0.03, [-0.52, 0.42, 0.12, -0.64, 0.72, 0.24], HIP), // holding a panel up, reading it
-  edit: pose(0, 0, 0, [-0.42, 0.32, 0.1, -0.2, 0.34, 0.42], [0.42, 0.32, 0.1, 0.2, 0.34, 0.42]), // both hands on the keys
-  exec: pose(0.18, -0.04, 0, [-0.54, 0.66, 0.05, -0.76, 0.8, 0.2], HIP), // pointing: go
-  net: pose(-0.1, 0, 0.02, left(HANG), [0.52, 0.78, 0.06, 0.24, 1, 0.1]), // a hand at her ear
-  call: pose(0, 0, 0, [-0.5, 0.4, 0.1, -0.74, 0.34, 0.25], [0.5, 0.4, 0.1, 0.74, 0.34, 0.25]), // arms open, her fragments about her
-  load: pose(0.1, 0.03, 0, left(HIP), [0.54, 0.8, 0.02, 0.5, 1.06, 0.08]), // an orb held up
-  ask: pose(0, 0, 0.04, [-0.46, 0.3, 0.08, -0.66, 0.52, 0.22], [0.46, 0.3, 0.08, 0.66, 0.52, 0.22]), // a shrug
-  tool: pose(0, 0, 0, [-0.4, 0.34, 0.14, -0.17, 0.44, 0.42], [0.4, 0.34, 0.14, 0.17, 0.44, 0.42]), // an orb between her hands
-  happy: pose(0.08, 0.05, 0, left(HIP), [0.56, 0.84, 0, 0.52, 1.2, 0.08]), // a fist up
-  worried: pose(0, 0, 0, [-0.5, 0.84, 0.1, -0.2, 1.04, 0.14], [0.5, 0.84, 0.1, 0.2, 1.04, 0.14]), // her hands at her head
-}
-
-/** The cue's pose at `now`, with what moves in it: she sways at rest, her fingers go at the keys, she bounces when pleased. */
-function poseAt(cue: Cue, now: number): Pose {
-  const p = [...POSES[cue]]
-  p[0]! += cue === 'worried' ? 0 : 0.1 * wave(now, cue === 'idle' ? 6400 : 4200)
-  if (cue === 'edit') {
-    p[7]! += 0.05 * wave(now, 300)
-    p[13]! -= 0.05 * wave(now, 300)
-  }
-  if (cue === 'working') p[13]! += 0.02 * wave(now, 1600)
-  if (cue === 'exec') p[6]! -= 0.04 * Math.max(0, wave(now, 900))
-  if (cue === 'load' || cue === 'happy') p[13]! += 0.05 * wave(now, cue === 'happy' ? 720 : 1400)
-  if (cue === 'ask') for (const i of [7, 13]) p[i]! += 0.04 * wave(now, 1800)
-
-  return p
-}
-
-// Her trunk's axis, her shoulders' line and the foot of her neck.
-const TRUNK: readonly [V, V] = [[0, -0.5, 0], [0, 0.62, 0]]
-const SHOULDERS: readonly [V, V] = [[-0.26, 0.62, 0], [0.26, 0.62, 0]]
-const NECK: V = [0, 0.7, 0]
-
-const FLOOR = -0.4 // where the picture of her ends: she is seen from the hips up
-// The panel she reads and writes: its middle and its half sizes, in a picture that shows `wide` to each side of her (a narrow pane brings it in beside her head).
-const PANEL = { y: 0.98, by: 0.2 } as const
-const panelIn = (wide: number) => {
-  const bx = Math.max(0.1, Math.min(0.2, (wide - 0.26) / 2))
-
-  return { x: -Math.min(0.66, 0.26 + bx), bx }
-}
+// The panel she reads and writes, beside her head: its middle and its half sizes, in a picture that shows `wide` to each side of her.
+const PANEL = { y: 0.2, by: 0.36 } as const
+const panelIn = (wide: number) => ({ x: -Math.max(0.5, Math.min(0.92, wide - 0.28)), bx: 0.22 })
 
 /** What she has about her for a cue, lit: a panel, an orb, her fragments. The distance to it (Infinity: nothing). */
-function propOf(cue: Cue, now: number, hand: V, wide: number): (x: number, y: number, z: number) => number {
+function propOf(cue: Cue, now: number, wide: number): (x: number, y: number, z: number) => number {
   if (cue === 'scan' || cue === 'edit') {
     const panel = panelIn(wide)
 
-    return (x, y, z) => slab(x - panel.x, y - PANEL.y, z - 0.2, panel.bx, PANEL.by, 0.02, 0.02)
+    return (x, y, z) => slab(x - panel.x, y - PANEL.y, z - 0.45, panel.bx, PANEL.by, 0.02, 0.02)
   }
   if (cue === 'call') {
     const turn = (TAU * (now % 3600)) / 3600
+    const out = Math.min(1.02, wide - 0.14)
+    const orbs = [0, 1, 2].map(i => [out * Math.cos(turn + (TAU * i) / 3), 0.25 + 0.3 * Math.sin(2 * turn + i), 0.7 * Math.sin(turn + (TAU * i) / 3)] as const)
 
-    const out = Math.min(0.78, wide - 0.12)
-    const orbs = [0, 1, 2].map(i => [out * Math.cos(turn + (TAU * i) / 3), 0.95 + 0.16 * Math.sin(2 * turn + i), 0.6 * Math.sin(turn + (TAU * i) / 3)] as const)
-
-    return (x, y, z) => Math.min(len(x - orbs[0]![0], y - orbs[0]![1], z - orbs[0]![2]), len(x - orbs[1]![0], y - orbs[1]![1], z - orbs[1]![2]), len(x - orbs[2]![0], y - orbs[2]![1], z - orbs[2]![2])) - 0.1
+    return (x, y, z) => Math.min(len(x - orbs[0]![0], y - orbs[0]![1], z - orbs[0]![2]), len(x - orbs[1]![0], y - orbs[1]![1], z - orbs[1]![2]), len(x - orbs[2]![0], y - orbs[2]![1], z - orbs[2]![2])) - 0.12
   }
-  if (cue === 'load') return (x, y, z) => len(x - hand[0], y - hand[1] - 0.2, z - hand[2]) - (0.1 + 0.02 * wave(now, 700))
-  if (cue === 'tool') return (x, y, z) => len(x, y - 0.46 - 0.03 * wave(now, 1100), z - 0.48) - 0.12
-  if (cue === 'exec') {
-    // A bolt leaves her hand for the conversation, again and again.
-    const u = (now % 900) / 900
+  if (cue === 'load' || cue === 'tool') {
+    const out = Math.min(0.95, wide - 0.2)
 
-    return (x, y, z) => len(x - hand[0] + 0.15 + 0.5 * u, y - hand[1] - 0.02, z - hand[2]) - 0.09 * (1 - u * 0.5)
+    return (x, y, z) => len(x - out, y - (cue === 'load' ? 0.78 : -0.3) - 0.04 * wave(now, 1100), z - 0.3) - (0.13 + 0.03 * wave(now, 700))
   }
 
   return () => Infinity
 }
 
 /**
- * Cortana as a few solids: a head under a bob of hair cut at the jaw, shoulders, chest, a narrow waist, hips set aside
- * over the leg that bears her, two arms whose elbows and hands the pose places. She is seen from the hips up.
+ * Cortana, close: a head (a brow, the hollows of the eyes, a nose, lips, a chin) under a bob of hair cut at the jaw and swept
+ * across the forehead, a neck, her shoulders. The head turns as a bearing says; the shoulders stay.
  */
-function cortana(p: Pose, cue: Cue, now: number, lift: number, wide: number): Scene {
-  const [yaw, sway, head] = [p[0]!, p[1]!, p[2]!]
-  const [c, s] = [Math.cos(yaw), Math.sin(yaw)]
-  const arms = [-1, 1].map((side, i) => {
-    const at = 3 + 6 * i
-    const [shoulder, elbow, hand] = [[side * 0.3, 0.6, 0] as V, [p[at]!, p[at + 1]!, p[at + 2]!] as V, [p[at + 3]!, p[at + 4]!, p[at + 5]!] as V]
-    // (A ball that holds the whole arm: far from it, the arm is not worked out.)
-    const middle = [0, 1, 2].map(k => (shoulder[k]! + elbow[k]! + hand[k]!) / 3) as unknown as V
-    const round = Math.max(...[shoulder, elbow, hand].map(joint => len(joint[0] - middle[0], joint[1] - middle[1], joint[2] - middle[2]))) + 0.1
-
-    return { shoulder, elbow, hand, middle, round }
-  })
-  const legs = [-1, 1].map(side => ({ hip: [sway + side * 0.13, -0.26, 0] as V, knee: [side * 0.12 + sway * 0.4, -0.84, 0.03] as V }))
-  // (Her right hand, as the scene has it: what she holds is where it is.)
-  const held = arms[1]!.hand
-  const prop = propOf(cue, now, [c * held[0] - s * held[2], held[1] + lift, s * held[0] + c * held[2]], wide)
-  const pointer = arms[0]!.hand
-  const bolt = cue === 'exec' ? propOf(cue, now, [c * pointer[0] - s * pointer[2], pointer[1] + lift, s * pointer[0] + c * pointer[2]], wide) : prop
+function cortana(bearing: Bearing, cue: Cue, now: number, wide: number): Scene {
+  const local = helmetOf(bearing)
+  const prop = propOf(cue, now, wide)
 
   return {
     eye: 7,
-    lens: 0.13,
-    mid: 0.5,
-    reach: 1.45,
-    at: (wx, wy, wz) => {
-      const x = c * wx + s * wz
-      const y = wy - lift
-      const z = -s * wx + c * wz
-      // (Far from her trunk, its distance is that to a column about it: its parts are worked out only near them. The same for her head.)
-      const column = limb(x, y, z, TRUNK[0], TRUNK[1], 0.46)
-      let body = column
-      if (column < 0.2) {
-        body = smin(limb(x, y, z, SHOULDERS[0], SHOULDERS[1], 0.085), egg(x, y - 0.42, z - 0.03, 0.24, 0.22, 0.17), 0.1)
-        body = smin(body, egg(x - sway * 0.5, y - 0.12, z, 0.17, 0.22, 0.13), 0.1)
-        body = smin(body, egg(x - sway, y + 0.17, z, 0.26, 0.2, 0.18), 0.1)
-        body = smin(body, limb(x, y, z, NECK, [head * 0.5, 0.86, 0], 0.065), 0.04)
-        for (const leg of legs) body = smin(body, limb(x, y, z, leg.hip, leg.knee, 0.125, 0.095), 0.06)
-      }
-      for (const arm of arms) {
-        const ball = len(x - arm.middle[0], y - arm.middle[1], z - arm.middle[2]) - arm.round
-        if (ball > 0.15) {
-          body = Math.min(body, ball)
-          continue
-        }
-        body = smin(body, limb(x, y, z, arm.shoulder, arm.elbow, 0.085, 0.075), 0.05)
-        body = Math.min(body, limb(x, y, z, arm.elbow, arm.hand, 0.075, 0.065), len(x - arm.hand[0], y - arm.hand[1], z - arm.hand[2]) - 0.085)
-      }
-      const skull = len(x - head, y - 1.03, z) - 0.3
-      if (skull > 0.15) return nearest(nearest(body, PLATE, skull, GLASS), kind, bolt(wx, wy, wz), LIGHT)
-      // The bob: a shell about the head, open over the face, cut at the jaw.
-      const hair = Math.max(egg(x - head, y - 1.04, z + 0.03, 0.235, 0.235, 0.24), -egg(x - head, y - 0.92, z - 0.24, 0.165, 0.2, 0.2), 0.8 - y)
-      const face = egg(x - head, y - 1, z - 0.02, 0.17, 0.21, 0.19)
+    lens: 0.166,
+    mid: -0.17,
+    reach: 2,
+    at: (x, y, z) => {
+      const body = smin(limb(x, y, z, NECK[0], NECK[1], 0.25, 0.3), smin(limb(x, y, z, SHOULDERS[0], SHOULDERS[1], 0.2), egg(x, y + 1.42, z - 0.02, 0.62, 0.34, 0.3), 0.15), 0.12)
+      const light = prop(x, y, z)
+      // (Far from her head, its distance is that to a ball about it.)
+      const ball = len(x, y - HEAD_Y, z) - 1.12
+      if (ball > 0.25) return nearest(Math.min(body, ball), PLATE, light, LIGHT)
+      local(x, y, z)
+      const ax = Math.abs(lx)
+      // The skull, the cheeks and jaw running down to the chin, and what stands out of the face or is sunk in it.
+      let face = smin(egg(lx, ly - 0.16, lz + 0.04, 0.58, 0.64, 0.66), egg(lx, ly + 0.2, lz - 0.14, 0.44, 0.56, 0.5), 0.18)
+      face = smin(face, len(lx, ly + 0.7, lz - 0.34) - 0.13, 0.12) // the chin
+      face = smin(face, limb(lx, ly, lz, NOSE[0], NOSE[1], 0.05, 0.085), 0.06)
+      face = smin(face, egg(lx, ly + 0.46, lz - 0.58, 0.15, 0.055, 0.07), 0.04) // the lips
+      face = smin(face, egg(ax - 0.2, ly - 0.12, lz - 0.54, 0.2, 0.05, 0.1), 0.06) // a brow
+      face = -smin(-face, len(ax - 0.21, ly + 0.04, lz - 0.66) - 0.1, 0.06) // the hollow of an eye
+      // The bob: a shell about the skull, open over the face (lower on one side: the fringe is swept across), cut at the jaw.
+      const shell = Math.min(egg(lx, ly - 0.2, lz + 0.08, 0.64, 0.67, 0.72), Math.max(len(lx, (lz + 0.08) * 0.9) - 0.63, Math.abs(ly + 0.28) - 0.44) - 0.02)
+      const hair = Math.max(shell, -egg(lx - 0.1, ly + 0.2, lz - 0.7, 0.5, 0.74, 0.56), -(shell + 0.12))
 
-      return nearest(nearest(nearest(body, PLATE, face, FACE), kind, hair, GLASS), kind, bolt(wx, wy, wz), LIGHT)
+      return nearest(nearest(nearest(body, PLATE, face, FACE), kind, hair, GLASS), kind, light, LIGHT)
     },
+  }
+}
+const NECK: readonly [V, V] = [[0, -0.5, -0.08], [0, -1.05, -0.12]]
+const SHOULDERS: readonly [V, V] = [[-0.84, -1.16, -0.12], [0.84, -1.16, -0.12]]
+const NOSE: readonly [V, V] = [[0, 0.0, 0.58], [0, -0.22, 0.72]]
+
+/** For a bearing, what turns a point of the head's own space back into the scene's: where her eyes and mouth are. */
+function sceneOf([yaw, pitch, roll, lift]: Bearing): (x: number, y: number, z: number) => V {
+  const [cy, sy, cp, sp, cr, sr] = [Math.cos(yaw), Math.sin(yaw), Math.cos(pitch), Math.sin(pitch), Math.cos(roll), Math.sin(roll)]
+
+  return (x, y, z) => {
+    const [x1, y2] = [cr * x - sr * y, sr * x + cr * y]
+    const [y1, z1] = [cp * y2 - sp * z, sp * y2 + cp * z]
+
+    return [cy * x1 - sy * z1, y1 + HEAD_Y + lift, sy * x1 + cy * z1]
   }
 }
 
@@ -338,7 +278,7 @@ const GLINT = unit(KEY[0], KEY[1], KEY[2] + 1)
 // A model's own hue, mixed into the armour or the hologram: the Chief and three of Blue Team; Cortana and three of her kind.
 const HUES: Readonly<Record<'cortana' | 'mjolnir', Readonly<Record<Form, readonly [hue: number, share: number]>>>> = {
   mjolnir: { opus: [0, 0], sonnet: [0x6fa8d8, 0.5], haiku: [0xd8c088, 0.5], fable: [0xd0d6e0, 0.55] },
-  cortana: { opus: [0, 0], sonnet: [0x006aa6, 0.7], haiku: [0x00806c, 0.7], fable: [0xb85a14, 0.7] },
+  cortana: { opus: [0, 0], sonnet: [0x6fe6c0, 0.6], haiku: [0xe08cff, 0.6], fable: [0xffb86b, 0.6] },
 }
 
 /** What came before a cue and when it gave way: the figure eases out of it. */
@@ -350,6 +290,10 @@ const blend = (a: readonly number[], b: readonly number[], u: number) => b.map((
 const RAMP = '.:-=+*#%@'
 const DIGITS = '0110100111010+=<>/'
 const CELL = 0.5 // a cell's width over its height
+// A cell's four neighbours.
+const AROUND = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const
+// The character for each way a cell's quarters can be covered (bit 0 top left, 1 top right, 2 bottom left, 3 bottom right).
+const STROKES = [' ', '`', "'", '"', '.', ')', '/', '/', '.', '\\', '(', '\\', '_', '\\', '/', '#']
 
 /**
  * The figure at `now` in a grid of `columns` by `rows` cells, centred: Cortana in her skin, the Chief's helmet in his.
@@ -372,12 +316,13 @@ export function haloFrame(skin: Skin, form: Form, mood: Mood, now: number, colum
   const isHer = skin.variant === 'cortana'
   const cue = cueOf(mood, doing)
   const into = before === undefined ? 1 : ease((now - before.at) / EASE_MS)
-  const lift = isHer && cue === 'happy' ? 0.06 * Math.abs(wave(now, 720)) : 0
-  const bearing = (into < 1 && before !== undefined ? blend(bearingAt(before.cue, now), bearingAt(cue, now), into) : bearingAt(cue, now)) as unknown as Bearing
-  // How far to each side of her the picture shows: in a narrow pane her arms and what she holds stay inside it.
-  const wide = (0.13 * 7 * columns * CELL) / rows
-  const her = (into < 1 && before !== undefined ? blend(poseAt(before.cue, now), poseAt(cue, now), into) : poseAt(cue, now)).map((n, i) => (i >= 3 && i % 3 === 0 ? Math.max(0.1 - wide, Math.min(wide - 0.1, n)) : n))
-  const scene = isHer ? cortana(her, cue, now, lift, wide) : chief(bearing)
+  const turned = into < 1 && before !== undefined ? blend(bearingAt(before.cue, now), bearingAt(cue, now), into) : [...bearingAt(cue, now)]
+  // (She turns less than he does: her face is what is looked at.)
+  if (isHer) turned[0]! *= 0.55
+  const bearing = turned as unknown as Bearing
+  // How far to each side of her the picture shows: what she has about her stays inside it.
+  const wide = ((isHer ? 0.166 : 0.158) * 7 * columns * CELL) / rows
+  const scene = isHer ? cortana(bearing, cue, now, wide) : chief(bearing)
   const panel = panelIn(wide)
   const local = helmetOf(bearing)
   const { eye, lens, mid, reach } = scene
@@ -402,24 +347,34 @@ export function haloFrame(skin: Skin, form: Form, mood: Mood, now: number, colum
   const weight = new Float32Array(size)
   const made = new Uint8Array(size)
   const where = new Float32Array(size * 3)
+  // A ray through a point of the grid (in cells, fractions too): how far along it the surface is (Infinity: none), `kind` its material.
+  let d0 = 0
+  let d1 = 0
+  let d2 = 0
+  let here = Infinity
+  const cast = (fx: number, fy: number): number => {
+    const dx = ((fx - columns / 2) * 2 * lens * CELL) / rows
+    const dy = (1 - (fy / rows) * 2) * lens
+    const n = Math.hypot(dx, dy, 1)
+    d0 = dx / n
+    d1 = dy / n
+    d2 = -1 / n
+    const along = eye / n
+    here = Infinity
+    if (eye * eye - along * along >= reach * reach) return Infinity
+    let t = eye - reach
+    for (let i = 0; i < 48 && t < eye + reach; i++) {
+      here = far(d0 * t, d1 * t, eye + d2 * t)
+      if (here < 0.012) return t
+      t += here * 0.92
+    }
+
+    return Infinity
+  }
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < columns; x++) {
-      const dx = ((x + 0.5 - columns / 2) * 2 * lens * CELL) / rows
-      const dy = (1 - ((y + 0.5) / rows) * 2) * lens
-      const n = Math.hypot(dx, dy, 1)
-      const d0 = dx / n
-      const d1 = dy / n
-      const d2 = -1 / n
-      const along = eye / n
-      if (eye * eye - along * along >= reach * reach) continue
-      let t = eye - reach
-      let here = Infinity
-      for (let i = 0; i < 48 && t < eye + reach; i++) {
-        here = far(d0 * t, d1 * t, eye + d2 * t)
-        if (here < 0.012) break
-        t += here * 0.92
-      }
-      if (here >= 0.012) continue
+      const t = cast(x + 0.5, y + 0.5)
+      if (t === Infinity) continue
       const material = kind
       const px = d0 * t
       const py = d1 * t
@@ -440,8 +395,33 @@ export function haloFrame(skin: Skin, form: Form, mood: Mood, now: number, colum
       where[at * 3 + 1] = py + mid
       where[at * 3 + 2] = pz
       const solid = (0.15 + 0.85 * near ** 1.3) * (0.5 + 0.5 * lit) + 0.6 * glint
-      // A visor is a mirror and her hair a dark mass: heavy whatever the light. What lies under the armour, and her face, stay light.
-      weight[at] = material === GLASS ? 0.62 + 0.3 * lit + 0.6 * glint : material === UNDER ? 0.08 + 0.22 * lit : material === FACE ? 0.04 + 0.12 * lit : material === LIGHT ? 0.9 : isHer ? solid : 0.06 + 0.66 * solid
+      // A visor is a mirror: heavy whatever the light. Her hair is dark, and so faint on a dark ground; what lies under the armour stays light.
+      weight[at] = material === GLASS ? (isHer ? 0.1 + 0.3 * lit + 0.25 * glint : 0.62 + 0.3 * lit + 0.6 * glint) : material === UNDER ? 0.08 + 0.22 * lit : material === LIGHT ? 0.9 : isHer ? solid : 0.06 + 0.66 * solid
+    }
+  }
+
+  // The outline, cut finer than a cell: where the figure ends, four rays are sent through a cell's quarters, and the cell is the
+  // character whose shape is the part of it that is covered (a slope, a bracket, a low or a high stroke).
+  const rim = new Uint8Array(size) // 0: not on the outline; else 1 + the covered quarters as bits (top left, top right, bottom left, bottom right)
+  const rimOf = new Uint8Array(size)
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < columns; x++) {
+      const at = y * columns + x
+      const isIn = depth[at]! < Infinity
+      let isOut = false
+      for (const [i, j] of AROUND) {
+        const [nx, ny] = [x + i, y + j]
+        if (nx < 0 || ny < 0 || nx >= columns || ny >= rows ? isIn : depth[ny * columns + nx]! < Infinity !== isIn) isOut = true
+      }
+      if (!isOut) continue
+      let bits = 0
+      for (let q = 0; q < 4; q++) {
+        if (cast(x + 0.25 + 0.5 * (q & 1), y + 0.25 + 0.5 * (q >> 1)) < Infinity) {
+          bits |= 1 << q
+          rimOf[at] = kind
+        }
+      }
+      rim[at] = 1 + bits
     }
   }
 
@@ -450,9 +430,15 @@ export function haloFrame(skin: Skin, form: Form, mood: Mood, now: number, colum
     for (let x = 0; x < columns; x++) {
       const at = y * columns + x
       const t = depth[at]!
+      if (rim[at]! > 0 && rim[at]! - 1 !== 15 && !(isHer && y >= rows - 3)) {
+        // (All four quarters covered is a cell like any other; none is no cell.)
+        const stroke = STROKES[rim[at]! - 1]!
+        if (stroke !== ' ') put(x, y, stroke, tinted(mix(tones[rimOf[at]!]![1]!, tones[rimOf[at]!]![2]!, rimOf[at] === GLASS && isHer ? 0 : 0.35)))
+        continue
+      }
       if (t === Infinity) continue
       // Behind the edge of a part that stands clearly nearer, nothing is drawn: a gap of one cell tells the two apart.
-      const isBehind = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([i, j]) => x + i! >= 0 && x + i! < columns && y + j! >= 0 && y + j! < rows && depth[at + i! + j! * columns]! < t - (isHer ? 0.3 : 0.2))
+      const isBehind = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([i, j]) => x + i! >= 0 && x + i! < columns && y + j! >= 0 && y + j! < rows && depth[at + i! + j! * columns]! < t - 0.2)
       if (isBehind) continue
       const material = made[at]!
       const [faint, plain, strong] = tones[material]!
@@ -475,22 +461,22 @@ export function haloFrame(skin: Skin, form: Form, mood: Mood, now: number, colum
         else if (cue === 'net' && Math.abs(Math.hypot((u - 0.5) * 2, v - 0.5) - ((now % 1200) / 1200)) < 0.09) [glyph, color] = ['o', skin.bright] // a ring going out
         else if (cue === 'call' && Math.abs(v - 0.5) < 0.12 && Math.floor(u * 9 + now / 300) % 3 === 0) [glyph, color] = ['+', skin.bright] // contacts
       }
-      if (isHer && material === PLATE && wy - lift < 0.52 && Math.abs(wx) < 0.24 && hash(x, 7) < 0.3) {
+      if (isHer && material === PLATE && hash(x, 7) < 0.26) {
         // Down her body, a few columns of figures rise: twice as fast at work.
         const run = y + Math.floor(now / (mood === 'working' ? 110 : 240)) + Math.floor(hash(x, 3) * 9)
         if (run % 8 < 2) [glyph, color] = [DIGITS[Math.floor(hash(x, run) * DIGITS.length)]!, mix(plain, skin.value, 0.85)]
       }
       if (isHer && material === LIGHT && (cue === 'scan' || cue === 'edit')) {
         // Her panel is a page: lines of text, the one she reads lit; or the lines she types, as far as she has got.
-        const row = Math.floor((PANEL.y + PANEL.by + 0.02 - wy) / 0.075)
+        const row = Math.floor((PANEL.y + PANEL.by + 0.02 - wy) / 0.11)
         const across = (wx - panel.x + panel.bx) / (2 * panel.bx)
-        const typed = ((now % 4000) / 4000) * 6
+        const typed = ((now % 4000) / 4000) * 7
         const isInk = cue === 'scan' ? hash(row, 11) * 0.5 + 0.5 > across : row < Math.floor(typed) || (row === Math.floor(typed) && across < typed % 1)
-        const isRead = cue === 'scan' && row === Math.floor(now / 380) % 6
+        const isRead = cue === 'scan' && row === Math.floor(now / 380) % 7
         ;[glyph, color] = [isInk ? (isRead ? '#' : '=') : '.', isRead ? strong : isInk ? plain : faint]
       }
       // A bright band climbs her, as the projector redraws her.
-      if (isHer && Math.abs(wy - (FLOOR + ((now % 5200) / 5200) * 2.2)) < 0.05) color = mix(color, skin.cyan, 0.7)
+      if (isHer && Math.abs(wy - (-1.3 + ((now % 5200) / 5200) * 2.6)) < 0.06) color = mix(color, skin.bright, 0.6)
       // Her picture ends in the projector's light: its last rows thin out to dots.
       if (isHer && y >= rows - 3 && material !== LIGHT) {
         if ((x + y + (clock >> 2)) % 2 !== 0 && y > rows - 3) continue
@@ -514,20 +500,19 @@ export function haloFrame(skin: Skin, form: Form, mood: Mood, now: number, colum
   const blink = clock % 12 < 8
   if (isHer) {
     // Her face, where she shows it: two eyes and a mouth, set on her head as it turns. She blinks; the cue is in them.
-    const [yaw, head] = [her[0]!, her[2]!]
-    if (Math.abs(yaw) < 0.9) {
-      const isShut = cue === 'idle' && now % 4000 > 3820
-      const eyes = cue === 'happy' ? '^' : cue === 'worried' ? (blink ? '>' : 'x') : isShut || cue === 'edit' ? '-' : 'o'
-      const mouth = cue === 'happy' ? 'u' : cue === 'worried' ? '~' : cue === 'ask' || cue === 'net' ? 'o' : cue === 'working' ? '.' : '-'
-      const feature = (fx: number, fy: number, glyph: string) => {
-        const [x, y] = spot(Math.cos(yaw) * (head + fx) - Math.sin(yaw) * 0.19, fy + lift)
-        if (x >= 0 && y >= 0 && x < columns && y < rows && made[y * columns + x] === FACE) put(x, y, cue === 'worried' && glyph === '>' && fx > 0 ? '<' : glyph, tinted(skin.bright))
-      }
-      feature(-0.075, 1.02, eyes)
-      feature(0.075, 1.02, eyes)
-      feature(0, 0.9, mouth)
+    const out = sceneOf(bearing)
+    const isShut = cue === 'idle' && now % 4000 > 3820
+    const eyes = cue === 'happy' ? '^' : cue === 'worried' ? (blink ? 'x' : '+') : isShut ? '-' : 'O'
+    const feature = (fx: number, fy: number, fz: number, glyph: string, color: number) => {
+      const [wx, wy, wz] = out(fx, fy, fz)
+      const [x, y] = spot(wx, wy)
+      // (Only where that part of her face is what the cell shows: not behind her hair, not turned away.)
+      if (wz > 0.3 && x >= 0 && y >= 0 && x < columns && y < rows && made[y * columns + x] === FACE) put(x, y, glyph, tinted(color))
     }
-    if (cue === 'working') say(0.46, 1.22, ['.', '..', '...', ''][clock % 16 >> 2]!, skin.cyan)
+    for (const side of [-1, 1]) feature(side * 0.21, -0.04, 0.6, eyes, cue === 'worried' ? skin.alert : skin.bright)
+    feature(0, -0.47, 0.64, cue === 'happy' ? 'v' : cue === 'worried' ? '~' : cue === 'ask' || cue === 'net' ? 'o' : '_', mix(skin.value, skin.bright, 0.4))
+    if (cue === 'working') say(0.92, 0.9, ['.', '..', '...', ''][clock % 16 >> 2]!, skin.cyan)
+    if (cue === 'exec') say(-0.98, -0.35, ['>', '>>', '>>>', '  >'][clock % 16 >> 2]!, skin.value)
   } else {
     // The shield: it flares along the armour's outline when things go wrong, and recharges from the feet up when they went well.
     const charge = cue === 'happy' ? ((now % 1440) / 1440) * 1.3 : -1
@@ -545,9 +530,9 @@ export function haloFrame(skin: Skin, form: Form, mood: Mood, now: number, colum
     if (cue === 'call') say(0, 1.3, ['<  +  >', '<< + >>', '<<<+>>>', '   +   '][clock % 16 >> 2]!, skin.value)
     if (cue === 'load') say(0, 1.3, ['[|]', '[/]', '[-]', '[\\]'][clock % 8 >> 1]!, skin.value)
   }
-  if (cue === 'net') say(isHer ? 0.56 : 1.2, isHer ? 1.04 : 1.09, [')', '))', ')))', '  )'][clock % 16 >> 2]!, isHer ? skin.cyan : skin.value)
-  if (cue === 'ask') say(isHer ? 0.44 : 0.95, isHer ? 1.28 : 1.1, '?', blink ? skin.alert : skin.dim)
-  if (cue === 'worried') say(isHer ? 0.5 : 1, isHer ? 1.3 : 1.15, '!', blink ? skin.alert : skin.dim)
+  if (cue === 'net') say(isHer ? 0.98 : 1.2, isHer ? 0.45 : 1.09, [')', '))', ')))', '  )'][clock % 16 >> 2]!, isHer ? skin.cyan : skin.value)
+  if (cue === 'ask') say(isHer ? 0.92 : 0.95, isHer ? 0.98 : 1.1, '?', blink ? skin.alert : skin.dim)
+  if (cue === 'worried') say(isHer ? 0.95 : 1, isHer ? 1.02 : 1.15, '!', blink ? skin.alert : skin.dim)
 
   // Worried, she tears: a band of rows slips aside for a moment, as a signal splits.
   if (isHer && cue === 'worried' && clock % 9 < 2) {

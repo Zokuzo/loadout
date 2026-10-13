@@ -176,7 +176,7 @@ const chromed = (key: 'y2k' | 'y2k-dark', skin: Skin): TextFamily => {
 }
 
 /**
- * Halo: by day Cortana on her pedestal, by night the Master Chief's helmet, each drawn in ASCII and acting out what the session
+ * Halo: Cortana, close, or the Master Chief's helmet, by the pack's variant, each drawn in ASCII and acting out what the session
  * does (halo.ts), in a HUD worded as theirs: her meters are her rampancy, his the suit's. The other models are her kind and his team.
  */
 const haloed = (key: 'halo' | 'halo-dark', skin: Skin): TextFamily => {
@@ -316,8 +316,8 @@ const skinned = new Map<string, TextFamily>()
 
 /** The family a pack calls for, by its name; the cyber family in the pack's variant (red: the Ghostrunner world, yellow: Edgerunners). A text family's colours are the pack's where it brings them. */
 function packFamily(pack: Pack): FamilyDef {
-  // (The families drawn in ASCII, each in two: one for a light pack, one for a dark.)
-  const chrome = pack.family === 'y2k' ? (pack.isLight ? 'y2k' : 'y2k-dark') : pack.family === 'halo' ? (pack.isLight ? 'halo' : 'halo-dark') : undefined
+  // (The families drawn in ASCII, each in two: the chrome one for a light pack and for a dark, the Halo one by who its pack names.)
+  const chrome = pack.family === 'y2k' ? (pack.isLight ? 'y2k' : 'y2k-dark') : pack.family === 'halo' ? (pack.variant === 'cortana' ? 'halo' : 'halo-dark') : undefined
   if (chrome !== undefined && pack.skin === undefined) return FAMILIES[chrome] ?? CLAWD_FAMILY
   if (pack.family !== 'cyber' && pack.family !== 'y2k' && pack.family !== 'halo' && pack.skin === undefined) return FAMILIES[pack.family] ?? CLAWD_FAMILY
   const [key, who] = chrome !== undefined ? ([chrome, undefined] as const) : pack.family !== 'cyber' ? (['initial-d', undefined] as const) : pack.variant === 'yellow' ? (['cyberpunk-edgerunners', 'thief'] as const) : (['ghostrunner', 'ninja'] as const)

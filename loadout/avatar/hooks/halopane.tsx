@@ -3,11 +3,29 @@
 // and each limit as rounds left in a magazine. Same rows as the cyber HUD (HUD_ROWS), so the layout is one for both.
 import type { ElementTable, RenderElement } from 'claude-code'
 
-import { hex } from './hud'
+import { hex, mix } from './hud'
 import type { HudView, Meter } from './hudpane'
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 const cut = (text: string, room: number): string => (text.length <= room ? text : room < 1 ? '' : `${text.slice(0, room - 1)}…`)
+
+/**
+ * The colours a run of cells goes through, end to end, on each skin: the game's own. By night the shield's blues, the visor's
+ * gold to orange, a plasma violet; hers the hologram's range, from the projector's blue through violet to orchid. A magazine
+ * goes from its last rounds (hot) to a full one (calm), so a nearly empty one shows only its hot end.
+ */
+const HUES = {
+  mjolnir: { shield: [0x9be8ff, 0x74c7ff, 0x3d8bff], rounds: [0xff6a3a, 0xffb238, 0xd6d85a, 0x9fd86a], name: [0xffe08a, 0xffb238, 0xff8a3a], frame: [0x74c7ff, 0x5fe0c8, 0xa3b86c], rule: [0xa3b86c, 0x74c7ff, 0xb48cff] },
+  cortana: { shield: [0xb8f0ff, 0x6fb6ff, 0x7a6cf0], rounds: [0xff5470, 0xe08cff, 0x8f9cff, 0x6fd0ff], name: [0xb8f0ff, 0x8fa8ff, 0xe08cff], frame: [0x6fd0ff, 0x8f7cff, 0xe08cff], rule: [0x6fb6ff, 0x8f7cff, 0xe08cff] },
+} as const
+
+/** The colour `u` of the way (0 to 1) along a list of stops. */
+export const along = (stops: readonly number[], u: number): string => {
+  const at = Math.max(0, Math.min(1, u)) * (stops.length - 1)
+  const from = Math.min(stops.length - 2, Math.floor(at))
+
+  return hex(mix(stops[from]!, stops[from + 1]!, at - from))
+}
 
 export const TRACKER_COLUMNS = 11
 const TRACKER_ROWS = 5
@@ -49,19 +67,23 @@ export function haloTree({ Box, Button, Text }: ElementTable, view: HudView): Re
   const { skin, columns } = view
   const words = view.captions ?? { link: 'UNSC LINK', crew: 'FIRETEAM', unit: 'SPARTANS', banner: 'COMM', meters: 'SUIT' }
   const [primary, bright, dim, cyan, alert, value, ink, shadow] = [skin.primary, skin.bright, skin.dim, skin.cyan, skin.alert, skin.value, skin.ink, skin.shadow].map(hex) as [string, string, string, string, string, string, string, string]
-  const rule = (caption: string) => (
-    <Text wrap="truncate-end">
-      <Text color={dim}>╭─ </Text>
-      <Text color={primary} bold>{caption}</Text>
-      <Text color={dim}> {'─'.repeat(Math.max(0, columns - 5 - caption.length))}╮</Text>
-    </Text>
-  )
+  const hues = HUES[skin.variant === 'cortana' ? 'cortana' : 'mjolnir']
+  /** A run of characters, each in its own colour along `stops`; `of` is the whole run's length where this is a part of one. */
+  const shaded = (text: string, stops: readonly number[], isBold = false, from = 0, of = [...text].length) =>
+    [...text].map((glyph, i) => <Text key={String(from + i)} color={along(stops, of < 2 ? 0 : (from + i) / (of - 1))} bold={isBold}>{glyph}</Text>)
+  const rule = (caption: string) => {
+    const line = `╭─ ${caption} ${'─'.repeat(Math.max(0, columns - 5 - caption.length))}╮`
+
+    return <Text wrap="truncate-end">{shaded(line.slice(0, 3), hues.rule, false, 0, line.length)}{shaded(caption, hues.rule, true, 3, line.length)}{shaded(line.slice(3 + caption.length), hues.rule, false, 3 + caption.length, line.length)}</Text>
+  }
   const address = view.session.replace(/[^0-9a-z]/gi, '').toUpperCase()
   const clock = view.minutes === undefined ? '' : `T+${pad2(Math.floor(view.minutes / 60))}:${pad2(view.minutes % 60)}`
   const isAlarm = view.mood === 'worried' && !view.isCall
   const tone = isAlarm ? alert : view.isCall || view.mood === 'working' ? cyan : view.mood === 'happy' ? value : primary
   // The comm line: who speaks and of what on the box's top edge, the words inside it.
   const inner = Math.max(1, columns - 4)
+  // (Its frame starts in the turn's tone and runs into the skin's own frame colours; an alarm stays one colour.)
+  const comm = isAlarm ? [skin.alert, skin.alert, skin.alert] : [Number.parseInt(tone.slice(1), 16), hues.frame[1], hues.frame[2]]
   const head = cut(`${words.banner} ▸ ${view.title.toUpperCase()}`, Math.max(1, columns - 6))
   const said = cut(view.said, inner)
   const id = view.model.replace(/^claude-/, '').replace(/-\d{8}$/, '').toUpperCase()
@@ -87,14 +109,14 @@ export function haloTree({ Box, Button, Text }: ElementTable, view: HudView): Re
         {meter?.isAlert === true ? <Text color={ink} backgroundColor={alert} bold>{count}</Text> : <Text color={primary} bold>{count}</Text>}
       </Box>,
       <Text key={`${key}-rounds`} wrap="truncate-end">
-        <Text color={meter?.isAlert === true ? alert : primary}>{'▮'.repeat(loaded)}</Text>
+        {shaded('▮'.repeat(loaded), hues.rounds, false, 0, side)}
         <Text color={shadow}>{'▯'.repeat(side - loaded)}</Text>
       </Text>,
     ]
   }
   const tracker = trackerRows(view.alive)
   // The shield is blue on both skins: his count's colour, her projector's.
-  const blue = skin.variant === 'cortana' ? cyan : value
+  const blue = skin.variant === 'cortana' ? primary : value
 
   return (
     <Box flexDirection="column" height={view.height} justifyContent="flex-end" {...(view.ground === undefined ? {} : { width: view.ground.columns, backgroundColor: view.ground.color })}>
@@ -107,19 +129,19 @@ export function haloTree({ Box, Button, Text }: ElementTable, view: HudView): Re
       <Text wrap="truncate-end">
         <Text color={tone}>╭─ </Text>
         <Text color={tone} bold>{head}</Text>
-        <Text color={tone}> {'─'.repeat(Math.max(0, columns - 5 - head.length))}╮</Text>
+        {shaded(` ${'─'.repeat(Math.max(0, columns - 5 - head.length))}╮`, comm)}
       </Text>
       <Text wrap="truncate-end">
         <Text color={tone}>│ </Text>
         {isAlarm ? <Text color={ink} backgroundColor={alert} bold>{said.padEnd(inner)}</Text> : <Text color={bright} bold>{said.padEnd(inner)}</Text>}
-        <Text color={tone}> │</Text>
+        <Text color={hex(comm[2]!)}> │</Text>
       </Text>
-      <Text color={tone} wrap="truncate-end">╰{'─'.repeat(Math.max(0, columns - 2))}╯</Text>
+      <Text wrap="truncate-end">{shaded(`╰${'─'.repeat(Math.max(0, columns - 2))}╯`, comm)}</Text>
       {view.mask !== null && <Box width={columns} justifyContent="center">{view.mask}</Box>}
       <Box width={columns} justifyContent="center">
         <Text wrap="truncate-end">
           <Text color={cyan}>◂ </Text>
-          <Text color={primary} bold>{view.name.toUpperCase()}</Text>
+          {shaded(view.name.toUpperCase(), hues.name, true)}
           {model !== '' && <Text color={dim}> · {model}</Text>}
           <Text color={cyan}> ▸</Text>
         </Text>
@@ -138,14 +160,14 @@ export function haloTree({ Box, Button, Text }: ElementTable, view: HudView): Re
       </Box>
       <Text wrap="truncate-end">
         <Text color={dim}>▐</Text>
-        <Text color={isLow ? alert : blue}>{(isLow ? '█▓' : '█').repeat(charged).slice(0, charged)}</Text>
+        {isLow ? <Text color={alert}>{'█▓'.repeat(charged).slice(0, charged)}</Text> : shaded('█'.repeat(charged), hues.shield, false, 0, bar)}
         <Text color={shadow}>{'░'.repeat(bar - charged)}</Text>
         <Text color={dim}>▌</Text>
       </Text>
       <Box width={columns} gap={1}>
         <Box flexDirection="column" width={TRACKER_COLUMNS}>
           {tracker.map((row, y) => (
-            <Text key={String(y)}>{[...row.text].map((glyph, x) => <Text key={String(x)} color={row.hot[x] === true ? (skin.variant === 'cortana' ? value : cyan) : blue} bold={row.hot[x] === true}>{glyph}</Text>)}</Text>
+            <Text key={String(y)}>{[...row.text].map((glyph, x) => <Text key={String(x)} color={row.hot[x] === true ? (skin.variant === 'cortana' ? value : cyan) : along(hues.shield, y / (tracker.length - 1))} bold={row.hot[x] === true}>{glyph}</Text>)}</Text>
           ))}
         </Box>
         <Box flexDirection="column" width={side}>
@@ -158,7 +180,7 @@ export function haloTree({ Box, Button, Text }: ElementTable, view: HudView): Re
         </Box>
       </Box>
       {view.isFull && <Text color={alert} bold wrap="truncate-end">{critical}</Text>}
-      <Text color={dim} wrap="truncate-end">╰{'─'.repeat(Math.max(0, columns - 2))}╯</Text>
+      <Text wrap="truncate-end">{shaded(`╰${'─'.repeat(Math.max(0, columns - 2))}╯`, [...hues.rule].reverse())}</Text>
     </Box>
   )
 }

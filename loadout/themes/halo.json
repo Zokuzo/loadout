@@ -4,47 +4,49 @@
   "match": [
     "halo"
   ],
-  "isLight": true,
+  "isLight": false,
   "terminal": {
-    "background": "#f1f0fa"
+    "background": "#0b0a1e"
   },
   "avatar": {
     "family": "halo",
+    "variant": "cortana",
+    "film": false,
     "skin": {
-      "primary": "#4a35c9",
-      "bright": "#1a1245",
-      "body": "#a9a3e0",
-      "shadow": "#d6d3f0",
-      "dim": "#6a6796",
-      "cyan": "#006aa6",
-      "alert": "#d4203a",
-      "value": "#a0288f",
-      "tint": "#e6e3f5",
-      "ink": "#ffffff"
+      "primary": "#6fb6ff",
+      "bright": "#f2f8ff",
+      "body": "#2c4a9a",
+      "shadow": "#1a2458",
+      "dim": "#7f8fc8",
+      "cyan": "#8f7cff",
+      "alert": "#ff5470",
+      "value": "#e08cff",
+      "tint": "#0e0d28",
+      "ink": "#070616"
     }
   },
   "flow": {
     "palette": {
-      "bg": "#f1f0fa",
-      "page": "#f1f0fa",
-      "fg": "#1a1245",
-      "text2": "#3d3768",
-      "text3": "#524c7c",
-      "text4": "#646190",
-      "border": "#d2cfea",
-      "cardBorder": "#a39ddb",
-      "track": "#dedbf0",
-      "select": "#e2dffa",
-      "cyan": "#006aa6",
-      "green": "#0d7d5f",
-      "yellow": "#9a6400",
-      "orange": "#b84e00",
-      "red": "#cc1f3a",
-      "blue": "#3b4fd6",
-      "violet": "#7a2fc0",
-      "railDone": "#6fb8a4",
-      "railRun": "#c79a4a",
-      "tabActive": "#4a35c9"
+      "bg": "#0b0a1e",
+      "page": "#0b0a1e",
+      "fg": "#e6e9ff",
+      "text2": "#bcc2ea",
+      "text3": "#a6add8",
+      "text4": "#8a90c4",
+      "border": "#1f2150",
+      "cardBorder": "#4a52a8",
+      "track": "#181a40",
+      "select": "#141a44",
+      "cyan": "#6fd0ff",
+      "green": "#6fe6c0",
+      "yellow": "#f0c36a",
+      "orange": "#ff9a6b",
+      "red": "#ff5470",
+      "blue": "#8fa8ff",
+      "violet": "#c79bff",
+      "railDone": "#3f9a8a",
+      "railRun": "#7a6cf0",
+      "tabActive": "#6fb6ff"
     },
     "steps": {
       "header": {
@@ -58,8 +60,8 @@
       "layout": "path",
       "meter": {
         "style": "pips",
-          "fill": "▮",
-          "empty": "▯"
+        "fill": "▮",
+        "empty": "▯"
       },
       "states": {
         "done": {
@@ -102,12 +104,12 @@
         "ms": 520
       },
       "captions": {
-        "title": "campaign",
-        "active": "nav point",
-        "blocked": "pinned down",
-        "optional": "skull",
-        "progress": "checkpoint {i} of {n} · {left} ahead",
-        "idle": "holding position · {left} ahead"
+        "title": "CAMPAIGN",
+        "active": "NAV POINT",
+        "blocked": "PINNED DOWN",
+        "optional": "SKULL",
+        "progress": "CHECKPOINT {i} OF {n} · {left} AHEAD",
+        "idle": "HOLDING POSITION · {left} AHEAD"
       }
     }
   },

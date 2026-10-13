@@ -550,7 +550,17 @@ async function written($: EngineInterface, path: string, want: string) {
 
 /** One escape written to the pty, after every write asked for before it. */
 function told($: EngineInterface, path: string, color: string) {
-  const sent = writing.then(() => $.process.run(['python3', '-I', '-c', SET_GROUND, path, color], { timeoutMs: 3000 }).catch(() => null))
+  // (While it is written, nothing is drawn between two frames: a feed's picture sent that instant could land inside the escape and break it.)
+  const sent = writing.then(async () => {
+    grounding += 1
+    try {
+      return await $.process.run(['python3', '-I', '-c', SET_GROUND, path, color], { timeoutMs: 3000 })
+    } catch {
+      return null
+    } finally {
+      grounding -= 1
+    }
+  })
   writing = sent
 
   return sent
@@ -755,13 +765,15 @@ function frame($: EngineInterface) {
 let beats = 0
 // Whether the finer clock (FILM_MS) runs: it starts with the first feed cut finer than FEED_MS, and then draws that feed alone.
 let isFilming = false
+// How many writes of the terminal's ground are under way: none of the finer clocks draws meanwhile.
+let grounding = 0
 
 /**
  * Between two frames, what is cut finer than the pictures' clock, and nothing else: the camera feed's next picture where
  * its footage has such a loop, and the chrome skins' object and the Halo skins' figure, which move in ASCII. Twenty-two frames a second; thirty-three for a feed cut finer than FEED_MS.
  */
 function between($: EngineInterface, isFilmBeat = false) {
-  if (!isPaneUp || drawing !== 0) return
+  if (!isPaneUp || drawing !== 0 || grounding > 0) return
   const mounted = shown
   if (mounted === null || !('text' in mounted.layout) || !mounted.keys.has('kirby')) return
   const { feed, hero, text } = mounted.layout
@@ -1518,7 +1530,8 @@ export const register: Register = on => {
     await quiet(findAssets($)) // a reload mid-session raises no session.start
     // The camera feed: the pictures of the slot the theme's world and the session's model name, where there are any.
     const slot = 'skin' in wanted.family ? slotOf(wanted.family.world, wanted.form) : undefined
-    const feed = slot !== undefined && hasPictures(slot) ? slot : undefined
+    // (A pack may keep its family's drawn figure: `film` false.)
+    const feed = slot !== undefined && hasPictures(slot) && look.pack?.film !== false ? slot : undefined
     // A world with cars is theirs wherever its feed does not play: they are drawn as any sprite family, never the mask.
     const cars = 'skin' in wanted.family && !(canPicture === true && table !== undefined && style !== 'text' && feed !== undefined) ? wanted.family.cars : undefined
     const session = cars === undefined ? wanted : { family: cars, form: wanted.form }

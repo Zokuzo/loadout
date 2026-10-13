@@ -10,6 +10,7 @@
   },
   "avatar": {
     "family": "halo",
+    "variant": "mjolnir",
     "skin": {
       "primary": "#a3b86c",
       "bright": "#eaf2c9",
@@ -31,10 +32,10 @@
       "text2": "#b9c4ab",
       "text3": "#a3b094",
       "text4": "#86957a",
-      "border": "#263021",
-      "cardBorder": "#4d6338",
+      "border": "#22303a",
+      "cardBorder": "#3f6a8a",
       "track": "#1c2618",
-      "select": "#18230f",
+      "select": "#13222c",
       "cyan": "#74c7ff",
       "green": "#9fd86a",
       "yellow": "#ffb238",
@@ -42,9 +43,9 @@
       "red": "#ff5a45",
       "blue": "#8fb8ff",
       "violet": "#c9a0ff",
-      "railDone": "#5d7a3a",
-      "railRun": "#a8761e",
-      "tabActive": "#a3b86c"
+      "railDone": "#5d8a4a",
+      "railRun": "#b07a1e",
+      "tabActive": "#ffb238"
     },
     "steps": {
       "header": {
@@ -58,8 +59,8 @@
       "layout": "path",
       "meter": {
         "style": "pips",
-          "fill": "▮",
-          "empty": "▯"
+        "fill": "▮",
+        "empty": "▯"
       },
       "states": {
         "done": {
@@ -102,12 +103,12 @@
         "ms": 520
       },
       "captions": {
-        "title": "campaign",
-        "active": "nav point",
-        "blocked": "pinned down",
-        "optional": "skull",
-        "progress": "checkpoint {i} of {n} · {left} ahead",
-        "idle": "holding position · {left} ahead"
+        "title": "CAMPAIGN",
+        "active": "NAV POINT",
+        "blocked": "PINNED DOWN",
+        "optional": "SKULL",
+        "progress": "CHECKPOINT {i} OF {n} · {left} AHEAD",
+        "idle": "HOLDING POSITION · {left} AHEAD"
       }
     }
   },
