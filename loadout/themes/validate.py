@@ -79,7 +79,7 @@ def check(value, rule, root, at='pack'):
     if 'anyOf' in rule and all(check(value, sub, root, at) for sub in rule['anyOf']):
         errors.append(f'{at}: {json.dumps(value, ensure_ascii=False)} fits none of the allowed forms')
     if 'not' in rule and not check(value, rule['not'], root, at):
-        errors.append(f'{at}: has a field this family does not take (variant is the cyber family\'s; skin the cyber, initial-d and y2k families\')')
+        errors.append(f'{at}: has a field this family does not take (variant is the cyber family\'s; skin the cyber, initial-d, y2k and halo families\')')
     if 'if' in rule:
         branch = rule.get('then') if not check(value, rule['if'], root, at) else rule.get('else')
         if branch is not None:

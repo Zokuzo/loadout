@@ -13,9 +13,10 @@ import { HI, clawdMini, kirbyMini } from '../hooks/hires'
 import { CAST, FEED_SHAPE, SLOTS, frameAt, reelOf, slotOf } from '../hooks/reel'
 import type { Slot } from '../hooks/reel'
 import { MASK_COLUMNS, MASK_LEAST, MASK_ROWS, NONE, SKINS, TAGS, agentRows, blockRowsOf, hex, maskFrame, modelTag, stateOf, textOf } from '../hooks/hud'
-import type { Grid, Runner, Skin } from '../hooks/hud'
+import type { Grid, Runner, Skin, State } from '../hooks/hud'
 import { sheen } from '../hooks/hudpane'
 import { OBJECT_ROWS, chromeFrame, isChrome } from '../hooks/chrome'
+import { cueOf, haloFrame, haloLive, isHalo } from '../hooks/halo'
 import type { Pose as HiPose } from '../hooks/hires'
 import { CHROME_ROWS, laidOut, laidOutArt, laidOutText, mascotBlocks } from '../hooks/layout'
 import { FORMS, formOf } from '../hooks/look'
@@ -942,7 +943,7 @@ test('a theme picks the family: kirby, the cyber one in red for Ghostrunner or i
     for (const form of FORMS) expect(family.forms[form].frames.length).toBeGreaterThan(0)
     expect(Object.keys(family.mini(0).poses).length).toBe(20)
   }
-  expect(Object.values(FAMILIES).map(family => ('skin' in family ? family.cars?.blocks ?? 'text' : family.blocks))).toEqual(['kirby', 'clawd', 'text', 'text', 'clawd', 'text', 'text'])
+  expect(Object.values(FAMILIES).map(family => ('skin' in family ? family.cars?.blocks ?? 'text' : family.blocks))).toEqual(['kirby', 'clawd', 'text', 'text', 'clawd', 'text', 'text', 'text', 'text'])
 })
 
 const MOODS: Mood[] = ['idle', 'working', 'happy', 'worried']
@@ -2910,6 +2911,8 @@ test('a slot is a world and a model: each comes from its theme and the session\'
     'initiald-opus', 'initiald-sonnet', 'initiald-haiku', 'initiald-fable',
     'y2k-opus', 'y2k-sonnet', 'y2k-haiku', 'y2k-fable',
     'y2kdark-opus', 'y2kdark-sonnet', 'y2kdark-haiku', 'y2kdark-fable',
+    'halo-opus', 'halo-sonnet', 'halo-haiku', 'halo-fable',
+    'halodark-opus', 'halodark-sonnet', 'halodark-haiku', 'halodark-fable',
   ])
   const MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5', 'claude-fable-5']
   const slotsOf = (theme: string, packs: readonly Pack[] = []) => MODELS.map(model => {
@@ -2927,8 +2930,8 @@ test('a slot is a world and a model: each comes from its theme and the session\'
   expect(SLOTS.slice(8, 12).map(slot => CAST[slot])).toEqual(['TAKUMI', 'RYOSUKE', 'KEISUKE', 'BUNTA'])
   // The Y2K packs are one cast in two worlds: a light pack plays the pictures made for a light ground, a dark one those for the dark, each in its own skin; with none (none is shipped) the model's object turns in ASCII, never a mask or a sprite.
   const chrome = packsIn({ ...PACK_TEXTS, 'y2k.json': packText('y2k', { family: 'y2k' }, '#f2f5fa', { isLight: true }), 'y2k-dark.json': packText('y2k-dark', { family: 'y2k', skin: skinText(SKINS.midnight) }, '#050813') }).packs
-  expect([slotsOf('custom:y2k', chrome), slotsOf('custom:y2k-dark', chrome)]).toEqual([SLOTS.slice(12, 16), SLOTS.slice(16)])
-  expect(SLOTS.slice(12).map(slot => CAST[slot])).toEqual(['SERAPH', 'LUMEN', 'SPARK', 'HALO', 'SERAPH', 'LUMEN', 'SPARK', 'HALO'])
+  expect([slotsOf('custom:y2k', chrome), slotsOf('custom:y2k-dark', chrome)]).toEqual([SLOTS.slice(12, 16), SLOTS.slice(16, 20)])
+  expect(SLOTS.slice(12, 20).map(slot => CAST[slot])).toEqual(['SERAPH', 'LUMEN', 'SPARK', 'HALO', 'SERAPH', 'LUMEN', 'SPARK', 'HALO'])
   const [day, dark] = ['custom:y2k', 'custom:y2k-dark'].map(theme => themed(theme, chrome)) as [ReturnType<typeof themed>, ReturnType<typeof themed>]
   expect(['skin' in day.family && day.family.skin, 'skin' in dark.family && dark.family.skin, day.isLight, dark.isLight]).toEqual([SKINS.chrome, SKINS.midnight, true, false])
   expect(['skin' in day.family && day.family.cars, day.family === FAMILIES.y2k, dark.family === FAMILIES['y2k-dark']]).toEqual([undefined, true, true])
@@ -3092,6 +3095,8 @@ test('the camera feed plays the slot of the theme and the model: its manifest\'s
     'initiald-opus missing', 'initiald-sonnet missing', 'initiald-haiku missing', 'initiald-fable missing',
     'y2k-opus missing', 'y2k-sonnet missing', 'y2k-haiku missing', 'y2k-fable missing',
     'y2kdark-opus missing', 'y2kdark-sonnet missing', 'y2kdark-haiku missing', 'y2kdark-fable missing',
+    'halo-opus missing', 'halo-sonnet missing', 'halo-haiku missing', 'halo-fable missing',
+    'halodark-opus missing', 'halodark-sonnet missing', 'halodark-haiku missing', 'halodark-fable missing',
   ])
   expect(status).toMatch(/Pictures: \S+\/assets\./)
 
@@ -3106,7 +3111,7 @@ test('the camera feed plays the slot of the theme and the model: its manifest\'s
 
   // The manifests still missing are asked for again and again; once all are found, never more.
   const missing = SLOTS.filter(slot => manifests[slot] === undefined)
-  expect(missing.length).toBe(16)
+  expect(missing.length).toBe(24)
   asked.length = 0
   await clock.advance(31_000)
   expect(new Set(asked)).toEqual(new Set(missing))
@@ -3865,4 +3870,47 @@ test('the chrome skins draw the model\'s object in ASCII: one size, plain charac
   expect([textOf(chromeFrame(SKINS.chrome, 'opus', 'idle', 0, 30, 6)).length, chromeFrame(SKINS.chrome, 'opus', 'idle', 0, 30, 0).words.length]).toEqual([6, 0])
   // The layout gives it its rows where the pane has them, a mask's place otherwise.
   expect([laidOutText({ skin: SKINS.chrome, form: 'opus' }, 0, 53, 60, true).size, laidOutText({ skin: SKINS.red, form: 'opus' }, 0, 53, 60, true).size]).toEqual([{ columns: 52, rows: OBJECT_ROWS }, { columns: 52, rows: MASK_ROWS }])
+})
+
+test('the Halo skins draw their figure in pixels, two to a cell: Cortana by day, the Chief\'s helmet by night, each acting out the call that runs, in its own colours per model', () => {
+  expect([isHalo(SKINS.cortana), isHalo(SKINS.mjolnir), isHalo(SKINS.chrome), isHalo(SKINS.red)]).toEqual([true, true, false, false])
+  // A running call's kind is the cue; a failed one is a worry, an ended one leaves the mood.
+  expect([cueOf('idle'), cueOf('working'), cueOf('working', 'scan'), cueOf('working', 'think'), cueOf('idle', 'fail'), cueOf('happy', 'done')]).toEqual(['idle', 'working', 'scan', 'working', 'worried', 'happy'])
+  const CUES: readonly (readonly [Mood, State?])[] = [['idle'], ['working'], ['happy'], ['worried'], ['working', 'scan'], ['working', 'edit'], ['working', 'exec'], ['working', 'net'], ['working', 'call'], ['working', 'load'], ['working', 'ask'], ['working', 'tool']]
+  const seen = new Set<string>()
+  for (const skin of [SKINS.cortana, SKINS.mjolnir]) {
+    for (const [mood, doing] of CUES) {
+      const grid = haloFrame(skin, 'opus', mood, 1234, 52, OBJECT_ROWS, doing)
+      const text = textOf(grid).join('\n')
+      expect([grid.columns, grid.rows, grid.words.length, /^[\x20-\x7e\n\u2580\u2584]*$/.test(text)]).toEqual([52, OBJECT_ROWS, 52 * OBJECT_ROWS * 3, true])
+      // A figure is drawn, the pane's ground shows around it (an empty cell has no colour of its own), and the same moment is the same drawing.
+      expect([...text].filter(ch => ch !== ' ' && ch !== '\n').length).toBeGreaterThan(150)
+      expect(grid.words.every((word, i) => i % 3 !== 0 || word !== 0x20 || grid.words[i + 2] === NONE)).toBe(true)
+      expect(grid.words.filter((_word, i) => i % 3 === 2).some(bg => bg === NONE)).toBe(true)
+      expect(haloFrame(skin, 'opus', mood, 1234, 52, OBJECT_ROWS, doing).words).toEqual(grid.words)
+      seen.add(text)
+    }
+    // It moves at rest; another model is the same figure in another hue.
+    expect(textOf(haloFrame(skin, 'opus', 'idle', 0, 52, OBJECT_ROWS))).not.toEqual(textOf(haloFrame(skin, 'opus', 'idle', 1600, 52, OBJECT_ROWS)))
+    const [opus, sonnet] = [haloFrame(skin, 'opus', 'idle', 600, 52, OBJECT_ROWS), haloFrame(skin, 'sonnet', 'idle', 600, 52, OBJECT_ROWS)]
+    expect([textOf(opus).join(), opus.words.join() === sonnet.words.join()]).toEqual([textOf(sonnet).join(), false])
+    // Out of one cue into the next: half way it is neither, and once eased it is the new one.
+    const [was, half, there] = [haloFrame(skin, 'opus', 'idle', 5000, 52, OBJECT_ROWS), haloFrame(skin, 'opus', 'working', 5000, 52, OBJECT_ROWS, 'ask', { cue: 'idle', at: 4800 }), haloFrame(skin, 'opus', 'working', 5000, 52, OBJECT_ROWS, 'ask')]
+    expect([textOf(half).join() !== textOf(was).join(), textOf(half).join() !== textOf(there).join()]).toEqual([true, true])
+    expect(haloFrame(skin, 'opus', 'working', 5000, 52, OBJECT_ROWS, 'ask', { cue: 'idle', at: 1000 }).words).toEqual(there.words)
+    // Any size is drawn, none throws.
+    expect([textOf(haloFrame(skin, 'opus', 'idle', 0, 30, 6)).length, haloFrame(skin, 'opus', 'idle', 0, 30, 0).words.length]).toEqual([6, 0])
+    expect(laidOutText({ skin, form: 'opus' }, 0, 53, 60, true).size).toEqual({ columns: 52, rows: OBJECT_ROWS })
+  }
+  // Each cue is its own picture, for her and for him.
+  expect(seen.size).toBe(2 * CUES.length)
+  // The pane's own drawing remembers the cue before: the first frame after a change is still near the old pose.
+  haloLive(SKINS.mjolnir, 'opus', 'idle', 9000, 52, OBJECT_ROWS)
+  expect(textOf(haloLive(SKINS.mjolnir, 'opus', 'working', 9010, 52, OBJECT_ROWS, 'net'))).not.toEqual(textOf(haloFrame(SKINS.mjolnir, 'opus', 'working', 9010, 52, OBJECT_ROWS, 'net')))
+  // A light pack of the family is Cortana and her kind, a dark one the Chief and Blue Team, each in its skin.
+  const packs = packsIn({ ...PACK_TEXTS, 'halo.json': packText('halo', { family: 'halo' }, '#f1f0fa', { isLight: true }), 'halo-dark.json': packText('halo-dark', { family: 'halo', skin: skinText(SKINS.mjolnir) }, '#0b100d') }).packs
+  const [day, dark] = ['custom:halo', 'custom:halo-dark'].map(theme => themed(theme, packs)) as [ReturnType<typeof themed>, ReturnType<typeof themed>]
+  expect([day.family === FAMILIES.halo, dark.family === FAMILIES['halo-dark'], day.isLight, dark.isLight]).toEqual([true, true, true, false])
+  expect(FORMS.map(form => [nameOf({ family: day.family, form }), nameOf({ family: dark.family, form })])).toEqual([['CORTANA', 'MASTER CHIEF'], ['THE WEAPON', 'KELLY-087'], ['SERINA', 'LINDA-058'], ['ISABEL', 'FRED-104']])
+  expect(packOf(packText('x', { family: 'halo', variant: 'red' }, '#000000'), 'x.json')).toBe('avatar.variant: red or yellow, for cyber alone')
 })

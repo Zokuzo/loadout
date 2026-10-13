@@ -1,0 +1,151 @@
+{
+  "slug": "halo",
+  "name": "Halo",
+  "match": [
+    "halo"
+  ],
+  "isLight": true,
+  "terminal": {
+    "background": "#f1f0fa"
+  },
+  "avatar": {
+    "family": "halo",
+    "skin": {
+      "primary": "#4a35c9",
+      "bright": "#1a1245",
+      "body": "#a9a3e0",
+      "shadow": "#d6d3f0",
+      "dim": "#6a6796",
+      "cyan": "#006aa6",
+      "alert": "#d4203a",
+      "value": "#a0288f",
+      "tint": "#e6e3f5",
+      "ink": "#ffffff"
+    }
+  },
+  "flow": {
+    "palette": {
+      "bg": "#f1f0fa",
+      "page": "#f1f0fa",
+      "fg": "#1a1245",
+      "text2": "#3d3768",
+      "text3": "#524c7c",
+      "text4": "#646190",
+      "border": "#d2cfea",
+      "cardBorder": "#a39ddb",
+      "track": "#dedbf0",
+      "select": "#e2dffa",
+      "cyan": "#006aa6",
+      "green": "#0d7d5f",
+      "yellow": "#9a6400",
+      "orange": "#b84e00",
+      "red": "#cc1f3a",
+      "blue": "#3b4fd6",
+      "violet": "#7a2fc0",
+      "railDone": "#6fb8a4",
+      "railRun": "#c79a4a",
+      "tabActive": "#4a35c9"
+    },
+    "steps": {
+      "header": {
+        "style": "boxed",
+        "prefix": "MISSION ▸ ",
+        "color": "cyan",
+        "frame": "cardBorder",
+        "upper": true,
+        "corners": "╭╮╰╯"
+      },
+      "layout": "path",
+      "meter": {
+        "style": "pips",
+          "fill": "▮",
+          "empty": "▯"
+      },
+      "states": {
+        "done": {
+          "glyph": "◆",
+          "color": "green",
+          "labelColor": "text2",
+          "bold": false,
+          "rail": "│",
+          "railColor": "railDone"
+        },
+        "active": {
+          "glyph": "▼",
+          "color": "yellow",
+          "labelColor": "fg",
+          "bold": true,
+          "rail": "┆",
+          "railColor": "railRun",
+          "ground": "select"
+        },
+        "pending": {
+          "glyph": "◇",
+          "color": "text4",
+          "bold": false,
+          "rail": "┆",
+          "railColor": "border"
+        },
+        "blocked": {
+          "glyph": "✕",
+          "color": "red",
+          "bold": true,
+          "rail": "┆",
+          "railColor": "border"
+        }
+      },
+      "cycle": {
+        "glyphs": [
+          "▼",
+          "▽"
+        ],
+        "ms": 520
+      },
+      "captions": {
+        "title": "campaign",
+        "active": "nav point",
+        "blocked": "pinned down",
+        "optional": "skull",
+        "progress": "checkpoint {i} of {n} · {left} ahead",
+        "idle": "holding position · {left} ahead"
+      }
+    }
+  },
+  "spinner": {
+    "frames": [
+      "◜",
+      "◝",
+      "◞",
+      "◟"
+    ],
+    "ms": 140,
+    "verbs": [
+      "Finishing this fight",
+      "Waking the Chief",
+      "Charging shields",
+      "Reloading the MA5B",
+      "Driving the Warthog",
+      "Sticking a plasma grenade",
+      "Boarding a Banshee",
+      "Clearing the Library",
+      "Following 343 Guilty Spark",
+      "Reaching the control room",
+      "Dodging the Flood",
+      "Hunting skulls",
+      "Calling in a Pelican",
+      "Holding out for evac",
+      "Dual-wielding",
+      "Checkpoint... saving",
+      "Watching the motion tracker",
+      "Decrypting Forerunner glyphs",
+      "Overcharging the plasma pistol",
+      "Running the Silent Cartographer",
+      "Rolling out the Scorpion",
+      "Jumping feet first into hell",
+      "Returning the Covenant's bomb",
+      "Asking Cortana",
+      "Lighting the beacon",
+      "Making a slipspace jump"
+    ]
+  }
+}

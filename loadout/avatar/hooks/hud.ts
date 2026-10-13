@@ -11,7 +11,7 @@ import type { Act, Agent } from './stage'
 /** The terminal's default colour, in a cell. */
 export const NONE = 0x01000000
 
-export type Variant = 'red' | 'yellow' | 'night' | 'chrome' | 'midnight'
+export type Variant = 'red' | 'yellow' | 'night' | 'chrome' | 'midnight' | 'cortana' | 'mjolnir'
 
 /**
  * One skin's palette, 0xRRGGBB: the interface's one colour (`primary`), its lit edge, the mask's
@@ -29,12 +29,16 @@ export type Skin = { variant: Variant; primary: number; bright: number; body: nu
  * moonlit blue-green, what is live in the fog lights' yellow, an alarm a tail light, a count the pink of dusk.
  * Chrome is a phone advert of the year 2000: cobalt on ice white, navy print, what is live in glass teal, a count in the violet of an oil film;
  * midnight is the same room with the lights off, periwinkle and aqua on blue-black. (On these two the pane's bars are shaded as polished metal: hudpane.tsx.)
+ * Cortana is a hologram printed on lavender paper: indigo and violet, what is live in the projector's blue, a count in orchid;
+ * Mjolnir is the armour at night: its olive green on green-black, what is live in the visor's gold, a count in the blue of a shield bar.
  */
 export const SKINS: Readonly<Record<Variant, Skin>> = {
   red: { variant: 'red', primary: 0xff6158, bright: 0xffb9ad, body: 0x6a1d22, shadow: 0x34101a, dim: 0xc0706a, cyan: 0x5ef6ff, alert: 0xff1f47, value: 0xffd2cb, tint: 0x1c080c, ink: 0x0b0306 },
   yellow: { variant: 'yellow', primary: 0xfcee0a, bright: 0xfffbb5, body: 0x7d7605, shadow: 0x3a3702, dim: 0xb0a707, cyan: 0x5ef6ff, alert: 0xff3d3d, value: 0x3aa0ff, tint: 0x121100, ink: 0x060600 },
   chrome: { variant: 'chrome', primary: 0x1c3fd6, bright: 0x0d1638, body: 0x9fb4d8, shadow: 0xd3dcec, dim: 0x5c6f94, cyan: 0x00857a, alert: 0xd81e2c, value: 0xa23bb5, tint: 0xe4eaf4, ink: 0xffffff },
   midnight: { variant: 'midnight', primary: 0x7da2ff, bright: 0xffffff, body: 0x2a3970, shadow: 0x18213f, dim: 0x8793b5, cyan: 0x5fe6d6, alert: 0xff5468, value: 0xd9a3ff, tint: 0x0b1126, ink: 0x050813 },
+  cortana: { variant: 'cortana', primary: 0x4a35c9, bright: 0x1a1245, body: 0xa9a3e0, shadow: 0xd6d3f0, dim: 0x6a6796, cyan: 0x006aa6, alert: 0xd4203a, value: 0xa0288f, tint: 0xe6e3f5, ink: 0xffffff },
+  mjolnir: { variant: 'mjolnir', primary: 0xa3b86c, bright: 0xeaf2c9, body: 0x4a5c2c, shadow: 0x222d17, dim: 0x86957a, cyan: 0xffb238, alert: 0xff4f3a, value: 0x74c7ff, tint: 0x121a12, ink: 0x080c08 },
   night: { variant: 'night', primary: 0xd2e04e, bright: 0xf4eeda, body: 0x1f5068, shadow: 0x122f48, dim: 0x6f9fb8, cyan: 0xffb52e, alert: 0xff4d3d, value: 0xf29a8e, tint: 0x0c2236, ink: 0x06121f },
 }
 
@@ -457,7 +461,7 @@ export function maskFrame(skin: Skin, form: Form, mood: Mood, now: number, colum
 /** What a block says its agent is at: between calls, one per kind of tool, then a failed call, and its end, stopped or finished. */
 export type State = 'think' | 'scan' | 'edit' | 'exec' | 'net' | 'call' | 'load' | 'ask' | 'tool' | 'fail' | 'halt' | 'done'
 
-const STATES: Readonly<Record<Exclude<Act, 'exit'>, State>> = {
+export const STATES: Readonly<Record<Exclude<Act, 'exit'>, State>> = {
   idle: 'think', inhale: 'scan', sword: 'edit', dash: 'exec', ride: 'net', call: 'call', sparkle: 'load', ask: 'ask', hop: 'tool',
   hurt: 'fail', dazed: 'fail', dance: 'done', faint: 'halt',
 }

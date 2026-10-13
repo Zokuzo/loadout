@@ -37,7 +37,7 @@ function rot(p: V, axis: 0 | 1 | 2, a: number): V {
   return q
 }
 
-const smin = (a: number, b: number, k: number) => {
+export const smin = (a: number, b: number, k: number) => {
   const h = Math.max(0, Math.min(1, 0.5 + (0.5 * (b - a)) / k))
 
   return b + (a - b) * h - k * h * (1 - h)
@@ -110,7 +110,7 @@ const GLINT = unit(KEY[0], KEY[1], KEY[2] + 1)
 // How long a loop lasts in each mood, ms: at work everything flows twice as fast.
 const LOOP_MS: Readonly<Record<Mood, number>> = { idle: 6400, working: 3200, happy: 4000, worried: 9600 }
 
-const hash = (a: number, b: number) => {
+export const hash = (a: number, b: number) => {
   let h = (Math.imul(a, 374761393) + Math.imul(b, 668265263)) | 0
   h = Math.imul(h ^ (h >>> 13), 1274126177)
 

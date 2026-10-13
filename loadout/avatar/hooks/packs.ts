@@ -4,7 +4,7 @@
 // draws from are read here; the Flow map's (`flow`) are its own to check.
 import type { Skin, Variant } from './hud'
 
-export type PackFamily = 'kirby' | 'clawd' | 'cyber' | 'initial-d' | 'y2k'
+export type PackFamily = 'kirby' | 'clawd' | 'cyber' | 'initial-d' | 'y2k' | 'halo'
 
 /**
  * A pack as this mod keeps it: the theme names it serves (`slug`, and the `match` substrings),
@@ -24,7 +24,7 @@ export type Pack = {
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/
 const COLOUR = /^#[0-9a-f]{6}$/i
-const FAMILIES: readonly PackFamily[] = ['kirby', 'clawd', 'cyber', 'initial-d', 'y2k']
+const FAMILIES: readonly PackFamily[] = ['kirby', 'clawd', 'cyber', 'initial-d', 'y2k', 'halo']
 const SKIN_KEYS = ['primary', 'bright', 'body', 'shadow', 'dim', 'cyan', 'alert', 'value', 'tint', 'ink'] as const
 
 /** A theme's name as packs know it: `custom:Kirby Pink` and `kirby_pink` are `kirby-pink`. */
@@ -55,20 +55,20 @@ export function packOf(text: string, file: string): Pack | string {
   if (match !== undefined && !(Array.isArray(match) && match.every(one => typeof one === 'string' && SLUG.test(one)))) return 'match is not a list of names'
   if (!isRecord(avatar)) return 'no avatar'
   const family = FAMILIES.find(one => one === avatar['family'])
-  if (family === undefined) return 'avatar.family is not kirby, clawd, cyber, initial-d or y2k'
+  if (family === undefined) return 'avatar.family is not kirby, clawd, cyber, initial-d, y2k or halo'
   const variant = avatar['variant']
   if (family === 'cyber' ? variant !== 'red' && variant !== 'yellow' : variant !== undefined) return 'avatar.variant: red or yellow, for cyber alone'
   const pack: Pack = { slug, name: typeof name === 'string' && name !== '' ? name : slug, match: (match as string[] | undefined) ?? [], isLight, background, family }
   const worn = avatar['skin']
-  // (The cars' HUD has one palette, `night`, and the chrome one the pack's light or dark: no variant to name.)
+  // (The cars' HUD has one palette, `night`, and the chrome and Halo ones the pack's light or dark: no variant to name.)
   const told = family === 'cyber' ? { variant: variant as Variant } : {}
-  if (family !== 'cyber' && family !== 'initial-d' && family !== 'y2k') return worn === undefined ? pack : 'avatar.skin is for cyber, initial-d and y2k alone'
+  if (family !== 'cyber' && family !== 'initial-d' && family !== 'y2k' && family !== 'halo') return worn === undefined ? pack : 'avatar.skin is for cyber, initial-d, y2k and halo alone'
   if (worn === undefined) return { ...pack, ...told }
   if (!isRecord(worn)) return 'avatar.skin is not an object'
   const colours = SKIN_KEYS.map(key => colourOf(worn[key]))
   const missing = SKIN_KEYS.find((_key, i) => colours[i] === undefined)
   if (missing !== undefined) return `avatar.skin.${missing} is not #rrggbb`
-  const skin = Object.fromEntries([['variant', variant ?? (family !== 'y2k' ? 'night' : isLight ? 'chrome' : 'midnight')], ...SKIN_KEYS.map((key, i) => [key, colours[i]])]) as Skin
+  const skin = Object.fromEntries([['variant', variant ?? (family === 'halo' ? (isLight ? 'cortana' : 'mjolnir') : family !== 'y2k' ? 'night' : isLight ? 'chrome' : 'midnight')], ...SKIN_KEYS.map((key, i) => [key, colours[i]])]) as Skin
 
   return { ...pack, ...told, skin }
 }

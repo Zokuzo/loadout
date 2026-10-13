@@ -11,6 +11,7 @@ import type { Look } from './families'
 import { FEED_SHAPE } from './reel'
 import type { Slot } from './reel'
 import { OBJECT_ROWS, isChrome } from './chrome'
+import { isHalo } from './halo'
 import { MASK_COLUMNS, MASK_LEAST, MASK_ROWS, NONE, blockRowsOf } from './hud'
 import type { Skin } from './hud'
 import { HUD_ROWS } from './hudpane'
@@ -113,7 +114,7 @@ export function laidOutArt(look: Look, alive: number, width: number, rows: numbe
 /**
  * The same for a family in text. The mask depends on the pane alone, so it holds still as the
  * agents come and go: whole where the rows allow, cropped about its visor on a shorter pane, left
- * out under MASK_LEAST rows or MASK_COLUMNS columns. (The chrome skins draw the model's object there, chrome.ts, OBJECT_ROWS tall where the rows allow.) It never takes the last TEXT_RESERVED rows:
+ * out under MASK_LEAST rows or MASK_COLUMNS columns. (The chrome skins draw the model's object there, chrome.ts, and the Halo ones their figure, halo.ts: OBJECT_ROWS tall where the rows allow.) It never takes the last TEXT_RESERVED rows:
  * the agents' blocks take the rows left above the banner, one of them for their rule, so a running
  * agent is told on any pane that holds the HUD and two rows more.
  *
@@ -142,7 +143,7 @@ export function laidOutText(text: TextLook, alive: number, width: number, rows: 
     if (hero.who !== undefined && room >= HERO_ROWS_LEAST) return laid({ columns, rows: Math.min(HERO_ROWS, room) }, drawn)
   }
 
-  return laid({ columns, rows: canDraw && columns >= MASK_COLUMNS && room >= MASK_LEAST ? Math.min(isChrome(text.skin) ? OBJECT_ROWS : MASK_ROWS, room) : 0 })
+  return laid({ columns, rows: canDraw && columns >= MASK_COLUMNS && room >= MASK_LEAST ? Math.min(isChrome(text.skin) || isHalo(text.skin) ? OBJECT_ROWS : MASK_ROWS, room) : 0 })
 }
 
 // --- the mascot in cell blocks ---------------------------------------------------

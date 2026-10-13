@@ -1,10 +1,10 @@
 import type { Form } from './look'
 import { FORMS } from './look'
 
-/** The worlds a text family can be set in, and their characters' places: a slot is a world and a model's form. (`y2k` and `y2kdark` are one cast, rendered for a light and a dark ground.) */
-export type World = 'ghostrunner' | 'edgerunners' | 'initiald' | 'y2k' | 'y2kdark'
+/** The worlds a text family can be set in, and their characters' places: a slot is a world and a model's form. (`y2k` and `y2kdark` are one cast, rendered for a light and a dark ground; `halo` is Cortana and her kind, `halodark` the Chief and Blue Team.) */
+export type World = 'ghostrunner' | 'edgerunners' | 'initiald' | 'y2k' | 'y2kdark' | 'halo' | 'halodark'
 export type Slot = `${World}-${Form}`
-export const WORLDS: readonly World[] = ['ghostrunner', 'edgerunners', 'initiald', 'y2k', 'y2kdark']
+export const WORLDS: readonly World[] = ['ghostrunner', 'edgerunners', 'initiald', 'y2k', 'y2kdark', 'halo', 'halodark']
 export const slotOf = (world: World, form: Form): Slot => `${world}-${form}`
 export const SLOTS: readonly Slot[] = WORLDS.flatMap(world => FORMS.map(form => slotOf(world, form)))
 
@@ -15,6 +15,8 @@ export const CAST: Readonly<Record<Slot, string>> = {
   'initiald-opus': 'TAKUMI', 'initiald-sonnet': 'RYOSUKE', 'initiald-haiku': 'KEISUKE', 'initiald-fable': 'BUNTA',
   'y2k-opus': 'SERAPH', 'y2k-sonnet': 'LUMEN', 'y2k-haiku': 'SPARK', 'y2k-fable': 'HALO',
   'y2kdark-opus': 'SERAPH', 'y2kdark-sonnet': 'LUMEN', 'y2kdark-haiku': 'SPARK', 'y2kdark-fable': 'HALO',
+  'halo-opus': 'CORTANA', 'halo-sonnet': 'THE WEAPON', 'halo-haiku': 'SERINA', 'halo-fable': 'ISABEL',
+  'halodark-opus': 'MASTER CHIEF', 'halodark-sonnet': 'KELLY-087', 'halodark-haiku': 'LINDA-058', 'halodark-fable': 'FRED-104',
 }
 
 /** Every picture of the camera feed is this shape (400 by 340), so its box is one size whoever is in it. */

@@ -23,7 +23,7 @@ import type { World } from './reel'
 import { KIRBY } from './sprite'
 import { TOUGE } from './touge'
 
-export type FamilyName = 'kirby' | 'clawd' | 'ghostrunner' | 'cyberpunk-edgerunners' | 'initial-d' | 'y2k' | 'y2k-dark'
+export type FamilyName = 'kirby' | 'clawd' | 'ghostrunner' | 'cyberpunk-edgerunners' | 'initial-d' | 'y2k' | 'y2k-dark' | 'halo' | 'halo-dark'
 
 /** What worries a mascot, in its own words: a context getting full, and a limit (named) almost used up. */
 export type Worry = { full: string; near: (limit: string) => string }
@@ -175,6 +175,27 @@ const chromed = (key: 'y2k' | 'y2k-dark', skin: Skin): TextFamily => {
   }
 }
 
+/**
+ * Halo: by day Cortana on her pedestal, by night the Master Chief's helmet, each drawn in ASCII and acting out what the session
+ * does (halo.ts), in a HUD worded as theirs: her meters are her rampancy, his the suit's. The other models are her kind and his team.
+ */
+const haloed = (key: 'halo' | 'halo-dark', skin: Skin): TextFamily => {
+  const world = key === 'halo' ? 'halo' : 'halodark'
+  const names = { opus: CAST[`${world}-opus`], sonnet: CAST[`${world}-sonnet`], haiku: CAST[`${world}-haiku`], fable: CAST[`${world}-fable`] }
+
+  return key === 'halo' ? {
+    key, skin, world, names,
+    captions: { link: 'UNSC AI', crew: 'FRAGMENTS', unit: 'ACTIVE', banner: 'COMM', meters: 'RAMPANCY' },
+    speech: { idle: ['STANDING BY, CHIEF.', hex(skin.primary)], working: ['CRUNCHING THE NUMBERS...', hex(skin.cyan)], worried: ['', hex(skin.alert)], happy: ['I KNEW YOU COULD DO IT.', hex(skin.value)] },
+    worry: { full: 'RAMPANCY RISING. /clear', near: limit => `${limit.toUpperCase()} LIMIT WEARING THIN` },
+  } : {
+    key, skin, world, names,
+    captions: { link: 'UNSC LINK', crew: 'FIRETEAM', unit: 'SPARTANS', banner: 'COMM', meters: 'MJOLNIR MK VI' },
+    speech: { idle: ['WAKE ME WHEN YOU NEED ME.', hex(skin.primary)], working: ['FINISHING THIS FIGHT...', hex(skin.cyan)], worried: ['', hex(skin.alert)], happy: ['CHECKPOINT... DONE.', hex(skin.value)] },
+    worry: { full: 'SHIELDS DOWN. /clear', near: limit => `${limit.toUpperCase()} LIMIT: SHIELDS LOW` },
+  }
+}
+
 /** The cyber family in one of its two palettes and worlds: Raijin, terse as a netrunner. The drawn ninja is Ghostrunner's Opus, the drawn thief Edgerunners'. */
 const cyber = (key: FamilyName, skin: Skin, who: Who): TextFamily => ({
   key,
@@ -208,6 +229,7 @@ const cyber = (key: FamilyName, skin: Skin, who: Who): TextFamily => ({
 export const FAMILIES: Partial<Record<FamilyName, FamilyDef>> = {
   kirby: KIRBY_FAMILY, clawd: CLAWD_FAMILY, ghostrunner: cyber('ghostrunner', SKINS.red, 'ninja'), 'cyberpunk-edgerunners': cyber('cyberpunk-edgerunners', SKINS.yellow, 'thief'), 'initial-d': touge(SKINS.night),
   y2k: chromed('y2k', SKINS.chrome), 'y2k-dark': chromed('y2k-dark', SKINS.midnight),
+  halo: haloed('halo', SKINS.cortana), 'halo-dark': haloed('halo-dark', SKINS.mjolnir),
 }
 
 /**
@@ -294,14 +316,15 @@ const skinned = new Map<string, TextFamily>()
 
 /** The family a pack calls for, by its name; the cyber family in the pack's variant (red: the Ghostrunner world, yellow: Edgerunners). A text family's colours are the pack's where it brings them. */
 function packFamily(pack: Pack): FamilyDef {
-  const chrome = pack.family !== 'y2k' ? undefined : pack.isLight ? 'y2k' : 'y2k-dark'
+  // (The families drawn in ASCII, each in two: one for a light pack, one for a dark.)
+  const chrome = pack.family === 'y2k' ? (pack.isLight ? 'y2k' : 'y2k-dark') : pack.family === 'halo' ? (pack.isLight ? 'halo' : 'halo-dark') : undefined
   if (chrome !== undefined && pack.skin === undefined) return FAMILIES[chrome] ?? CLAWD_FAMILY
-  if (pack.family !== 'cyber' && pack.family !== 'y2k' && pack.skin === undefined) return FAMILIES[pack.family] ?? CLAWD_FAMILY
+  if (pack.family !== 'cyber' && pack.family !== 'y2k' && pack.family !== 'halo' && pack.skin === undefined) return FAMILIES[pack.family] ?? CLAWD_FAMILY
   const [key, who] = chrome !== undefined ? ([chrome, undefined] as const) : pack.family !== 'cyber' ? (['initial-d', undefined] as const) : pack.variant === 'yellow' ? (['cyberpunk-edgerunners', 'thief'] as const) : (['ghostrunner', 'ninja'] as const)
   const stock = FAMILIES[key] ?? KIRBY_FAMILY
   const mark = JSON.stringify(pack.skin)
   if (pack.skin === undefined || ('skin' in stock && JSON.stringify(stock.skin) === mark)) return stock
-  const made = skinned.get(mark) ?? (chrome !== undefined ? chromed(chrome, pack.skin) : who === undefined ? touge(pack.skin) : cyber(key, pack.skin, who))
+  const made = skinned.get(mark) ?? (chrome === 'halo' || chrome === 'halo-dark' ? haloed(chrome, pack.skin) : chrome !== undefined ? chromed(chrome, pack.skin) : who === undefined ? touge(pack.skin) : cyber(key, pack.skin, who))
   skinned.set(mark, made)
 
   return made

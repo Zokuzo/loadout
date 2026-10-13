@@ -10,8 +10,10 @@ import type { Beat, Moment } from './cyber'
 import { frameOf, nameOf, themed } from './families'
 import type { Acting, FamilyDef, Worry } from './families'
 import { chromeFrame, isChrome } from './chrome'
-import { NONE, agentRows, hex, maskFrame } from './hud'
-import type { Grid } from './hud'
+import { haloLive, isHalo } from './halo'
+import { haloTree } from './halopane'
+import { NONE, STATES, agentRows, hex, maskFrame } from './hud'
+import type { Grid, State } from './hud'
 import { HUD_ROWS, hudTree } from './hudpane'
 import { CHROME_ROWS, LEGEND_MAX, encoded, laidOut, laidOutArt, laidOutText, mascotBlocks } from './layout'
 import type { Layout } from './layout'
@@ -30,7 +32,7 @@ import { alone } from '../../hooks/part'
 import type { Part } from '../../hooks/part'
 import { SWAPS, colorOf } from './minis'
 import { stageFrame, stagedOf as stagedArt } from './scene'
-import { LEAVE_MS, NARROWEST as STAGE_NARROWEST, TICK_MS, sceneOf, stagedOf } from './stage'
+import { LEAVE_MS, NARROWEST as STAGE_NARROWEST, TICK_MS, sceneOf, stagedOf, toolAct } from './stage'
 import { FLOW_PANE, VIEW as FLOW_VIEW } from '../../flow/hooks/register'
 import type { KirbyHudCall, KirbyHudHelper, KirbyHudLimit, KirbyHudUsage } from '../../types'
 
@@ -294,7 +296,7 @@ function portraitOf(slot: Slot, mood: Mood, now: number, happyUntil: number): { 
 type Picture = { cells: string } | { source: ReturnType<typeof sourceOf> | { file: string; format: 'png' } }
 
 /** The mascot at `now`: a true-pixel frame where the layout has them (clear where nothing is drawn: the pane's ground shows through), else the cell-block step of that moment on `ground`. */
-function mascotPicture(drawn: Layout, mood: Mood, now: number, ground: number, isBusy = false, happyUntil = 0, isLight = false): Picture {
+function mascotPicture(drawn: Layout, mood: Mood, now: number, ground: number, isBusy = false, happyUntil = 0, isLight = false, doing: State | undefined = undefined): Picture {
   if ('text' in drawn && drawn.feed !== undefined) return { source: portraitOf(drawn.feed, mood, now, happyUntil) }
   if ('text' in drawn && drawn.hero !== undefined) {
     const moment = momentOf(mood, now, isBusy, happyUntil)
@@ -302,7 +304,8 @@ function mascotPicture(drawn: Layout, mood: Mood, now: number, ground: number, i
     return drawn.art === undefined ? { cells: packed(heroGrid(drawn.hero, moment, drawn.size.columns, drawn.size.rows), ground) }
       : { source: sourceOf(heroCanvas(drawn.hero, moment, drawn.art.mascot.width, drawn.art.mascot.height), PRESCALE) }
   }
-  // (The chrome skins have no mask: their mascot is the model's object, in ASCII.)
+  // (The chrome skins have no mask: their mascot is the model's object, in ASCII. Nor the Halo ones: theirs acts out the call that runs.)
+  if ('text' in drawn && isHalo(drawn.text.skin)) return { cells: packed(haloLive(drawn.text.skin, drawn.text.form, mood, now, drawn.size.columns, drawn.size.rows, doing), ground) }
   if ('text' in drawn) return { cells: packed((isChrome(drawn.text.skin) ? chromeFrame : maskFrame)(drawn.text.skin, drawn.text.form, mood, now, drawn.size.columns, drawn.size.rows), ground) }
   if (drawn.art === undefined) return { cells: encoded(mascotBlocks(drawn, mood, Math.floor(now / TICK_MS)), ground) }
   const { mascot, scale } = drawn.art
@@ -670,7 +673,7 @@ async function slow($: EngineInterface) {
 // no render pass and without asking the engine for anything but the time.
 // `keys` are the pictures mounted.
 // `ground` is the pane's own background, NONE for the terminal's; `isLight` whether the theme is a light one.
-type Shown = { layout: Layout; ground: number; isLight: boolean; usage: KirbyHudUsage | null; isWorking: boolean; isBusy: boolean; happyUntil: number; crew: readonly KirbyHudHelper[]; keys: Set<string> }
+type Shown = { layout: Layout; ground: number; isLight: boolean; usage: KirbyHudUsage | null; isWorking: boolean; isBusy: boolean; doing: State | undefined; happyUntil: number; crew: readonly KirbyHudHelper[]; keys: Set<string> }
 let shown: Shown | null = null
 let isPaneUp = false
 // What each picture last showed: a frame equal to it is not sent.
@@ -724,7 +727,7 @@ async function draw($: EngineInterface) {
   // (A camera feed never rests: its loops are the whole of it.)
   const isStill = 'text' in mounted.layout ? mounted.layout.feed === undefined && hero !== undefined && isAtRest(hero, momentOf(mood, now, false, mounted.happyUntil)) : acted === undefined || acted.isAtRest(actingOf(mood, now))
   isCalm = mood === 'idle' && mounted.crew.length === 0 && isStill
-  if (mounted.keys.has('kirby')) await put($, 'kirby', mounted.layout.size, mascotPicture(mounted.layout, mood, now, mounted.ground, mounted.isBusy, mounted.happyUntil, mounted.isLight))
+  if (mounted.keys.has('kirby')) await put($, 'kirby', mounted.layout.size, mascotPicture(mounted.layout, mood, now, mounted.ground, mounted.isBusy, mounted.happyUntil, mounted.isLight, mounted.doing))
   if (mounted.keys.has('stage') && mounted.layout.stage !== null && mounted.crew.length > 0) await put($, 'stage', mounted.layout.stage, stagePicture(mounted.layout, mounted.crew, now, mounted.ground, mounted.isLight))
 }
 
@@ -750,7 +753,7 @@ let beats = 0
 
 /**
  * Between two frames, what is cut finer than the pictures' clock, and nothing else: the camera feed's next picture where
- * its footage has such a loop, and the chrome skins' object, which turns in ASCII. Twenty-two frames a second.
+ * its footage has such a loop, and the chrome skins' object, which turns in ASCII. (The Halo skins' figure moves on the pictures' own clock.) Twenty-two frames a second.
  */
 function between($: EngineInterface) {
   if (!isPaneUp || drawing !== 0) return
@@ -764,7 +767,7 @@ function between($: EngineInterface) {
   drawing = mine
   waited = 0
   void $.clock.now()
-    .then(now => put($, 'kirby', mounted.layout.size, mascotPicture(mounted.layout, moodOf(mounted.usage, mounted.isWorking, now < mounted.happyUntil), now, mounted.ground, mounted.isBusy, mounted.happyUntil, mounted.isLight)))
+    .then(now => put($, 'kirby', mounted.layout.size, mascotPicture(mounted.layout, moodOf(mounted.usage, mounted.isWorking, now < mounted.happyUntil), now, mounted.ground, mounted.isBusy, mounted.happyUntil, mounted.isLight, mounted.doing)))
     .catch(() => {})
     .finally(() => {
       if (drawing === mine) drawing = 0
@@ -1641,8 +1644,11 @@ export const register: Register = on => {
 
     // The banner tells the turn before the worry: at work it is the working line, whatever the meters say (they say it themselves).
     const told: Mood = working ? 'working' : mood
+    // What the call that runs is, as a HUD tells it: the Halo figures act it out.
+    const act = call === undefined ? undefined : toolAct(call.tool)
+    const doing = act === undefined || act === 'exit' ? undefined : STATES[act]
     const limit = (label: string, l: KirbyHudLimit | undefined) => ({ label, percent: l?.percentUsed, isAlert: (l?.percentUsed ?? 0) >= LIMIT_NEAR, detail: reset(l) })
-    const tree = 'skin' in family ? hudTree($.ui.resolve(e), {
+    const tree = 'skin' in family ? (isHalo(family.skin) ? haloTree : hudTree)($.ui.resolve(e), {
       skin: family.skin,
       ...(family.captions === undefined ? {} : { captions: family.captions }),
       ...(paneGround === undefined ? {} : { ground: { color: hex(paneGround), columns: width } }),
@@ -1660,7 +1666,7 @@ export const register: Register = on => {
       agents: drawn.stage !== null ? pictured('stage', drawn.stage, stagePicture(drawn, alive, now, ground, isLight), 'the agents at work')
         : table === undefined && alive.length > 0 ? <Box flexDirection="column">{alive.slice(0, LEGEND_MAX).map(legend)}</Box> : null,
       alive: alive.length,
-      mask: size.rows > 0 ? pictured('kirby', size, mascotPicture(drawn, mood, now, ground, call !== undefined, happy), name) : null,
+      mask: size.rows > 0 ? pictured('kirby', size, mascotPicture(drawn, mood, now, ground, call !== undefined, happy, false, doing), name) : null,
       petted,
       onPet: pet,
       cost: money(u?.usd),
@@ -1712,7 +1718,7 @@ export const register: Register = on => {
     })
     // What the frames repaint is published last, with nothing awaited after it: a frame never sees
     // pictures the tree handed back does not hold. (Only a terminal mounts pictures: elsewhere there is nothing to repaint.)
-    shown = table === undefined ? null : { layout: drawn, ground, isLight, usage: u, isWorking: working, isBusy: call !== undefined, happyUntil: happy, crew: alive, keys }
+    shown = table === undefined ? null : { layout: drawn, ground, isLight, usage: u, isWorking: working, isBusy: call !== undefined, doing, happyUntil: happy, crew: alive, keys }
 
     return <Box flexDirection="column" height={bodyRows} {...filled}>{head}{tree}</Box>
   })

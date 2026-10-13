@@ -6,7 +6,7 @@ import type { TestBody } from 'claude-code/testing'
 import type { Palette } from '../hooks/palette'
 import { PACK_TEXT } from './packs'
 
-export const SLUGS = ['default', 'kirby', 'kirby-pink', 'ghostrunner', 'cyberpunk-edgerunners', 'initial-d', 'y2k', 'y2k-dark'] as const
+export const SLUGS = ['default', 'kirby', 'kirby-pink', 'ghostrunner', 'cyberpunk-edgerunners', 'initial-d', 'y2k', 'y2k-dark', 'halo', 'halo-dark'] as const
 export type Slug = typeof SLUGS[number]
 /** A pack's palette as its file gives it. packs.ts is a generated copy of ../../themes/*.json (a test can read no file outside the mod). */
 export const paletteIn = (slug: Slug): Palette => (JSON.parse(PACK_TEXT[slug] ?? '{}') as { flow: { palette: Palette } }).flow.palette

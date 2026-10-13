@@ -35,7 +35,7 @@
       "additionalProperties": false,
       "required": ["family"],
       "properties": {
-        "family": { "description": "Which of the Avatar mod's families plays: its art, names and lines are code. 'initial-d' is the cars, and the camera feed of the 'initiald' world's drivers where there is footage (loadout/README.md). 'y2k' is four chrome objects turning in ASCII (avatar/hooks/chrome.ts), inked for the pack's light or dark ground.", "enum": ["kirby", "clawd", "cyber", "initial-d", "y2k"] },
+        "family": { "description": "Which of the Avatar mod's families plays: its art, names and lines are code. 'initial-d' is the cars, and the camera feed of the 'initiald' world's drivers where there is footage (loadout/README.md). 'y2k' is four chrome objects turning in ASCII (avatar/hooks/chrome.ts), inked for the pack's light or dark ground. 'halo' is Cortana (a light pack) or the Master Chief's helmet (a dark one), drawn in ASCII and acting out the running call (avatar/hooks/halo.ts).", "enum": ["kirby", "clawd", "cyber", "initial-d", "y2k", "halo"] },
         "variant": { "description": "The cyber family's skin and world: 'red' (the Ghostrunner world: Jack, Hel, Mitra, Mara) or 'yellow' (the Edgerunners world: Lucy, David, Rebecca, Adam Smasher). The world and the session's model name the character (loadout/README.md).", "enum": ["red", "yellow"] },
         "skin": { "$ref": "#/$defs/skin" }
       },
@@ -43,7 +43,7 @@
       "then": { "required": ["variant"] },
       "else": {
         "not": { "required": ["variant"] },
-        "if": { "properties": { "family": { "enum": ["initial-d", "y2k"] } } },
+        "if": { "properties": { "family": { "enum": ["initial-d", "y2k", "halo"] } } },
         "else": { "not": { "required": ["skin"] } }
       }
     },
@@ -83,7 +83,7 @@
       "maxLength": 60
     },
     "skin": {
-      "description": "A text HUD's colours (hud.ts Skin): the cyber family's, or the one around the initial-d or y2k family's camera feed. Absent: the mod's own skin. Present: all ten.",
+      "description": "A text HUD's colours (hud.ts Skin): the cyber family's, or the one around the initial-d, y2k or halo family's picture. Absent: the mod's own skin. Present: all ten.",
       "type": "object",
       "additionalProperties": false,
       "required": ["primary", "bright", "body", "shadow", "dim", "cyan", "alert", "value", "tint", "ink"],
