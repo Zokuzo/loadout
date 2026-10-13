@@ -17,6 +17,7 @@ import type { Grid, Runner, Skin, State } from '../hooks/hud'
 import { sheen } from '../hooks/hudpane'
 import { OBJECT_ROWS, chromeFrame, isChrome } from '../hooks/chrome'
 import { cueOf, haloFrame, haloLive, isHalo } from '../hooks/halo'
+import { TRACKER_COLUMNS, trackerRows } from '../hooks/halopane'
 import type { Pose as HiPose } from '../hooks/hires'
 import { CHROME_ROWS, laidOut, laidOutArt, laidOutText, mascotBlocks } from '../hooks/layout'
 import { FORMS, formOf } from '../hooks/look'
@@ -3298,6 +3299,55 @@ test('the Initial D pack brings its own family: a car per model, seen from the f
   await ui.unmount()
 })
 
+test('the Halo pane is the game\'s HUD: a comm line, the figure, the context left as a shield bar, a motion tracker, a magazine per limit; nothing wider than the pane, and an alarm when the context is critical', async ($, on) => {
+  // The tracker: five rows of Braille, a blip per contact (never more cells than its box), the same for the same count.
+  const [empty, three] = [trackerRows(0), trackerRows(3)]
+  expect([empty.length, empty.every(row => [...row.text].length === TRACKER_COLUMNS && /^[⠀-⣿]+$/.test(row.text)), empty.some(row => row.hot.some(Boolean))]).toEqual([5, true, false])
+  expect([three.flatMap(row => row.hot).filter(Boolean).length >= 3, JSON.stringify(trackerRows(3)) === JSON.stringify(three), trackerRows(40).length]).toEqual([true, true, 5])
+  const clock = mock.clock(on, { now: NOW })
+  store(on, {}, 'custom:halo-dark', 'claude-opus-5-5')
+  let usage: unknown = { ...USAGE, rateLimits: [], context: { tokens: 50_000, window: 200_000, percent: 25 } }
+  on('session.usage', () => ({ value: usage as typeof USAGE }))
+  on('ui.blit', () => ({ value: {} }))
+  themesFolder(on, { ...PACK_TEXTS, 'halo.json': packText('halo', { family: 'halo' }, '#f1f0fa', { isLight: true }), 'halo-dark.json': packText('halo-dark', { family: 'halo' }, '#0b100d') })
+  const pane = (bodyColumns: number) => ({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns, scroll: { offset: 0, bodyRows: 60 } } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  for (const columns of [34, 44, 54]) {
+    const ui = await $.ui.mount(pane(columns))
+    const lines = flow(under(await ui.drawn()))
+    const said = lines.join('\n')
+    for (const words of ['UNSC LINK', 'COMM ▸ IDLE', 'WAKE ME WHEN YOU NEED ME.', 'MASTER CHIEF · OPUS-5-5', 'MJOLNIR MK VI', 'SHIELD // CONTEXT', 'CREDITS']) expect([columns, words, said.includes(words)]).toEqual([columns, words, true])
+    // The shield is what is left: three quarters of the context, three quarters of the bar.
+    const bar = lines.find(line => line.startsWith('▐'))
+    expect([bar?.length, [...(bar ?? '')].filter(ch => ch === '█').length]).toEqual([columns - 4, Math.round(0.75 * (columns - 6))])
+    expect(lines).toContain(' 75')
+    for (const line of lines) if (!line.startsWith('<')) expect([columns, line, line.length < columns]).toEqual([columns, line, true])
+    expect(widest(await ui.drawn())).toBe(columns - 1)
+    // The figure has the pane's width and its own rows, and is drawn in his skin.
+    const figure = await ui.find({ key: 'kirby' })
+    expect([figure?.props.columns, figure?.props.rows]).toEqual([columns - 1, OBJECT_ROWS])
+    const colours = new Set((await ui.findAll({ type: 'Text' })).flatMap(t => [t.props.color, t.props.backgroundColor]))
+    expect([colours.has(hex(SKINS.mjolnir.primary)), colours.has(hex(SKINS.mjolnir.value)), colours.has(hex(SKINS.red.primary))]).toEqual([true, true, false])
+    await ui.unmount()
+  }
+  // A context nearly full: the shield is low, said in his words and as the bar's advice.
+  usage = { ...USAGE, rateLimits: [], context: { tokens: 150_000, window: 200_000, percent: 75 } }
+  await clock.advance(4400)
+  const ui = await $.ui.mount(pane(34))
+  const lines = flow(under(await ui.drawn()))
+  expect(lines.filter(line => line.startsWith('[!]'))).toEqual(['[!] SHIELDS DOWN > /clear'])
+  expect([lines.some(line => line.includes('SHIELDS DOWN. /clear')), lines.some(line => line.includes('COMM ▸ WORRIED'))]).toEqual([true, true])
+  for (const line of lines) if (!line.startsWith('<')) expect(line.length).toBeLessThan(34)
+  await ui.unmount()
+  // A limit nearly spent: said in his words, its magazine nearly empty, and its caption whole on the narrowest pane.
+  usage = USAGE
+  await clock.advance(4400)
+  const low = await $.ui.mount(pane(34))
+  const told = flow(under(await low.drawn()))
+  expect([told.some(line => line.includes('LIMIT: SHIELDS LOW')), told.filter(line => /^[▮▯]+$/.test(line)).map(line => line.length), told.some(line => line.endsWith('…') && /LIMIT/.test(line))]).toEqual([true, [21, 21], false])
+  await low.unmount()
+})
+
 test('the Initial D pane is the camera feed where its slot has footage and the terminal draws pictures, in a HUD of its own words; the cars everywhere else, never the mask', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
   store(on, {}, 'custom:initial-d', 'claude-opus-5-5')
@@ -3872,7 +3922,7 @@ test('the chrome skins draw the model\'s object in ASCII: one size, plain charac
   expect([laidOutText({ skin: SKINS.chrome, form: 'opus' }, 0, 53, 60, true).size, laidOutText({ skin: SKINS.red, form: 'opus' }, 0, 53, 60, true).size]).toEqual([{ columns: 52, rows: OBJECT_ROWS }, { columns: 52, rows: MASK_ROWS }])
 })
 
-test('the Halo skins draw their figure in pixels, two to a cell: Cortana by day, the Chief\'s helmet by night, each acting out the call that runs, in its own colours per model', () => {
+test('the Halo skins draw their figure in ASCII as the chrome ones do: Cortana by day, the Chief\'s helmet by night, each acting out the call that runs, in its own colours per model', () => {
   expect([isHalo(SKINS.cortana), isHalo(SKINS.mjolnir), isHalo(SKINS.chrome), isHalo(SKINS.red)]).toEqual([true, true, false, false])
   // A running call's kind is the cue; a failed one is a worry, an ended one leaves the mood.
   expect([cueOf('idle'), cueOf('working'), cueOf('working', 'scan'), cueOf('working', 'think'), cueOf('idle', 'fail'), cueOf('happy', 'done')]).toEqual(['idle', 'working', 'scan', 'working', 'worried', 'happy'])
@@ -3882,11 +3932,10 @@ test('the Halo skins draw their figure in pixels, two to a cell: Cortana by day,
     for (const [mood, doing] of CUES) {
       const grid = haloFrame(skin, 'opus', mood, 1234, 52, OBJECT_ROWS, doing)
       const text = textOf(grid).join('\n')
-      expect([grid.columns, grid.rows, grid.words.length, /^[\x20-\x7e\n\u2580\u2584]*$/.test(text)]).toEqual([52, OBJECT_ROWS, 52 * OBJECT_ROWS * 3, true])
-      // A figure is drawn, the pane's ground shows around it (an empty cell has no colour of its own), and the same moment is the same drawing.
+      expect([grid.columns, grid.rows, grid.words.length, /^[\x20-\x7e\n]*$/.test(text)]).toEqual([52, OBJECT_ROWS, 52 * OBJECT_ROWS * 3, true])
+      // A figure is drawn, the pane's ground shows through every cell, and the same moment is the same drawing.
       expect([...text].filter(ch => ch !== ' ' && ch !== '\n').length).toBeGreaterThan(150)
-      expect(grid.words.every((word, i) => i % 3 !== 0 || word !== 0x20 || grid.words[i + 2] === NONE)).toBe(true)
-      expect(grid.words.filter((_word, i) => i % 3 === 2).some(bg => bg === NONE)).toBe(true)
+      expect(grid.words.filter((_word, i) => i % 3 === 2).every(bg => bg === NONE)).toBe(true)
       expect(haloFrame(skin, 'opus', mood, 1234, 52, OBJECT_ROWS, doing).words).toEqual(grid.words)
       seen.add(text)
     }

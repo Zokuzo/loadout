@@ -753,7 +753,7 @@ let beats = 0
 
 /**
  * Between two frames, what is cut finer than the pictures' clock, and nothing else: the camera feed's next picture where
- * its footage has such a loop, and the chrome skins' object, which turns in ASCII. (The Halo skins' figure moves on the pictures' own clock.) Twenty-two frames a second.
+ * its footage has such a loop, and the chrome skins' object and the Halo skins' figure, which move in ASCII. Twenty-two frames a second.
  */
 function between($: EngineInterface) {
   if (!isPaneUp || drawing !== 0) return
@@ -761,7 +761,7 @@ function between($: EngineInterface) {
   if (mounted === null || !('text' in mounted.layout) || !mounted.keys.has('kirby')) return
   const { feed, hero, text } = mounted.layout
   const reel = feed === undefined ? undefined : reels.get(feed)
-  const isFine = feed === undefined ? hero === undefined && isChrome(text.skin) : reel !== undefined && Object.values(reel.clips).some(clip => clip.ms < FRAME_MS)
+  const isFine = feed === undefined ? hero === undefined && (isChrome(text.skin) || isHalo(text.skin)) : reel !== undefined && Object.values(reel.clips).some(clip => clip.ms < FRAME_MS)
   if (!isFine) return
   const mine = (turn += 1)
   drawing = mine

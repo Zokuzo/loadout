@@ -1,5 +1,5 @@
-// The Halo themes' mascots, modelled as the Y2K objects are (chrome.ts: a ray marched to a surface) but drawn as pixels, two to a
-// cell: flat tones of a material's colour, and a dark outline where a part ends. By day it is Cortana, a hologram standing on her pedestal,
+// The Halo themes' mascots, drawn in ASCII as the Y2K objects are (chrome.ts): each cell is one ray marched to a surface, and
+// what is near and lit is a heavy character in a strong colour. By day it is Cortana, a hologram standing on her pedestal,
 // who acts out what the session does: she reads a panel, types, points, listens, sends her fragments out. By night it is
 // the Master Chief's helmet, which turns to look, nods, tilts, and whose visor and shield tell the same things.
 // A surface has a material, and a material its own colours: the armour's green and the visor's gold never run together.
@@ -97,7 +97,7 @@ function bearingAt(cue: Cue, now: number): Bearing {
     const v = now % 9000
     const ahead = v < 6400 ? 0 : v < 7000 ? ease((v - 6400) / 600) : v < 8400 ? 1 : 1 - ease((v - 8400) / 600)
 
-    return [yaw * (1 - 1.5 * ahead) + 0.05 * wave(now, 5200), pitch, roll, breath]
+    return [yaw * (1 - 1.5 * ahead) + 0.22 * wave(now, 5200), pitch + 0.04 * wave(now, 7800), roll, breath]
   }
   if (cue === 'working') return [0.5 * wave(now, 3800), pitch + 0.04 * wave(now, 1900), roll, breath]
   if (cue === 'happy') return [yaw, 0.28 * Math.max(0, wave(now, 720)), roll, breath]
@@ -109,7 +109,7 @@ function bearingAt(cue: Cue, now: number): Bearing {
   return [yaw + 0.04 * wave(now, 2800), pitch + 0.02 * wave(now, 1400), roll, lift + breath]
 }
 
-const HEAD_Y = 0.1 // the helmet's centre over the scene's
+const HEAD_Y = 0.06 // the helmet's centre over the scene's
 
 // A point as the helmet sees it, left here by `helmetOf`'s answer: three numbers, and nothing allocated per ray.
 let [lx, ly, lz] = [0, 0, 0]
@@ -129,14 +129,14 @@ function helmetOf([yaw, pitch, roll, lift]: Bearing): (x: number, y: number, z: 
   }
 }
 
-// The visor's opening in the shell, in the helmet's own space: its middle and its half sizes.
-const VISOR = { y: 0.08, z: 0.75, bx: 0.58, by: 0.17 } as const
-const [CHEEK_COS, CHEEK_SIN] = [Math.cos(0.32), Math.sin(0.32)]
+// The visor: the tall opening in the front of the shell, in the helmet's own space: its middle and its half sizes.
+const VISOR = { y: -0.03, z: 0.8, bx: 0.54, by: 0.33 } as const
+const [BILL_COS, BILL_SIN] = [Math.cos(0.22), Math.sin(0.22)]
 
 /**
- * The Mark VI as a few solids: a shell with a jaw, a band cut out of its front where the gold visor shows, a brim over that
- * band and a crest over the dome, a mouthpiece under it between two slanted cheek guards, a pod at each ear. Under it the
- * neck of the undersuit, the chest plate and a pauldron at each side.
+ * The Mark VI as a few solids, after the game's own: a boxy shell with a flat plate along its top, a bill that juts out over
+ * a tall gold visor, a cheek guard at each side of the visor's foot with its two lamps, a chin guard that rises to a point
+ * between them, and a hose from each side of the jaw. Under it the neck of the undersuit, the chest plate and a pauldron at each side.
  */
 function chief(bearing: Bearing): Scene {
   const local = helmetOf(bearing)
@@ -144,40 +144,41 @@ function chief(bearing: Bearing): Scene {
 
   return {
     eye: 7,
-    lens: 0.186,
+    lens: 0.158,
     mid: 0,
-    reach: 2,
+    reach: 1.75,
     at: (x, y, z) => {
       // What stands under the helmet does not turn with it, and breathes with it.
       const by = y - rise
-      const body = Math.min(slab(x, by + 1.36, z, 0.66, 0.2, 0.28, 0.14), slab(x, by + 1.2, z - 0.3, 0.22, 0.12, 0.1, 0.05), egg(Math.abs(x) - 1.1, by + 1.12, z, 0.42, 0.34, 0.44))
+      // (The helmet fills the picture: of the armour under it, the collar alone shows.)
+      const body = Math.max(Math.abs(len(x, z) - 0.56) - 0.12, Math.abs(by + 1.08) - 0.1) - 0.04
       const neck = Math.max(len(x, z) - 0.42, Math.abs(by + 0.95) - 0.3)
       // (Far from the helmet, its distance is that to a ball about it: its plates are worked out only near them.)
-      const ball = len(x, by - HEAD_Y, z) - 1.2
+      const ball = len(x, by - HEAD_Y, z) - 1.3
       if (ball > 0.25) return nearest(Math.min(body, ball), PLATE, neck, UNDER)
       local(x, y, z)
       const ax = Math.abs(lx)
-      const cut = slab(lx, ly - VISOR.y, lz - VISOR.z, VISOR.bx, VISOR.by, 0.4, 0.06)
-      // (Under the visor the shell is open too: the undersuit shows between the cheek guards and the mouthpiece.)
-      const open = slab(lx, ly + 0.44, lz - 0.85, 0.42, 0.2, 0.4, 0.04)
-      // (The shell's distance is worked out once: the brim, the crest and what shows through the openings are that shell, a little out or in.)
-      const shell = egg(lx, ly - 0.05, lz, 0.74, 0.84, 0.84)
-      let plate = Math.max(smin(shell, slab(lx, ly + 0.5, lz - 0.1, 0.42, 0.2, 0.5, 0.12), 0.15), -cut, -open)
-      plate = smin(plate, Math.max(shell - 0.065, Math.abs(ly - 0.35) - 0.075, 0.1 - lz), 0.04) // the brim: a brow that hugs the shell
-      plate = smin(plate, Math.max(shell - 0.042, ax - 0.17, 0.3 - ly, -0.55 - lz), 0.04) // the crest, along the dome
-      plate = Math.min(plate, slab(lx, ly + 0.4, lz - 0.74, 0.11, 0.12, 0.1, 0.03), slab(lx, ly + 0.69, lz - 0.56, 0.3, 0.055, 0.16, 0.04)) // the mouthpiece, the chin
-      // A cheek guard at each side: a wide plate, slanted in toward the chin.
-      const u = CHEEK_COS * (ax - 0.4) - CHEEK_SIN * (ly + 0.36)
-      const v = CHEEK_SIN * (ax - 0.4) + CHEEK_COS * (ly + 0.36)
-      plate = Math.min(plate, slab(u, v, lz - 0.62, 0.15, 0.21, 0.14, 0.03), egg(ax - 0.76, ly + 0.02, lz - 0.05, 0.08, 0.18, 0.18))
-      plate = Math.min(plate, body)
-      const glass = Math.max(shell + 0.06, cut - 0.05)
-      const under = Math.min(neck, Math.max(shell + 0.09, open - 0.05))
+      const shell = smin(egg(lx, ly - 0.04, lz + 0.04, 0.8, 0.86, 0.9), slab(lx, ly + 0.36, lz + 0.02, 0.5, 0.28, 0.56, 0.22), 0.2)
+      const cut = slab(lx, ly - VISOR.y, lz - VISOR.z, VISOR.bx, VISOR.by, 0.42, 0.1)
+      let plate = Math.max(shell, -cut)
+      plate = smin(plate, Math.max(shell - 0.05, ax - 0.28, 0.42 - ly, -0.6 - lz), 0.04) // the plate along the top
+      // The bill: a slab over the visor, tipped down toward its front edge.
+      const billY = BILL_COS * (ly - 0.43) + BILL_SIN * (lz - 0.66)
+      const billZ = -BILL_SIN * (ly - 0.43) + BILL_COS * (lz - 0.66)
+      plate = smin(plate, slab(lx, billY, billZ, 0.6, 0.035, 0.3, 0.05), 0.07)
+      // The chin guard: a wedge whose point rises between the cheek guards, on a bar across the jaw.
+      const wedge = Math.max((ly + 0.3 + 0.7 * ax) / 1.22, Math.abs(lz - 0.84) - 0.13, -0.8 - ly, ax - 0.4) - 0.03
+      plate = Math.min(plate, wedge, slab(lx, ly + 0.66, lz - 0.52, 0.4, 0.1, 0.34, 0.06))
+      plate = Math.min(plate, slab(ax - 0.56, ly + 0.44, lz - 0.7, 0.13, 0.18, 0.2, 0.04)) // a cheek guard
+      const glass = Math.max(shell + 0.1, cut - 0.03)
+      const hose = limb(ax, ly, lz, HOSE[0], HOSE[1], 0.09)
+      const lamps = Math.min(len(ax - 0.56, ly + 0.36, lz - 0.93), len(ax - 0.56, ly + 0.5, lz - 0.93)) - 0.05
 
-      return nearest(nearest(plate, PLATE, glass, GLASS), kind, under, UNDER)
+      return nearest(nearest(nearest(Math.min(plate, body), PLATE, glass, GLASS), kind, Math.min(neck, hose), UNDER), kind, lamps, LIGHT)
     },
   }
 }
+const HOSE: readonly [V, V] = [[0.36, -0.56, 0.62], [0.2, -0.95, 0.3]]
 
 // --- Cortana ------------------------------------------------------------------
 
@@ -345,29 +346,36 @@ export type Before = { cue: Cue; at: number }
 
 const blend = (a: readonly number[], b: readonly number[], u: number) => b.map((n, i) => a[i]! + (n - a[i]!) * u)
 
-/** Black and white, for a tone's shade and its shine. */
-const [BLACK, WHITE] = [0x000000, 0xffffff]
+// Characters by the ink they lay, least to most (chrome.ts's own).
+const RAMP = '.:-=+*#%@'
+const DIGITS = '0110100111010+=<>/'
+const CELL = 0.5 // a cell's width over its height
 
 /**
  * The figure at `now` in a grid of `columns` by `rows` cells, centred: Cortana in her skin, the Chief's helmet in his.
- * It is a picture of `columns` by twice `rows` square pixels, two to a cell (an upper half block: its ink is the pixel above,
- * its ground the one below): each pixel is one ray, shaded in a few flat tones of its material's colour, and where a part ends
- * or passes in front of another the pixel is an outline. `doing` is the state of the call that runs, if one does: with the
- * mood it makes the cue acted out. `before` is the cue left a moment ago: the pose moves from it to this one.
+ * Drawn as the Y2K objects are: each cell is one ray marched to the surface, and what reads as depth is drawn as weight (a
+ * part near the eye and facing the light is a heavy character in a strong colour); behind the edge of a part that stands
+ * nearer a cell is left empty. Each material has its own colours. `doing` is the state of the call that runs, if one does:
+ * with the mood it makes the cue acted out. `before` is the cue left a moment ago: the pose moves from it to this one.
  */
 export function haloFrame(skin: Skin, form: Form, mood: Mood, now: number, columns: number, rows: number, doing?: State, before?: Before): Grid {
   const words = new Uint32Array(Math.max(0, columns * rows) * 3).fill(NONE)
   for (let i = 0; i < words.length; i += 3) words[i] = 0x20
   const grid = { columns, rows, words }
   if (rows < 1 || columns < 1) return grid
-  const [W, H] = [columns, rows * 2]
+  const put = (x: number, y: number, glyph: string, fg: number) => {
+    if (x < 0 || y < 0 || x >= columns || y >= rows) return
+    words[(y * columns + x) * 3] = glyph.charCodeAt(0)
+    words[(y * columns + x) * 3 + 1] = fg
+  }
+  const isEmpty = (x: number, y: number) => x >= 0 && y >= 0 && x < columns && y < rows && words[(y * columns + x) * 3] === 0x20
   const isHer = skin.variant === 'cortana'
   const cue = cueOf(mood, doing)
   const into = before === undefined ? 1 : ease((now - before.at) / EASE_MS)
   const lift = isHer && cue === 'happy' ? 0.06 * Math.abs(wave(now, 720)) : 0
   const bearing = (into < 1 && before !== undefined ? blend(bearingAt(before.cue, now), bearingAt(cue, now), into) : bearingAt(cue, now)) as unknown as Bearing
   // How far to each side of her the picture shows: in a narrow pane her arms and what she holds stay inside it.
-  const wide = (0.13 * 7 * W) / H
+  const wide = (0.13 * 7 * columns * CELL) / rows
   const her = (into < 1 && before !== undefined ? blend(poseAt(before.cue, now), poseAt(cue, now), into) : poseAt(cue, now)).map((n, i) => (i >= 3 && i % 3 === 0 ? Math.max(0.1 - wide, Math.min(wide - 0.1, n)) : n))
   const scene = isHer ? cortana(her, cue, now, lift, wide) : chief(bearing)
   const panel = panelIn(wide)
@@ -375,36 +383,29 @@ export function haloFrame(skin: Skin, form: Form, mood: Mood, now: number, colum
   const { eye, lens, mid, reach } = scene
   const far = (x: number, y: number, z: number) => scene.at(x, y + mid, z)
 
-  // Each material's tones, from its shade to its shine; the first is in the model's own hue. And the outline's ink.
+  // Each material's colours, faint to strong; the first is in the model's own hue.
   const [hue, share] = HUES[isHer ? 'cortana' : 'mjolnir'][form]
   const own = mix(skin.primary, hue, share)
-  const alarm = cue === 'worried' ? 0.12 + 0.22 * (0.5 + 0.5 * wave(now, 720)) : 0
+  const alarm = cue === 'worried' ? 0.3 + 0.3 * (0.5 + 0.5 * wave(now, 720)) : 0
   const tinted = (color: number) => mix(color, skin.alert, alarm)
-  const tones: readonly (readonly number[])[] = isHer ? [
-    [mix(own, BLACK, 0.15), own, mix(own, skin.body, 0.55), skin.body, mix(skin.body, WHITE, 0.6)],
-    [skin.bright, mix(skin.bright, skin.cyan, 0.45), mix(skin.bright, skin.cyan, 0.8), skin.cyan, mix(skin.cyan, WHITE, 0.45)],
-    [skin.dim, skin.dim, skin.dim, skin.dim, skin.dim],
-    [mix(skin.value, BLACK, 0.2), skin.value, mix(skin.value, WHITE, 0.3), mix(skin.value, WHITE, 0.55), mix(skin.value, WHITE, 0.8)],
-    [mix(skin.body, own, 0.25), mix(skin.body, WHITE, 0.35), mix(skin.body, WHITE, 0.6), mix(skin.body, WHITE, 0.78), mix(skin.body, WHITE, 0.9)],
-  ] : [
-    [mix(skin.shadow, skin.body, 0.7), mix(skin.body, own, 0.2), mix(skin.body, own, 0.55), mix(skin.body, own, 0.9), mix(own, skin.bright, 0.55)],
-    [mix(skin.cyan, BLACK, 0.62), mix(skin.cyan, BLACK, 0.38), mix(skin.cyan, BLACK, 0.12), mix(skin.cyan, WHITE, 0.25), mix(skin.cyan, WHITE, 0.8)],
-    [skin.ink, mix(skin.ink, skin.shadow, 0.5), skin.shadow, mix(skin.shadow, skin.dim, 0.3), mix(skin.shadow, skin.dim, 0.5)],
-    [mix(skin.value, BLACK, 0.3), skin.value, mix(skin.value, WHITE, 0.3), mix(skin.value, WHITE, 0.55), mix(skin.value, WHITE, 0.8)],
-    [skin.body, skin.body, skin.body, skin.body, skin.body],
+  const tones: readonly (readonly [number, number, number])[] = [
+    [mix(skin.body, skin.dim, 0.5), own, skin.bright],
+    [mix(skin.shadow, skin.cyan, 0.7), skin.cyan, mix(skin.cyan, skin.bright, 0.8)],
+    [mix(skin.tint, skin.dim, 0.5), mix(skin.shadow, skin.dim, 0.85), skin.dim],
+    [skin.value, skin.value, mix(skin.value, skin.bright, 0.6)],
+    [mix(skin.body, skin.dim, 0.5), own, skin.bright],
   ]
-  const line = isHer ? skin.bright : mix(skin.ink, skin.shadow, 0.35)
 
-  // First every pixel's ray: how far along it the surface is, what it is made of, how lit, and where.
-  const size = W * H
+  // First every cell's ray: how far along it the surface is, what it is made of, and how heavy the cell is.
+  const size = columns * rows
   const depth = new Float32Array(size).fill(Infinity)
-  const light = new Float32Array(size)
+  const weight = new Float32Array(size)
   const made = new Uint8Array(size)
   const where = new Float32Array(size * 3)
-  for (let j = 0; j < H; j++) {
-    for (let x = 0; x < W; x++) {
-      const dx = ((x + 0.5 - W / 2) * 2 * lens) / H
-      const dy = (1 - ((j + 0.5) / H) * 2) * lens
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < columns; x++) {
+      const dx = ((x + 0.5 - columns / 2) * 2 * lens * CELL) / rows
+      const dy = (1 - ((y + 0.5) / rows) * 2) * lens
       const n = Math.hypot(dx, dy, 1)
       const d0 = dx / n
       const d1 = dy / n
@@ -427,170 +428,147 @@ export function haloFrame(skin: Skin, form: Form, mood: Mood, now: number, colum
       const gx = far(px + 0.012, py, pz) - here
       const gy = far(px, py + 0.012, pz) - here
       const gz = far(px, py, pz + 0.012) - here
-      const at = j * W + x
+      const at = y * columns + x
       const length = Math.hypot(gx, gy, gz) || 1
       const lit = Math.max(0, (gx * KEY[0] + gy * KEY[1] + gz * KEY[2]) / length)
-      const glint = Math.max(0, (gx * GLINT[0] + gy * GLINT[1] + gz * GLINT[2]) / length) ** 28
+      const glint = Math.max(0, (gx * GLINT[0] + gy * GLINT[1] + gz * GLINT[2]) / length) ** 24
+      // Near is 1, the far side of the figure 0: the nearer, the heavier, whatever the light.
+      const near = Math.max(0, Math.min(1, (eye + reach * 0.8 - t) / (reach * 1.6)))
       depth[at] = t
       made[at] = material
       where[at * 3] = px
       where[at * 3 + 1] = py + mid
       where[at * 3 + 2] = pz
-      // (Past 1: a glint.)
-      light[at] = glint > 0.5 ? 1.2 : lit
+      const solid = (0.15 + 0.85 * near ** 1.3) * (0.5 + 0.5 * lit) + 0.6 * glint
+      // A visor is a mirror and her hair a dark mass: heavy whatever the light. What lies under the armour, and her face, stay light.
+      weight[at] = material === GLASS ? 0.62 + 0.3 * lit + 0.6 * glint : material === UNDER ? 0.08 + 0.22 * lit : material === FACE ? 0.04 + 0.12 * lit : material === LIGHT ? 0.9 : isHer ? solid : 0.06 + 0.66 * solid
     }
   }
 
-  // Then every pixel's colour (NONE: the pane's ground shows through).
-  const image = new Uint32Array(size).fill(NONE)
   const clock = Math.floor(now / 90)
-  const jump = isHer ? 0.16 : 0.22
-  for (let j = 0; j < H; j++) {
-    for (let x = 0; x < W; x++) {
-      const at = j * W + x
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < columns; x++) {
+      const at = y * columns + x
       const t = depth[at]!
       if (t === Infinity) continue
+      // Behind the edge of a part that stands clearly nearer, nothing is drawn: a gap of one cell tells the two apart.
+      const isBehind = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([i, j]) => x + i! >= 0 && x + i! < columns && y + j! >= 0 && y + j! < rows && depth[at + i! + j! * columns]! < t - (isHer ? 0.3 : 0.2))
+      if (isBehind) continue
       const material = made[at]!
-      // An outline: where the figure ends, where a part stands in front of another, where one material meets the next.
-      let isEdge = x === 0 || x === W - 1 || j === 0
-      if (!isEdge) {
-        for (const step of [-1, 1, -W, W]) {
-          const other = at + step
-          if (other < 0 || other >= size) continue
-          if (depth[other]! === Infinity || depth[other]! > t + jump || (made[other]! !== material && made[other]! > material)) isEdge = true
-        }
-      }
-      const ramp = tones[material]!
-      const lit = light[at]!
-      let color = isEdge ? line : ramp[lit > 1 ? 4 : lit < 0.12 ? 0 : lit < 0.42 ? 1 : lit < 0.75 ? 2 : 3]!
+      const [faint, plain, strong] = tones[material]!
+      const tone = Math.min(1, weight[at]!)
+      let glyph = RAMP[Math.min(RAMP.length - 1, Math.floor(tone * RAMP.length))]!
+      let color = weight[at]! > 1.02 ? strong : tone < 0.5 ? mix(faint, plain, tone * 2) : mix(plain, strong, tone * 2 - 1)
       const wx = where[at * 3]!
       const wy = where[at * 3 + 1]!
       const wz = where[at * 3 + 2]!
-      if (!isHer && material === GLASS && !isEdge) {
-        // The visor is a mirror: dark gold at its foot, bright at its top, a streak of light that drifts across it. And it shows what is done.
+      if (!isHer && material === GLASS) {
+        // The visor: a streak of light drifts across it, and it shows what is done. Where a cell is on the glass: from its left edge (0) to its right (1), its foot (0) to its top (1).
         local(wx, wy, wz)
         const u = (lx / VISOR.bx + 1) / 2
         const v = ((ly - VISOR.y) / VISOR.by + 1) / 2
-        const streak = Math.abs(u + 0.35 * v - 0.42 - 0.12 * wave(now, 5200))
-        color = ramp[v < 0.22 ? 0 : v < 0.5 ? 1 : v < 0.8 ? 2 : 3]!
-        if (streak < 0.035) color = ramp[4]!
-        else if (streak < 0.075) color = ramp[3]!
+        if (Math.abs(u + 0.3 * v - 0.4 - 0.14 * wave(now, 5200)) < 0.05) [glyph, color] = ['@', strong]
         const sweep = 0.5 + 0.5 * wave(now, cue === 'scan' ? 1500 : 3000)
-        if ((cue === 'scan' || cue === 'working') && Math.abs(u - sweep) < 0.035) color = WHITE // a scan line going across
-        else if (cue === 'edit' && Math.abs(v - 0.35) < 0.12 && u > 0.15 && u < 0.15 + 0.7 * ((now % 2400) / 2400)) color = WHITE // a line being written
-        else if (cue === 'exec' && Math.abs(Math.abs(v - 0.5) - (0.3 - ((((u * 7 - now / 260) % 1) + 1) % 1) * 0.6) * 0.5) < 0.07 && v > 0.15 && v < 0.85) color = WHITE // prompts running across
-        else if (cue === 'net' && Math.abs(Math.hypot((u - 0.5) * 2.6, v - 0.5) - ((now % 1200) / 1200) * 1.2) < 0.09) color = WHITE // a ring going out
-        else if (cue === 'call' && v > 0.3 && v < 0.7 && Math.floor(u * 9 + now / 300) % 3 === 0) color = WHITE // contacts
+        if ((cue === 'scan' || cue === 'working') && Math.abs(u - sweep) < 0.04) [glyph, color] = ['|', skin.bright] // a scan line going across
+        else if (cue === 'edit' && Math.abs(v - 0.35) < 0.1 && u > 0.15 && u < 0.15 + 0.7 * ((now % 2400) / 2400)) [glyph, color] = ['_', skin.bright] // a line being written
+        else if (cue === 'exec' && Math.abs(v - 0.5) < 0.12 && Math.floor(u * 12 - now / 140) % 4 === 0) [glyph, color] = ['>', skin.bright] // prompts running across
+        else if (cue === 'net' && Math.abs(Math.hypot((u - 0.5) * 2, v - 0.5) - ((now % 1200) / 1200)) < 0.09) [glyph, color] = ['o', skin.bright] // a ring going out
+        else if (cue === 'call' && Math.abs(v - 0.5) < 0.12 && Math.floor(u * 9 + now / 300) % 3 === 0) [glyph, color] = ['+', skin.bright] // contacts
       }
-      if (isHer && !isEdge) {
-        // Down her body, thin columns of light rise: twice as fast at work. And a bright band climbs her, as the projector redraws her.
-        if (material === PLATE && wy - lift < 0.56 && hash(x, 7) < 0.22 && (j + Math.floor(now / (mood === 'working' ? 60 : 130)) + Math.floor(hash(x, 3) * 12)) % 12 < 4) color = mix(color, skin.value, 0.75)
-        if (material === LIGHT && (cue === 'scan' || cue === 'edit')) {
-          // Her panel is a page: lines of text, the one she reads lit; or the lines she types, as far as she has got.
-          const row = Math.floor((PANEL.y + PANEL.by - wy) / 0.045)
-          const across = (wx - panel.x + panel.bx) / (2 * panel.bx)
-          const typed = ((now % 4000) / 4000) * 5
-          const isInk = row % 2 === 1 && across > 0.12 && (cue === 'scan' ? across < 0.45 + 0.45 * hash(row, 11) : row >> 1 < Math.floor(typed) || (row >> 1 === Math.floor(typed) && across < 0.12 + 0.8 * (typed % 1)))
-          color = isInk ? (cue === 'scan' && row >> 1 === Math.floor(now / 380) % 5 ? skin.bright : ramp[0]!) : mix(skin.tint, WHITE, 0.5)
-        }
-        if (Math.abs(wy - (FLOOR + ((now % 5200) / 5200) * 2.2)) < 0.04) color = mix(color, WHITE, 0.55)
-        // Her picture ends in the projector's light: its last rows thin out.
-        if (j >= H - 6 && (x + j + (clock >> 2)) % 2 !== 0) continue
-        if (j >= H - 6) color = mix(color, skin.shadow, (j - (H - 7)) / 7)
+      if (isHer && material === PLATE && wy - lift < 0.52 && Math.abs(wx) < 0.24 && hash(x, 7) < 0.3) {
+        // Down her body, a few columns of figures rise: twice as fast at work.
+        const run = y + Math.floor(now / (mood === 'working' ? 110 : 240)) + Math.floor(hash(x, 3) * 9)
+        if (run % 8 < 2) [glyph, color] = [DIGITS[Math.floor(hash(x, run) * DIGITS.length)]!, mix(plain, skin.value, 0.85)]
       }
-      image[at] = tinted(color)
+      if (isHer && material === LIGHT && (cue === 'scan' || cue === 'edit')) {
+        // Her panel is a page: lines of text, the one she reads lit; or the lines she types, as far as she has got.
+        const row = Math.floor((PANEL.y + PANEL.by + 0.02 - wy) / 0.075)
+        const across = (wx - panel.x + panel.bx) / (2 * panel.bx)
+        const typed = ((now % 4000) / 4000) * 6
+        const isInk = cue === 'scan' ? hash(row, 11) * 0.5 + 0.5 > across : row < Math.floor(typed) || (row === Math.floor(typed) && across < typed % 1)
+        const isRead = cue === 'scan' && row === Math.floor(now / 380) % 6
+        ;[glyph, color] = [isInk ? (isRead ? '#' : '=') : '.', isRead ? strong : isInk ? plain : faint]
+      }
+      // A bright band climbs her, as the projector redraws her.
+      if (isHer && Math.abs(wy - (FLOOR + ((now % 5200) / 5200) * 2.2)) < 0.05) color = mix(color, skin.cyan, 0.7)
+      // Her picture ends in the projector's light: its last rows thin out to dots.
+      if (isHer && y >= rows - 3 && material !== LIGHT) {
+        if ((x + y + (clock >> 2)) % 2 !== 0 && y > rows - 3) continue
+        ;[glyph, color] = [y === rows - 1 ? '.' : ':', mix(faint, skin.cyan, 0.4)]
+      }
+      put(x, y, glyph, tinted(color))
     }
   }
-  /** A pixel, where the picture has it. */
-  const dot = (x: number, j: number, color: number, isOver = true) => {
-    if (x >= 0 && j >= 0 && x < W && j < H && (isOver || image[j * W + x] === NONE)) image[j * W + x] = color
-  }
-  /** Where a point of the scene falls in the picture. */
-  const spot = (wx: number, wy: number): readonly [number, number] => [Math.floor(W / 2 + ((wx / eye) * H) / (2 * lens)), Math.floor(((1 - (wy - mid) / eye / lens) * H) / 2)]
 
+  /** Where a point of the scene falls in the grid. */
+  const spot = (wx: number, wy: number): readonly [number, number] => [Math.floor(columns / 2 + ((wx / eye) * rows) / (2 * lens * CELL)), Math.floor(((1 - (wy - mid) / eye / lens) * rows) / 2)]
+  /** A word in the air about the figure, at a point of the scene: only where nothing is drawn, brought in from the pane's edges. */
+  const say = (wx: number, wy: number, text: string, color: number) => {
+    const [px, py] = spot(wx, wy)
+    const x = Math.max(0, Math.min(columns - text.length, px - (text.length >> 1)))
+    const y = Math.max(0, Math.min(rows - 1, py))
+    ;[...text].forEach((ch, i) => {
+      if (ch !== ' ' && isEmpty(x + i, y)) put(x + i, y, ch, color)
+    })
+  }
+  const blink = clock % 12 < 8
   if (isHer) {
     // Her face, where she shows it: two eyes and a mouth, set on her head as it turns. She blinks; the cue is in them.
     const [yaw, head] = [her[0]!, her[2]!]
     if (Math.abs(yaw) < 0.9) {
-      const ink = tinted(skin.bright)
-      const isShut = (cue === 'idle' && now % 4000 > 3820) || cue === 'happy'
-      const face = (fx: number, fy: number) => spot(Math.cos(yaw) * (head + fx) - Math.sin(yaw) * 0.19, fy + lift)
-      for (const side of [-1, 1]) {
-        const [x, j] = face(side * 0.075, 1.02)
-        if (made[j * W + x] !== FACE) continue
-        dot(x, j, ink)
-        if (!isShut) dot(x, j - 1, cue === 'worried' ? skin.alert : ink)
-        if (cue === 'happy') dot(x + side, j + 1, ink), dot(x - side, j + 1, ink) // an arc: a smile in the eyes
-        if (cue === 'worried' || cue === 'ask') dot(x + side, j - 3, ink) // a brow, raised
+      const isShut = cue === 'idle' && now % 4000 > 3820
+      const eyes = cue === 'happy' ? '^' : cue === 'worried' ? (blink ? '>' : 'x') : isShut || cue === 'edit' ? '-' : 'o'
+      const mouth = cue === 'happy' ? 'u' : cue === 'worried' ? '~' : cue === 'ask' || cue === 'net' ? 'o' : cue === 'working' ? '.' : '-'
+      const feature = (fx: number, fy: number, glyph: string) => {
+        const [x, y] = spot(Math.cos(yaw) * (head + fx) - Math.sin(yaw) * 0.19, fy + lift)
+        if (x >= 0 && y >= 0 && x < columns && y < rows && made[y * columns + x] === FACE) put(x, y, cue === 'worried' && glyph === '>' && fx > 0 ? '<' : glyph, tinted(skin.bright))
       }
-      const [mx, mj] = face(0, 0.895)
-      if (made[mj * W + mx] === FACE) {
-        dot(mx, mj, ink)
-        if (cue === 'happy') dot(mx - 1, mj - 1, ink), dot(mx + 1, mj - 1, ink)
-        else if (cue === 'ask' || cue === 'net' || cue === 'worried') dot(mx, mj + 1, ink)
-        else dot(mx + 1, mj, ink)
-      }
+      feature(-0.075, 1.02, eyes)
+      feature(0.075, 1.02, eyes)
+      feature(0, 0.9, mouth)
     }
+    if (cue === 'working') say(0.46, 1.22, ['.', '..', '...', ''][clock % 16 >> 2]!, skin.cyan)
   } else {
     // The shield: it flares along the armour's outline when things go wrong, and recharges from the feet up when they went well.
     const charge = cue === 'happy' ? ((now % 1440) / 1440) * 1.3 : -1
     if (cue === 'worried' || charge >= 0) {
-      for (let j = 1; j < H - 1; j++) {
-        for (let x = 1; x < W - 1; x++) {
-          const at = j * W + x
-          if (depth[at]! !== Infinity || (depth[at - 1]! === Infinity && depth[at + 1]! === Infinity && depth[at - W]! === Infinity && depth[at + W]! === Infinity)) continue
-          const up = 1 - j / H
-          if (cue === 'worried' ? hash(x + clock * 31, j) < 0.45 + alarm : Math.abs(up - charge) < 0.16) image[at] = cue === 'worried' ? skin.alert : mix(skin.cyan, WHITE, Math.abs(up - charge) < 0.06 ? 0.7 : 0.2)
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < columns; x++) {
+          const isEdge = isEmpty(x, y) && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([i, j]) => x + i! >= 0 && x + i! < columns && y + j! >= 0 && y + j! < rows && depth[(y + j!) * columns + x + i!]! < Infinity)
+          if (!isEdge) continue
+          const up = 1 - y / rows
+          if (cue === 'worried' && hash(x + clock * 31, y) < 0.3 + alarm) put(x, y, hash(y + clock, x) < 0.5 ? ':' : '!', skin.alert)
+          else if (charge >= 0 && Math.abs(up - charge) < 0.14) put(x, y, Math.abs(up - charge) < 0.05 ? '*' : ':', mix(skin.cyan, skin.bright, 0.4))
         }
       }
     }
+    if (cue === 'call') say(0, 1.3, ['<  +  >', '<< + >>', '<<<+>>>', '   +   '][clock % 16 >> 2]!, skin.value)
+    if (cue === 'load') say(0, 1.3, ['[|]', '[/]', '[-]', '[\\]'][clock % 8 >> 1]!, skin.value)
   }
+  if (cue === 'net') say(isHer ? 0.56 : 1.2, isHer ? 1.04 : 1.09, [')', '))', ')))', '  )'][clock % 16 >> 2]!, isHer ? skin.cyan : skin.value)
+  if (cue === 'ask') say(isHer ? 0.44 : 0.95, isHer ? 1.28 : 1.1, '?', blink ? skin.alert : skin.dim)
+  if (cue === 'worried') say(isHer ? 0.5 : 1, isHer ? 1.3 : 1.15, '!', blink ? skin.alert : skin.dim)
 
   // Worried, she tears: a band of rows slips aside for a moment, as a signal splits.
   if (isHer && cue === 'worried' && clock % 9 < 2) {
-    const [from, by] = [Math.floor(hash(clock, 5) * (H - 6)), hash(clock, 9) < 0.5 ? 3 : -3]
-    for (let j = from; j < from + 6; j++) {
-      const row = image.slice(j * W, (j + 1) * W)
-      for (let x = 0; x < W; x++) image[j * W + x] = x - by < 0 || x - by >= W ? NONE : row[x - by]!
+    const [from, by] = [Math.floor(hash(clock, 5) * (rows - 3)), hash(clock, 9) < 0.5 ? 2 : -2]
+    for (let y = from; y < from + 3; y++) {
+      const line = words.slice(y * columns * 3, (y + 1) * columns * 3)
+      for (let x = 0; x < columns; x++) {
+        const source = x - by
+        words[(y * columns + x) * 3] = source < 0 || source >= columns ? 0x20 : line[source * 3]!
+        words[(y * columns + x) * 3 + 1] = source < 0 || source >= columns ? NONE : line[source * 3 + 1]!
+      }
     }
   }
   // Pleased: a few glints in the air, each for a third of a second, where nothing is drawn.
   if (cue === 'happy') {
     const beat = Math.floor(now / 330)
-    for (let k = 0; k < 7; k++) {
-      const [x, j] = [1 + Math.floor(hash(k, beat) * (W - 2)), 1 + Math.floor(hash(beat, k + 7) * (H - 2))]
-      for (const [i, n] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]] as const) dot(x + i, j + n, skin.value, false)
+    for (let k = 0; k < 6; k++) {
+      const [x, y] = [Math.floor(hash(k, beat) * columns), Math.floor(hash(beat, k + 7) * rows)]
+      if (isEmpty(x, y)) put(x, y, '+*.'[k % 3]!, skin.value)
     }
   }
-
-  // Two pixels to a cell: an upper half block, its ink the pixel above and its ground the one below.
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < W; x++) {
-      const [upper, lower] = [image[2 * y * W + x]!, image[(2 * y + 1) * W + x]!]
-      if (upper === NONE && lower === NONE) continue
-      const at = (y * W + x) * 3
-      words[at] = upper === NONE ? 0x2584 : 0x2580
-      words[at + 1] = upper === NONE ? lower : upper
-      words[at + 2] = upper === NONE || lower === NONE ? NONE : lower
-    }
-  }
-  /** A word in the air about the figure, at a point of the scene: only where nothing is drawn, brought in from the pane's edges. */
-  const say = (wx: number, wy: number, text: string, color: number) => {
-    const [px, pj] = spot(wx, wy)
-    const x = Math.max(0, Math.min(W - text.length, px - (text.length >> 1)))
-    const y = Math.max(0, Math.min(rows - 1, pj >> 1))
-    ;[...text].forEach((ch, i) => {
-      const at = (y * W + x + i) * 3
-      if (ch !== ' ' && words[at] === 0x20) [words[at], words[at + 1]] = [ch.charCodeAt(0), color]
-    })
-  }
-  const blink = clock % 12 < 8
-  if (cue === 'net') say(isHer ? 0.56 : 1.2, isHer ? 1.04 : 1.09, [')', '))', ')))', '  )'][clock % 16 >> 2]!, isHer ? skin.cyan : skin.value)
-  if (cue === 'working' && isHer) say(0.46, 1.22, ['.', '..', '...', ''][clock % 16 >> 2]!, skin.cyan)
-  if (cue === 'call' && !isHer) say(0, 1.3, ['<  +  >', '<< + >>', '<<<+>>>', '   +   '][clock % 16 >> 2]!, skin.value)
-  if (cue === 'load' && !isHer) say(0, 1.3, ['[|]', '[/]', '[-]', '[\\]'][clock % 8 >> 1]!, skin.value)
-  if (cue === 'ask') say(isHer ? 0.44 : 0.95, isHer ? 1.28 : 1.1, '?', blink ? skin.alert : skin.dim)
-  if (cue === 'worried') say(isHer ? 0.5 : 1, isHer ? 1.3 : 1.15, '!', blink ? skin.alert : skin.dim)
 
   return grid
 }

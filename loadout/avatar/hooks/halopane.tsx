@@ -83,7 +83,7 @@ export function haloTree({ Box, Button, Text }: ElementTable, view: HudView): Re
 
     return [
       <Box key={`${key}-label`} width={side} justifyContent="space-between">
-        <Text color={dim} wrap="truncate-end">{cut(`${meter?.label ?? key} // ${meter?.detail ?? ''}`.toUpperCase(), side - 4)}</Text>
+        <Text color={dim} wrap="truncate-end">{cut(`${(meter?.label ?? key).replace(/ limit$/i, '')} · ${(meter?.detail ?? '').replace(/^resets in /i, '')}`.toUpperCase(), side - 4)}</Text>
         {meter?.isAlert === true ? <Text color={ink} backgroundColor={alert} bold>{count}</Text> : <Text color={primary} bold>{count}</Text>}
       </Box>,
       <Text key={`${key}-rounds`} wrap="truncate-end">
