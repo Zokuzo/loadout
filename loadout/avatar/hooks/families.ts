@@ -23,7 +23,7 @@ import type { World } from './reel'
 import { KIRBY } from './sprite'
 import { TOUGE } from './touge'
 
-export type FamilyName = 'kirby' | 'clawd' | 'ghostrunner' | 'cyberpunk-edgerunners' | 'initial-d'
+export type FamilyName = 'kirby' | 'clawd' | 'ghostrunner' | 'cyberpunk-edgerunners' | 'initial-d' | 'y2k' | 'y2k-dark'
 
 /** What worries a mascot, in its own words: a context getting full, and a limit (named) almost used up. */
 export type Worry = { full: string; near: (limit: string) => string }
@@ -152,6 +152,29 @@ const touge = (skin: Skin): TextFamily => ({
   worry: { full: 'TYRES NEAR GONE. /clear', near: limit => `${limit.toUpperCase()} LIMIT AT REDLINE` },
 })
 
+/**
+ * The turn of the millennium in chrome: four polished objects, one per model, turning in ASCII (chrome.ts) in a HUD that talks
+ * as a phone of the year 2000 does. Light or dark by its key. (Its worlds are for pictures of them, footage/y2k.py: none is shipped.)
+ */
+const chromed = (key: 'y2k' | 'y2k-dark', skin: Skin): TextFamily => {
+  const world = key === 'y2k' ? 'y2k' : 'y2kdark'
+
+  return {
+    key,
+    skin,
+    world,
+    captions: { link: 'ONLINE', crew: 'NETWORK', unit: 'NODES', banner: 'SIGNAL', meters: 'ENERGY' },
+    names: { opus: CAST[`${world}-opus`], sonnet: CAST[`${world}-sonnet`], haiku: CAST[`${world}-haiku`], fable: CAST[`${world}-fable`] },
+    speech: {
+      idle: ['ONLINE. STANDING BY.', hex(skin.primary)],
+      working: ['LOADING THE FUTURE...', hex(skin.cyan)],
+      worried: ['', hex(skin.alert)],
+      happy: ['STREAMLINED.', hex(skin.value)],
+    },
+    worry: { full: 'MEMORY CARD FULL. /clear', near: limit => `${limit.toUpperCase()} BATTERY LOW` },
+  }
+}
+
 /** The cyber family in one of its two palettes and worlds: Raijin, terse as a netrunner. The drawn ninja is Ghostrunner's Opus, the drawn thief Edgerunners'. */
 const cyber = (key: FamilyName, skin: Skin, who: Who): TextFamily => ({
   key,
@@ -184,6 +207,7 @@ const cyber = (key: FamilyName, skin: Skin, who: Who): TextFamily => ({
 /** The families that exist. One a theme calls for that is not here is played by Kirby. */
 export const FAMILIES: Partial<Record<FamilyName, FamilyDef>> = {
   kirby: KIRBY_FAMILY, clawd: CLAWD_FAMILY, ghostrunner: cyber('ghostrunner', SKINS.red, 'ninja'), 'cyberpunk-edgerunners': cyber('cyberpunk-edgerunners', SKINS.yellow, 'thief'), 'initial-d': touge(SKINS.night),
+  y2k: chromed('y2k', SKINS.chrome), 'y2k-dark': chromed('y2k-dark', SKINS.midnight),
 }
 
 /**
@@ -270,12 +294,14 @@ const skinned = new Map<string, TextFamily>()
 
 /** The family a pack calls for, by its name; the cyber family in the pack's variant (red: the Ghostrunner world, yellow: Edgerunners). A text family's colours are the pack's where it brings them. */
 function packFamily(pack: Pack): FamilyDef {
-  if (pack.family !== 'cyber' && pack.skin === undefined) return FAMILIES[pack.family] ?? CLAWD_FAMILY
-  const [key, who] = pack.family !== 'cyber' ? (['initial-d', undefined] as const) : pack.variant === 'yellow' ? (['cyberpunk-edgerunners', 'thief'] as const) : (['ghostrunner', 'ninja'] as const)
+  const chrome = pack.family !== 'y2k' ? undefined : pack.isLight ? 'y2k' : 'y2k-dark'
+  if (chrome !== undefined && pack.skin === undefined) return FAMILIES[chrome] ?? CLAWD_FAMILY
+  if (pack.family !== 'cyber' && pack.family !== 'y2k' && pack.skin === undefined) return FAMILIES[pack.family] ?? CLAWD_FAMILY
+  const [key, who] = chrome !== undefined ? ([chrome, undefined] as const) : pack.family !== 'cyber' ? (['initial-d', undefined] as const) : pack.variant === 'yellow' ? (['cyberpunk-edgerunners', 'thief'] as const) : (['ghostrunner', 'ninja'] as const)
   const stock = FAMILIES[key] ?? KIRBY_FAMILY
   const mark = JSON.stringify(pack.skin)
   if (pack.skin === undefined || ('skin' in stock && JSON.stringify(stock.skin) === mark)) return stock
-  const made = skinned.get(mark) ?? (who === undefined ? touge(pack.skin) : cyber(key, pack.skin, who))
+  const made = skinned.get(mark) ?? (chrome !== undefined ? chromed(chrome, pack.skin) : who === undefined ? touge(pack.skin) : cyber(key, pack.skin, who))
   skinned.set(mark, made)
 
   return made

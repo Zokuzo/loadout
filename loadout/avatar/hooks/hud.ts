@@ -11,7 +11,7 @@ import type { Act, Agent } from './stage'
 /** The terminal's default colour, in a cell. */
 export const NONE = 0x01000000
 
-export type Variant = 'red' | 'yellow' | 'night'
+export type Variant = 'red' | 'yellow' | 'night' | 'chrome' | 'midnight'
 
 /**
  * One skin's palette, 0xRRGGBB: the interface's one colour (`primary`), its lit edge, the mask's
@@ -27,10 +27,14 @@ export type Skin = { variant: Variant; primary: number; bright: number; body: nu
  * hue alone). Yellow on black as its HUD is, what one may do in its blue and an alarm in red. Cyan is the same in both.
  * Night is a mountain pass in a cel of the nineties: the street lamps' yellow-green on a teal-navy dark, captions in
  * moonlit blue-green, what is live in the fog lights' yellow, an alarm a tail light, a count the pink of dusk.
+ * Chrome is a phone advert of the year 2000: cobalt on ice white, navy print, what is live in glass teal, a count in the violet of an oil film;
+ * midnight is the same room with the lights off, periwinkle and aqua on blue-black. (On these two the pane's bars are shaded as polished metal: hudpane.tsx.)
  */
 export const SKINS: Readonly<Record<Variant, Skin>> = {
   red: { variant: 'red', primary: 0xff6158, bright: 0xffb9ad, body: 0x6a1d22, shadow: 0x34101a, dim: 0xc0706a, cyan: 0x5ef6ff, alert: 0xff1f47, value: 0xffd2cb, tint: 0x1c080c, ink: 0x0b0306 },
   yellow: { variant: 'yellow', primary: 0xfcee0a, bright: 0xfffbb5, body: 0x7d7605, shadow: 0x3a3702, dim: 0xb0a707, cyan: 0x5ef6ff, alert: 0xff3d3d, value: 0x3aa0ff, tint: 0x121100, ink: 0x060600 },
+  chrome: { variant: 'chrome', primary: 0x1c3fd6, bright: 0x0d1638, body: 0x9fb4d8, shadow: 0xd3dcec, dim: 0x5c6f94, cyan: 0x00857a, alert: 0xd81e2c, value: 0xa23bb5, tint: 0xe4eaf4, ink: 0xffffff },
+  midnight: { variant: 'midnight', primary: 0x7da2ff, bright: 0xffffff, body: 0x2a3970, shadow: 0x18213f, dim: 0x8793b5, cyan: 0x5fe6d6, alert: 0xff5468, value: 0xd9a3ff, tint: 0x0b1126, ink: 0x050813 },
   night: { variant: 'night', primary: 0xd2e04e, bright: 0xf4eeda, body: 0x1f5068, shadow: 0x122f48, dim: 0x6f9fb8, cyan: 0xffb52e, alert: 0xff4d3d, value: 0xf29a8e, tint: 0x0c2236, ink: 0x06121f },
 }
 
@@ -64,7 +68,7 @@ export const textOf = ({ columns, rows, words }: Grid): string[] =>
 const channels = (color: number) => [(color >> 16) & 255, (color >> 8) & 255, color & 255] as const
 
 /** `a` to `b`, `u` of the way; past 1 it stays `b`. */
-function mix(a: number, b: number, u: number): number {
+export function mix(a: number, b: number, u: number): number {
   const q = Math.max(0, Math.min(1, u))
   const [x, y] = [channels(a), channels(b)]
   const at = (i: 0 | 1 | 2) => Math.round(x[i] + (y[i] - x[i]) * q)

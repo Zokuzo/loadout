@@ -4,6 +4,8 @@ On three themes, Ghostrunner, Cyberpunk Edgerunners and Initial D, the Avatar pa
 
 What is shipped is the recipe of each feed: `footage/<slot>.json` names every loop, how many frames it has, how long a frame shows, what the loop shows in a few words, and the character's name and lines. With a video of your own and `bin/footage`, you rebuild the same feed.
 
+(The Y2K themes are not part of this: their objects are drawn in ASCII by code, `avatar/hooks/chrome.ts`.)
+
 ## The twelve feeds
 
 | Slot | Theme | Model | Character | Loops | Frames |

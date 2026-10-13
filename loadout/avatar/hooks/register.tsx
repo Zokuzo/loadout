@@ -9,6 +9,7 @@ import type { Reel, Slot } from './reel'
 import type { Beat, Moment } from './cyber'
 import { frameOf, nameOf, themed } from './families'
 import type { Acting, FamilyDef, Worry } from './families'
+import { chromeFrame, isChrome } from './chrome'
 import { NONE, agentRows, hex, maskFrame } from './hud'
 import type { Grid } from './hud'
 import { HUD_ROWS, hudTree } from './hudpane'
@@ -56,6 +57,7 @@ const PANE = 'kirby'
 const PANE_COLUMNS = 34 // Sword Kirby, the widest form, and a column to spare
 const OPEN = { id: PANE, title: 'Avatar', columns: PANE_COLUMNS }
 const FRAME_MS = 90 // the pictures' clock: eleven frames a second
+const FEED_MS = 45 // half of it: what moves finer than that clock (a camera feed cut so, an object in ASCII) gets a frame of its own between two
 const CALM_EVERY = 3 // idle, alone and at rest, one frame in three
 const SLOW_MS = 4000 // between re-reads of the usage figures, the model, the theme and the agents
 const STUCK_FRAMES = 22 // a frame not drawn after two seconds no longer holds the next ones back
@@ -300,7 +302,8 @@ function mascotPicture(drawn: Layout, mood: Mood, now: number, ground: number, i
     return drawn.art === undefined ? { cells: packed(heroGrid(drawn.hero, moment, drawn.size.columns, drawn.size.rows), ground) }
       : { source: sourceOf(heroCanvas(drawn.hero, moment, drawn.art.mascot.width, drawn.art.mascot.height), PRESCALE) }
   }
-  if ('text' in drawn) return { cells: packed(maskFrame(drawn.text.skin, drawn.text.form, mood, now, drawn.size.columns, drawn.size.rows), ground) }
+  // (The chrome skins have no mask: their mascot is the model's object, in ASCII.)
+  if ('text' in drawn) return { cells: packed((isChrome(drawn.text.skin) ? chromeFrame : maskFrame)(drawn.text.skin, drawn.text.form, mood, now, drawn.size.columns, drawn.size.rows), ground) }
   if (drawn.art === undefined) return { cells: encoded(mascotBlocks(drawn, mood, Math.floor(now / TICK_MS)), ground) }
   const { mascot, scale } = drawn.art
   const acted = drawn.look.family.acted
@@ -474,7 +477,7 @@ for _ in range(4):
         break
 `
 
-// Writes one escape to the pty named: OSC 11 with the colour given, OSC 111 with none. Anything that
+// Writes to the pty named: OSC 11 with the colour given, OSC 111 with none, and the foreground that goes with it. Anything that
 // is not a pty of the caller's own, or not a colour, is refused before a byte is written.
 const SET_GROUND = `import os, re, stat, sys
 path, color = sys.argv[1], sys.argv[2]
@@ -484,7 +487,17 @@ fd = os.open(path, os.O_WRONLY | os.O_NOCTTY | os.O_NOFOLLOW | os.O_NONBLOCK)
 info = os.fstat(fd)
 if not (stat.S_ISCHR(info.st_mode) and info.st_uid == os.getuid() and os.isatty(fd)):
     sys.exit(3)
-os.write(fd, (f'\\033]11;{color}\\a' if color else '\\033]111\\a').encode())
+# A light background takes the rest with it: the terminal's own foreground, cursor and sixteen colours were chosen for its
+# own background, and plain text and highlighted code are written in them. The foreground (OSC 10) and cursor (OSC 12) become the
+# background's hue darkened to a near-black, the sixteen (OSC 4) inks that read on a pale ground. A dark one keeps the person's (OSC 110, 112, 104).
+ink = '\\033]110\\a\\033]112\\a\\033]104\\a'
+if color:
+    r, g, b = (int(color[i:i + 2], 16) for i in (1, 3, 5))
+    if 2126 * r + 7152 * g + 722 * b > 1500000:
+        dark = f'#{r * 6 // 100:02x}{g * 9 // 100:02x}{b * 23 // 100:02x}'
+        inks = [dark, '#c81e2c', '#0f7f52', '#8a6a00', '#1c3fd6', '#8a3fc0', '#00798a', '#5c6f94', '#6b7a9c', '#d81e2c', '#0b8f5c', '#a07a00', '#2a62c9', '#a23bb5', '#00857a', '#3d4c72']
+        ink = f'\\033]10;{dark}\\a\\033]12;{dark}\\a' + ''.join(f'\\033]4;{n};{one}\\a' for n, one in enumerate(inks))
+os.write(fd, ((f'\\033]11;{color}\\a' if color else '\\033]111\\a') + ink).encode())
 `
 
 const PTY = /^\/dev\/pts\/\d+$/
@@ -732,10 +745,37 @@ function frame($: EngineInterface) {
   })
 }
 
+// The beats of the clock (FEED_MS): the even ones are the pictures' frames.
+let beats = 0
+
+/**
+ * Between two frames, what is cut finer than the pictures' clock, and nothing else: the camera feed's next picture where
+ * its footage has such a loop, and the chrome skins' object, which turns in ASCII. Twenty-two frames a second.
+ */
+function between($: EngineInterface) {
+  if (!isPaneUp || drawing !== 0) return
+  const mounted = shown
+  if (mounted === null || !('text' in mounted.layout) || !mounted.keys.has('kirby')) return
+  const { feed, hero, text } = mounted.layout
+  const reel = feed === undefined ? undefined : reels.get(feed)
+  const isFine = feed === undefined ? hero === undefined && isChrome(text.skin) : reel !== undefined && Object.values(reel.clips).some(clip => clip.ms < FRAME_MS)
+  if (!isFine) return
+  const mine = (turn += 1)
+  drawing = mine
+  waited = 0
+  void $.clock.now()
+    .then(now => put($, 'kirby', mounted.layout.size, mascotPicture(mounted.layout, moodOf(mounted.usage, mounted.isWorking, now < mounted.happyUntil), now, mounted.ground, mounted.isBusy, mounted.happyUntil, mounted.isLight)))
+    .catch(() => {})
+    .finally(() => {
+      if (drawing === mine) drawing = 0
+    })
+}
+
 function startTicking($: EngineInterface) {
   if (isTicking) return
   isTicking = true
-  $.clock.every(FRAME_MS, () => frame($))
+  // One clock for both, so the two never drift apart: every other beat is a frame of everything, the ones between the feed's alone.
+  $.clock.every(FEED_MS, () => ((beats += 1) % 2 === 0 ? frame($) : between($)))
   $.clock.every(SLOW_MS, () => void slow($).catch(() => {}))
 }
 

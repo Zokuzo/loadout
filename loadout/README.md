@@ -6,7 +6,7 @@ It is three parts in one plugin (they were the mods `kirby-hud`, `flow-map` and 
 
 | Part | Folder | What it draws |
 |---|---|---|
-| Avatar | `avatar/` | The "Avatar" side pane: the theme picker, a mascot or character per theme, the agents on a stage, the usage meters. It also tints the terminal background per theme. |
+| Avatar | `avatar/` | The "Avatar" side pane: the theme picker, a mascot or character per theme, the agents on a stage, the usage meters. It also tints the terminal background per theme (and, on a light theme, sets the terminal's text colours to dark inks, so code stays readable). |
 | Flow map | `flow/` | The "Flow map" pane: workflow runs, plain subagents, the step plan, the wayfinder map. Registers the tool `mcp__loadout__steps`. |
 | Frames | `frames/` | A coloured frame around each conversation row, one hue per kind of action; and the working line in the theme's own words behind its own turning icon (a pack's `spinner`, `THEMES.md`). |
 
@@ -110,7 +110,9 @@ Footage for a slot is a folder, `assets/<slot>/`, with a `manifest.json` and one
 - `clips`: a loop's name (lower case, digits, dashes) is its folder; `frames` how many pictures it has, `ms` how long each shows (30 to 1000, else 90). `what` is a note for people.
 - `moods`: the loops of each mood, played in turn, each for about seven seconds. `idle` is required; a mood left out plays the idle loops.
 
-To add or replace a character, drop its folder in `assets/`: nothing else. A running session looks for the manifests still missing every 15 seconds, so the feed starts within a few seconds of the folder landing (a manifest already read is kept until `/reload-plugins`). When the model changes mid-session, the feed switches within a few seconds.
+To add or replace a character, drop its folder in `assets/`: nothing else. A running session looks for the manifests still missing every 15 seconds, so the feed starts within a few seconds of the folder landing (a manifest already read is kept until `/reload-plugins`). When the model changes mid-session, the feed switches within a few seconds. The pictures' clock is 90 ms; a slot with a loop cut finer than that is drawn every 45 ms, twenty-two frames a second, as the Y2K objects are.
+
+The two Y2K themes have a cast of their own, and it is not footage: four objects of chrome, each turning in three dimensions and drawn in ASCII characters, computed in the pane a frame at a time (`avatar/hooks/chrome.ts`), twenty-two frames a second. Opus is Seraph, a ring with a bead looping through its hole; Sonnet is Lumen, a drop of liquid metal and two that circle it; Haiku is Spark, a four-point star; Fable is Halo, a core in three rings. Depth is drawn as weight: what is near and lit is a heavy character in the strongest colour, what is far a faint one, and a cell is left empty behind the edge of a part that passes in front. At work they turn twice as fast, pleased they bob among glints, worried they slow and redden. (Their worlds, `y2k` and `y2kdark`, take pictures as any other does: `python3 footage/y2k.py` renders the same objects as picture loops into `assets/`, and they then play in place of the ASCII where the terminal draws pictures. None is shipped.)
 
 Where a slot has no manifest:
 
@@ -152,4 +154,4 @@ python3 themes/validate.py
 
 ## The pictures
 
-Everything in this repository is drawn in code or as data: the sprites, the text characters, the mask. The camera feed of the Ghostrunner, Cyberpunk Edgerunners and Initial D themes plays footage from `assets/<slot>/`, and no footage is shipped: it would be other people's work. Without it the first two draw their built-in characters and the mask, and Initial D its pixel cars. `FOOTAGE.md` says how to rebuild the author's feeds from a video of your own: the recipe of each is shipped (`footage/<slot>.json`), and `bin/footage` cuts the frames. `assets/` is ignored by git.
+Everything in this repository is drawn in code or as data: the sprites, the text characters, the mask. The camera feed of the Ghostrunner, Cyberpunk Edgerunners and Initial D themes plays footage from `assets/<slot>/`, and no footage is shipped: it would be other people's work. Without it the first two draw their built-in characters and the mask, and Initial D its pixel cars. The Y2K themes need none: their objects are drawn in ASCII by code. `FOOTAGE.md` says how to rebuild the author's feeds from a video of your own: the recipe of each is shipped (`footage/<slot>.json`), and `bin/footage` cuts the frames. `assets/` is ignored by git.

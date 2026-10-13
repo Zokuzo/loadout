@@ -4,7 +4,7 @@
 // is handed in already mounted; everything here is redrawn only when what it says changes.
 import type { ElementTable, RenderElement } from 'claude-code'
 
-import { hex } from './hud'
+import { hex, mix } from './hud'
 import type { Skin } from './hud'
 import type { Mood } from './mascot'
 
@@ -57,6 +57,17 @@ const addressOf = (id: string): string => {
   return plain.length < 8 ? '' : ` ${plain.slice(0, 4)}.${plain.slice(4, 6)}.${plain.slice(6, 8)}`
 }
 
+/**
+ * A run of cells shaded as a polished bar: darker toward its right end, one hard light a third of the way along.
+ * The colour of each cell of `length`, around `tone`.
+ */
+export const sheen = (tone: number, length: number): string[] =>
+  Array.from({ length }, (_cell, i) => {
+    const u = length < 2 ? 0.3 : i / (length - 1)
+
+    return hex(mix(mix(tone, 0x000000, 0.4 * Math.abs(u - 0.3)), 0xffffff, 0.55 * Math.exp(-(((u - 0.3) / 0.14) ** 2))))
+  })
+
 const SIGNS: Readonly<Record<Mood, string>> = { idle: ':', working: '~', worried: '!', happy: '✓' }
 
 export function hudTree({ Box, Button, Text }: ElementTable, view: HudView): RenderElement {
@@ -74,6 +85,10 @@ export function hudTree({ Box, Button, Text }: ElementTable, view: HudView): Ren
   const clock = view.minutes === undefined ? '' : `T+${pad2(Math.floor(view.minutes / 60))}:${pad2(view.minutes % 60)}`
   const isAlarm = view.mood === 'worried' && !view.isCall
   const tone = isAlarm ? alert : view.isCall || view.mood === 'working' ? cyan : view.mood === 'happy' ? value : primary
+  // The chrome skins: what is a flat bar elsewhere (the banner, the name, a meter's fill) is polished metal, a cell at a time.
+  const isChrome = skin.variant === 'chrome' || skin.variant === 'midnight'
+  const polished = (text: string, of: number, isGround = false) =>
+    sheen(of, [...text].length).map((color, i) => <Text key={String(i)} {...(isGround ? { color: ink, backgroundColor: color } : { color })} bold>{[...text][i]}</Text>)
   const inner = Math.max(1, columns - 4)
   // The banner's line: cut to the bar, an alarm's bar ending in hazard stripes.
   const room = Math.max(1, inner - 2 - (isAlarm ? 3 : 0))
@@ -93,7 +108,7 @@ export function hudTree({ Box, Button, Text }: ElementTable, view: HudView): Ren
         <Text color={dim} wrap="truncate-end">{`${label} // ${detail}`.toUpperCase()}</Text>
         <Text wrap="truncate-end">
           {/* Past its threshold a bar is notched, as hazard tape, at the height of any bar, and its number a filled tag: an alarm is told by more than a colour. */}
-          <Text color={isAlert ? alert : primary}>{isAlert ? '▄▂'.repeat(filled).slice(0, filled) : '▄'.repeat(filled)}</Text>
+          {isChrome && !isAlert ? polished('▄'.repeat(filled), skin.primary) : <Text color={isAlert ? alert : primary}>{isAlert ? '▄▂'.repeat(filled).slice(0, filled) : '▄'.repeat(filled)}</Text>}
           <Text color={shadow}>{'▄'.repeat(bar - filled)}</Text>
           {percent === undefined
             ? <Text color={dim}>{'N/A'.padStart(8)}</Text>
@@ -121,7 +136,7 @@ export function hudTree({ Box, Button, Text }: ElementTable, view: HudView): Ren
         <Text color={tone}>│</Text>
         <Text color={tone} bold>{view.isCall ? '>' : SIGNS[view.mood]}</Text>
         <Text color={tone}>│</Text>
-        <Text color={ink} backgroundColor={tone} bold>{` ${said.padEnd(room)} `}{isAlarm && '▞▞▞'}</Text>
+        {isChrome && !isAlarm ? polished(` ${said.padEnd(room)} `, Number.parseInt(tone.slice(1), 16), true) : <Text color={ink} backgroundColor={tone} bold>{` ${said.padEnd(room)} `}{isAlarm && '▞▞▞'}</Text>}
         <Text color={tone}>▛</Text>
       </Text>
       <Text wrap="truncate-end">
@@ -133,7 +148,7 @@ export function hudTree({ Box, Button, Text }: ElementTable, view: HudView): Ren
       <Box width={columns} justifyContent="center">
         <Text wrap="truncate-end">
           <Text color={dim}>─┤ </Text>
-          <Text color={primary} bold>{view.name.toUpperCase()}</Text>
+          {isChrome ? polished(view.name.toUpperCase(), skin.primary) : <Text color={primary} bold>{view.name.toUpperCase()}</Text>}
           {model !== '' && <Text color={dim}> // {model}</Text>}
           <Text color={dim}> ├─</Text>
         </Text>

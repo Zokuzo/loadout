@@ -14,9 +14,12 @@ import { CAST, FEED_SHAPE, SLOTS, frameAt, reelOf, slotOf } from '../hooks/reel'
 import type { Slot } from '../hooks/reel'
 import { MASK_COLUMNS, MASK_LEAST, MASK_ROWS, NONE, SKINS, TAGS, agentRows, blockRowsOf, hex, maskFrame, modelTag, stateOf, textOf } from '../hooks/hud'
 import type { Grid, Runner, Skin } from '../hooks/hud'
+import { sheen } from '../hooks/hudpane'
+import { OBJECT_ROWS, chromeFrame, isChrome } from '../hooks/chrome'
 import type { Pose as HiPose } from '../hooks/hires'
-import { CHROME_ROWS, laidOut, laidOutArt, mascotBlocks } from '../hooks/layout'
+import { CHROME_ROWS, laidOut, laidOutArt, laidOutText, mascotBlocks } from '../hooks/layout'
 import { FORMS, formOf } from '../hooks/look'
+import type { Form } from '../hooks/look'
 import { CLAWD, CLAWD_BLEND_MS, CLAWD_LOOP_MS, clawdFrame, isClawdAtRest } from '../hooks/clawd'
 import { norm, packFiles, packOf, packsOf, resolve } from '../hooks/packs'
 import type { Pack } from '../hooks/packs'
@@ -939,7 +942,7 @@ test('a theme picks the family: kirby, the cyber one in red for Ghostrunner or i
     for (const form of FORMS) expect(family.forms[form].frames.length).toBeGreaterThan(0)
     expect(Object.keys(family.mini(0).poses).length).toBe(20)
   }
-  expect(Object.values(FAMILIES).map(family => ('skin' in family ? family.cars?.blocks ?? 'text' : family.blocks))).toEqual(['kirby', 'clawd', 'text', 'text', 'clawd'])
+  expect(Object.values(FAMILIES).map(family => ('skin' in family ? family.cars?.blocks ?? 'text' : family.blocks))).toEqual(['kirby', 'clawd', 'text', 'text', 'clawd', 'text', 'text'])
 })
 
 const MOODS: Mood[] = ['idle', 'working', 'happy', 'worried']
@@ -2900,11 +2903,13 @@ test('a reel plays its mood\'s loops in rotation, each held a while, and survive
 
 // --- one character per model: the slots -----------------------------------------------
 
-test('a slot is a world and a model: each of the twelve comes from its theme and the session\'s model', () => {
+test('a slot is a world and a model: each comes from its theme and the session\'s model', () => {
   expect(SLOTS).toEqual([
     'ghostrunner-opus', 'ghostrunner-sonnet', 'ghostrunner-haiku', 'ghostrunner-fable',
     'edgerunners-opus', 'edgerunners-sonnet', 'edgerunners-haiku', 'edgerunners-fable',
     'initiald-opus', 'initiald-sonnet', 'initiald-haiku', 'initiald-fable',
+    'y2k-opus', 'y2k-sonnet', 'y2k-haiku', 'y2k-fable',
+    'y2kdark-opus', 'y2kdark-sonnet', 'y2kdark-haiku', 'y2kdark-fable',
   ])
   const MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5', 'claude-fable-5']
   const slotsOf = (theme: string, packs: readonly Pack[] = []) => MODELS.map(model => {
@@ -2918,8 +2923,15 @@ test('a slot is a world and a model: each of the twelve comes from its theme and
     expect(slotsOf('custom:kirby', packs)).toEqual([undefined, undefined, undefined, undefined])
   }
   // The third world is the Initial D pack's (the tables do not know the theme): its drivers, and no drawn character or mask of its own but its cars.
-  expect(slotsOf('custom:initial-d', PACKS)).toEqual(SLOTS.slice(8))
-  expect(SLOTS.slice(8).map(slot => CAST[slot])).toEqual(['TAKUMI', 'RYOSUKE', 'KEISUKE', 'BUNTA'])
+  expect(slotsOf('custom:initial-d', PACKS)).toEqual(SLOTS.slice(8, 12))
+  expect(SLOTS.slice(8, 12).map(slot => CAST[slot])).toEqual(['TAKUMI', 'RYOSUKE', 'KEISUKE', 'BUNTA'])
+  // The Y2K packs are one cast in two worlds: a light pack plays the pictures made for a light ground, a dark one those for the dark, each in its own skin; with none (none is shipped) the model's object turns in ASCII, never a mask or a sprite.
+  const chrome = packsIn({ ...PACK_TEXTS, 'y2k.json': packText('y2k', { family: 'y2k' }, '#f2f5fa', { isLight: true }), 'y2k-dark.json': packText('y2k-dark', { family: 'y2k', skin: skinText(SKINS.midnight) }, '#050813') }).packs
+  expect([slotsOf('custom:y2k', chrome), slotsOf('custom:y2k-dark', chrome)]).toEqual([SLOTS.slice(12, 16), SLOTS.slice(16)])
+  expect(SLOTS.slice(12).map(slot => CAST[slot])).toEqual(['SERAPH', 'LUMEN', 'SPARK', 'HALO', 'SERAPH', 'LUMEN', 'SPARK', 'HALO'])
+  const [day, dark] = ['custom:y2k', 'custom:y2k-dark'].map(theme => themed(theme, chrome)) as [ReturnType<typeof themed>, ReturnType<typeof themed>]
+  expect(['skin' in day.family && day.family.skin, 'skin' in dark.family && dark.family.skin, day.isLight, dark.isLight]).toEqual([SKINS.chrome, SKINS.midnight, true, false])
+  expect(['skin' in day.family && day.family.cars, day.family === FAMILIES.y2k, dark.family === FAMILIES['y2k-dark']]).toEqual([undefined, true, true])
   const mine = packsIn({ ...PACK_TEXTS, 'sunset.json': packText('sunset', { family: 'cyber', variant: 'yellow' }, '#101820'), 'dawn.json': packText('dawn', { family: 'cyber', variant: 'red' }, '#101820') }).packs
   expect([slotsOf('custom:sunset', mine)[1], slotsOf('custom:dawn', mine)[3]]).toEqual(['edgerunners-sonnet', 'ghostrunner-fable'])
   // The drawn characters stay the ninja for Ghostrunner and the thief for Edgerunners.
@@ -2957,7 +2969,7 @@ const manifestOf = (name: string | undefined, speech?: Record<string, string>) =
 function assetsFolder(on: On, manifests: Partial<Record<Slot, string>>, stills: readonly Slot[] = []) {
   const asked: string[] = []
   on('fs.read', (_$, e) => {
-    const slot = /\/assets\/([a-z-]+)\/manifest\.json$/.exec(e.path)?.[1] as Slot | undefined
+    const slot = /\/assets\/([a-z0-9-]+)\/manifest\.json$/.exec(e.path)?.[1] as Slot | undefined
     if (slot !== undefined) asked.push(slot)
     const text = slot === undefined ? undefined : manifests[slot]
     if (text === undefined) throw new Error('ENOENT')
@@ -3078,6 +3090,8 @@ test('the camera feed plays the slot of the theme and the model: its manifest\'s
     'ghostrunner-opus JACK (2 loops)', 'ghostrunner-sonnet HEL (2 loops)', 'ghostrunner-haiku missing', 'ghostrunner-fable missing',
     'edgerunners-opus missing', 'edgerunners-sonnet missing', 'edgerunners-haiku REBECCA [no name in its manifest] (2 loops)', 'edgerunners-fable ADAM SMASHER (2 loops)',
     'initiald-opus missing', 'initiald-sonnet missing', 'initiald-haiku missing', 'initiald-fable missing',
+    'y2k-opus missing', 'y2k-sonnet missing', 'y2k-haiku missing', 'y2k-fable missing',
+    'y2kdark-opus missing', 'y2kdark-sonnet missing', 'y2kdark-haiku missing', 'y2kdark-fable missing',
   ])
   expect(status).toMatch(/Pictures: \S+\/assets\./)
 
@@ -3090,9 +3104,9 @@ test('the camera feed plays the slot of the theme and the model: its manifest\'s
   expect([drawn.kind, drawn.named, drawn.box]).toEqual([['<Raster kirby>'], '─┤ LUCY // OPUS-5-5 ├─', [33, HERO_ROWS]])
   await $.command.run(typed('style auto'))
 
-  // The manifests still missing are asked for again and again; once all twelve are found, never more.
+  // The manifests still missing are asked for again and again; once all are found, never more.
   const missing = SLOTS.filter(slot => manifests[slot] === undefined)
-  expect(missing.length).toBe(8)
+  expect(missing.length).toBe(16)
   asked.length = 0
   await clock.advance(31_000)
   expect(new Set(asked)).toEqual(new Set(missing))
@@ -3810,4 +3824,45 @@ test('Clawd\'s minis: a walk of four drawn frames, a fall of its own, a landing 
   expect([landed < crouched, crouched < stood, falling > crouched]).toEqual([true, true, true])
   // And walking, his body bobs a pixel of his on the planted legs.
   expect(clawdMini(0).poses.walk[0]!.px.length).toBe(clawdMini(0).poses.walk[1]!.px.length + 2)
+})
+
+test('the chrome skins polish a bar: one colour a cell, a hard light a third of the way along, darker toward the right end', () => {
+  const bar = sheen(SKINS.chrome.primary, 20).map(color => Number.parseInt(color.slice(1), 16))
+  const lightOf = (color: number) => (color >> 16) + ((color >> 8) & 255) + (color & 255)
+  expect([bar.length, sheen(SKINS.chrome.primary, 0), sheen(SKINS.chrome.primary, 1).length]).toEqual([20, [], 1])
+  expect(bar.indexOf(bar.reduce((lit, color) => (lightOf(color) > lightOf(lit) ? color : lit)))).toBe(6)
+  expect([lightOf(bar[6]!) > lightOf(SKINS.chrome.primary), lightOf(bar[19]!) < lightOf(SKINS.chrome.primary)]).toEqual([true, true])
+})
+
+test('the chrome skins draw the model\'s object in ASCII: one size, plain characters, a loop that closes, each model and mood its own, the same drawing by day and by night in each skin\'s colours', () => {
+  expect([isChrome(SKINS.chrome), isChrome(SKINS.midnight), isChrome(SKINS.red), isChrome(SKINS.night)]).toEqual([true, true, false, false])
+  const drawn = (skin: Skin, form: Form, mood: Mood, now: number, columns = 52, rows = OBJECT_ROWS) => textOf(chromeFrame(skin, form, mood, now, columns, rows)).join('\n')
+  const inked = (text: string) => [...text].filter(ch => ch !== ' ' && ch !== '\n').length
+  const seen = new Set<string>()
+  for (const form of FORMS) {
+    for (const mood of ['idle', 'working', 'happy', 'worried'] as const) {
+      const grid = chromeFrame(SKINS.midnight, form, mood, 1234, 52, OBJECT_ROWS)
+      const text = textOf(grid).join('\n')
+      expect([grid.columns, grid.rows, grid.words.length, /^[\x20-\x7e\n]*$/.test(text)]).toEqual([52, OBJECT_ROWS, 52 * OBJECT_ROWS * 3, true])
+      // Something is drawn, nothing touches the box's edges at rest, and the pane's ground shows through every cell.
+      expect(inked(text)).toBeGreaterThan(60)
+      expect(grid.words.filter((_word, i) => i % 3 === 2).every(bg => bg === NONE)).toBe(true)
+      seen.add(text)
+    }
+    // It moves, and a loop ends where it began (an idle loop is 6400 ms).
+    expect(drawn(SKINS.midnight, form, 'idle', 0)).not.toBe(drawn(SKINS.midnight, form, 'idle', 600))
+    expect(drawn(SKINS.midnight, form, 'idle', 315)).toBe(drawn(SKINS.midnight, form, 'idle', 315 + 6400))
+  }
+  expect(seen.size).toBe(16)
+  // Weight is depth and light: the same characters on both skins, each in its own colours (by day the heaviest is the darkest ink, by night the brightest).
+  const [day, night] = [chromeFrame(SKINS.chrome, 'fable', 'idle', 600, 52, OBJECT_ROWS), chromeFrame(SKINS.midnight, 'fable', 'idle', 600, 52, OBJECT_ROWS)]
+  expect(textOf(day)).toEqual(textOf(night))
+  const inks = (grid: Grid) => new Set(grid.words.filter((_word, i) => i % 3 === 1 && grid.words[i - 1] !== 0x20))
+  expect([inks(day).has(SKINS.chrome.bright), inks(night).has(SKINS.midnight.bright), [...inks(day)].some(ink => inks(night).has(ink))]).toEqual([true, true, false])
+  // Where a part passes in front of another, the cells behind its edge are left empty: Halo's rings never run into its core.
+  expect(textOf(night).some(line => /\S \S/.test(line))).toBe(true)
+  // Any size is drawn, none throws: a pane of a few rows, of none.
+  expect([textOf(chromeFrame(SKINS.chrome, 'opus', 'idle', 0, 30, 6)).length, chromeFrame(SKINS.chrome, 'opus', 'idle', 0, 30, 0).words.length]).toEqual([6, 0])
+  // The layout gives it its rows where the pane has them, a mask's place otherwise.
+  expect([laidOutText({ skin: SKINS.chrome, form: 'opus' }, 0, 53, 60, true).size, laidOutText({ skin: SKINS.red, form: 'opus' }, 0, 53, 60, true).size]).toEqual([{ columns: 52, rows: OBJECT_ROWS }, { columns: 52, rows: MASK_ROWS }])
 })

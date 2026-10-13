@@ -201,8 +201,8 @@ test('each pack draws the four states its own way, readably, and fits every widt
     expect([pack.slug, way.some(l => /here ×2/i.test(l)), way.some(l => /next ×4/i.test(l)), way.some(l => l.includes(S.states.blocked.glyph) && /blocked ×3/i.test(l)), way.filter(l => /╰ by Ticket 8, /.test(l)).length]).toEqual([pack.slug, true, true, true, 3])
     looks.add(rows.slice(0, 12).join('\n'))
   }
-  // Six packs, six different lists.
-  expect(looks.size).toBe(6)
+  // Eight packs, seven different lists: the two Y2K packs are one design in two palettes.
+  expect(looks.size).toBe(7)
 })
 
 test('the working line is the theme\'s: one of its pack\'s words for the engine\'s, behind its icon, which turns', async ($, on) => {

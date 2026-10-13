@@ -1,0 +1,144 @@
+{
+  "slug": "y2k-dark",
+  "name": "Y2K Dark",
+  "match": [
+    "y2k-dark"
+  ],
+  "isLight": false,
+  "terminal": {
+    "background": "#050813"
+  },
+  "avatar": {
+    "family": "y2k",
+    "skin": {
+      "primary": "#7da2ff",
+      "bright": "#ffffff",
+      "body": "#2a3970",
+      "shadow": "#18213f",
+      "dim": "#8793b5",
+      "cyan": "#5fe6d6",
+      "alert": "#ff5468",
+      "value": "#d9a3ff",
+      "tint": "#0b1126",
+      "ink": "#050813"
+    }
+  },
+  "flow": {
+    "palette": {
+      "bg": "#050813",
+      "page": "#050813",
+      "fg": "#e8eef8",
+      "text2": "#b4bfd8",
+      "text3": "#a0acc8",
+      "text4": "#8793b5",
+      "border": "#1c2748",
+      "cardBorder": "#3d4f88",
+      "track": "#18213f",
+      "select": "#101a3a",
+      "cyan": "#5fe6d6",
+      "green": "#5fe6a0",
+      "yellow": "#f2d45c",
+      "orange": "#ffa36b",
+      "red": "#ff5468",
+      "blue": "#8fb0ff",
+      "violet": "#c79bff",
+      "railDone": "#2f8f88",
+      "railRun": "#4f6fd0",
+      "tabActive": "#8fb0ff"
+    },
+    "steps": {
+      "header": {
+        "style": "banner",
+        "prefix": "✦ ",
+        "color": "blue",
+        "frame": "cardBorder",
+        "upper": false
+      },
+      "layout": "path",
+      "meter": {
+        "style": "bar",
+        "fill": "▰",
+        "empty": "▱"
+      },
+      "states": {
+        "done": {
+          "glyph": "✦",
+          "color": "cyan",
+          "labelColor": "text2",
+          "bold": false,
+          "rail": "│",
+          "railColor": "railDone"
+        },
+        "active": {
+          "glyph": "◐",
+          "color": "blue",
+          "labelColor": "fg",
+          "bold": true,
+          "rail": "┆",
+          "railColor": "railRun",
+          "ground": "select"
+        },
+        "pending": {
+          "glyph": "○",
+          "color": "text4",
+          "bold": false,
+          "rail": "┆",
+          "railColor": "border"
+        },
+        "blocked": {
+          "glyph": "✕",
+          "color": "red",
+          "bold": true,
+          "rail": "┆",
+          "railColor": "border"
+        }
+      },
+      "cycle": {
+        "glyphs": [
+          "◐",
+          "◓",
+          "◑",
+          "◒"
+        ],
+        "ms": 220
+      },
+      "captions": {
+        "title": "streamline",
+        "active": "loading",
+        "blocked": "offline",
+        "optional": "bonus track",
+        "progress": "track {i} of {n} · {left} to go",
+        "idle": "standby · {left} to go"
+      }
+    }
+  },
+  "spinner": {
+    "frames": [
+      "✧",
+      "✦",
+      "✶",
+      "✦"
+    ],
+    "ms": 160,
+    "verbs": [
+      "Polishing chrome",
+      "Dialing up",
+      "Burning a CD",
+      "Defragmenting",
+      "Buffering",
+      "Rendering lens flares",
+      "Streamlining reality",
+      "Booting the future",
+      "Beaming over infrared",
+      "Flipping the phone open",
+      "Downloading a ringtone",
+      "Charging the battery",
+      "Bending light",
+      "Going online",
+      "Patching the millennium bug",
+      "Loading a new skin",
+      "Rewinding the tape",
+      "Syncing the address book"
+    ]
+  }
+}

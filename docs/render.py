@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent / 'loadout'
 FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf'
 BOLD = '/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf'
 W, H, PAD, SIZE = 560, 214, 22, 17
-ORDER = ['kirby', 'kirby-pink', 'ghostrunner', 'cyberpunk-edgerunners', 'initial-d', 'default']
+ORDER = ['kirby', 'kirby-pink', 'ghostrunner', 'cyberpunk-edgerunners', 'initial-d', 'default', 'y2k', 'y2k-dark']
 DARK = {'claude': '#d97757', 'text': '#ffffff', 'inactive': '#999999', 'success': '#4eba65', 'warning': '#ffc107', 'error': '#ff6b80',
         'suggestion': '#b1b9f9', 'permission': '#b1b9f9', 'promptBorder': '#888888', 'bashBorder': '#fd5db1', 'userMessageBackground': '#373737', 'autoAccept': '#af87ff'}
 
