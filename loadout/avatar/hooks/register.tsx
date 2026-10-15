@@ -22,7 +22,7 @@ import type { Form } from './look'
 import { mascotFrame } from './mascot'
 import { packFiles, packsOf } from './packs'
 import type { Pack } from './packs'
-import { HELP, USAGE, listed, loadoutAsk } from './loadout'
+import { HELP, USAGE, listed, loadoutAsk, loadoutSuggestions } from './loadout'
 import type { LoadoutAsk } from './loadout'
 import { pickerRows, pickerTree } from './picker'
 import { BUILT_IN, LIVE, askOf, builtInOffer, customOffer, findTheme, isLive, liveOf, liveSource, liveText, pinLines, quoted, settingOf, slugOf, withTheme, writeLive } from './themes'
@@ -1434,6 +1434,15 @@ export const register: Register = on => {
   on('command.run', { command: 'avatar' }, onCommand)
 
   on('command.run', { command: 'loadout' }, async ($, e) => ({ text: await loadoutCommand($, loadoutAsk(e.args)) }))
+
+  // `/loadout` as it is typed: the themes and the command's words join the typeahead.
+  on('prompt.autocomplete', {}, async ($, e, next) => {
+    const { suggestions } = await next(e)
+    if (!e.text.startsWith('/loadout')) return { suggestions }
+    await quiet(loadOffers($))
+
+    return { suggestions: [...suggestions, ...loadoutSuggestions(e.text, e.token, e.start, offers, await read($, theme))] }
+  })
 
   // The person changes the theme in this session, with Claude Code's own /theme or the row in /config: this terminal then paints that theme.
   // (Only the person's own change: a plugin's `$.config.set`, this one's `auto` among them, writes the setting and repaints nothing, as a probe session showed.)

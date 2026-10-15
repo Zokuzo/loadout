@@ -4,8 +4,8 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On, SessionUsage, UiPane } from 'claude-code'
 
-import { HELP, loadoutAsk } from '../avatar/hooks/loadout'
-import { BUILT_IN, customOffer, findTheme, isLive, liveOf, liveSource, liveText, withTheme, writeLive } from '../avatar/hooks/themes'
+import { HELP, loadoutAsk, loadoutSuggestions } from '../avatar/hooks/loadout'
+import { BUILT_IN, builtInOffer, customOffer, findTheme, isLive, liveOf, liveSource, liveText, withTheme, writeLive } from '../avatar/hooks/themes'
 import type { Disk } from '../avatar/hooks/themes'
 import { PALETTES } from '../flow/hooks/palette'
 
@@ -260,6 +260,19 @@ test('the words of /loadout: nothing, a switch, a pane, or a theme of one or sev
     { kind: 'theme', name: 'kirby', scope: 'all' }, { kind: 'theme', name: 'cyberpunk edgerunners', scope: 'all' }, { kind: 'theme', name: 'cyberpunk edgerunners', scope: 'here' },
     { kind: 'theme', name: 'kirby', scope: 'here' }, { kind: 'theme', name: 'dark', scope: 'all' }, { kind: 'theme', name: '', scope: 'here' },
   ])
+})
+
+test('the typeahead of /loadout: every theme for the command, a forgiving first word, then here or a switch value', () => {
+  const offers = [customOffer('halo', '{"name":"Halo"}'), customOffer('halo-dark', '{"name":"Halo Dark"}'), customOffer('kirby', '{"name":"Kirby"}'), builtInOffer('dark')]
+  const texts = (text: string) => loadoutSuggestions(text, text.split(' ').at(-1)!, text.lastIndexOf(' ') + 1, offers, 'custom:halo').map(one => one.text)
+  expect(loadoutSuggestions('/loadout', '/loadout', 0, offers, 'custom:halo')[0]).toEqual({ text: '/loadout halo', description: 'Halo · in use' })
+  expect(texts('/loadout ha')).toEqual(['halo', 'halo-dark'])
+  expect(texts('/loadout dark')).toEqual(['halo-dark', 'dark'])
+  expect(texts('/loadout st')).toEqual(['status', 'style'])
+  expect(texts('/loadout halo h')).toEqual(['here'])
+  expect(texts('/loadout style t')).toEqual(['text'])
+  expect(texts('/loadout halo here x')).toEqual([])
+  expect(texts('/theme ha')).toEqual([])
 })
 
 // --- the command ---------------------------------------------------------------------------

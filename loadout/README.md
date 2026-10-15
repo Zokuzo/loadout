@@ -27,6 +27,8 @@ It is three parts in one plugin (they were the mods `kirby-hud`, `flow-map` and 
 
 A theme's name is forgiving: any case, spaces or dashes (`Cyberpunk Edgerunners`, `cyberpunk-edgerunners`), or a prefix or word that only one theme has (`ghost`, `edge`, `edgerunners`, `cyberpunk`, `pink`). An exact name wins over a prefix (`kirby` is Kirby, not Kirby Pink). An ambiguous or unknown name changes nothing and lists the candidates.
 
+As it is typed, the prompt box's typeahead completes it: `/loadout` lists every theme (the one in use marked); a first word completes to a theme or a word of the command (`ha` gives `halo` and `halo-dark`); then `here`, `all`, or a switch's values.
+
 Two themes were renamed, and their old names still work, here and in the shell launcher: `cyberpunk-soft` and `soft` are `cyberpunk-edgerunners`; `cyberpunk-classic` and `classic` are `ghostrunner`. (The red theme was `cyberpunk`: that word now picks Cyberpunk Edgerunners, the one theme it begins.)
 
 `/loadout` and `/loadout status` say what set the theme: "the global theme", "this terminal's own theme", "pinned to this terminal", "the theme this terminal started with" (the global one changed since and shows at its next start), a project's or a managed settings file. A session started in the home directory reads `~/.claude/settings.json` as its project file too: that is said as "set by your global settings", and `/loadout <theme>` changes it as anywhere else.
