@@ -51,7 +51,7 @@
         "style": "banner",
         "prefix": "✦ ",
         "color": "blue",
-        "frame": "cardBorder",
+        "frame": "blue",
         "upper": false
       },
       "layout": "path",

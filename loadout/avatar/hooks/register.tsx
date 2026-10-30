@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, SessionMeasureInput } from 'claude-code'
+import type { Elements, EngineInterface, Register, SessionMeasureInput } from 'claude-code'
 
 import { ASSUMED, sourceOf } from './canvas'
 import type { Cell } from './canvas'
@@ -10,7 +10,8 @@ import type { Beat, Moment } from './cyber'
 import { frameOf, nameOf, themed } from './families'
 import type { Acting, FamilyDef, Worry } from './families'
 import { chromeFrame, isChrome } from './chrome'
-import { cueOf, haloLive, isHalo } from './halo'
+import { cueOf, drawnFrame, drawnOf, haloLive, isHalo } from './halo'
+import type { Drawn } from './halo'
 import { haloTree } from './halopane'
 import { NONE, STATES, agentRows, hex, maskFrame } from './hud'
 import type { Grid, State } from './hud'
@@ -34,7 +35,10 @@ import { SWAPS, colorOf } from './minis'
 import { stageFrame, stagedOf as stagedArt } from './scene'
 import { LEAVE_MS, NARROWEST as STAGE_NARROWEST, TICK_MS, sceneOf, stagedOf, toolAct } from './stage'
 import { FLOW_PANE, VIEW as FLOW_VIEW } from '../../flow/hooks/register'
-import type { KirbyHudCall, KirbyHudHelper, KirbyHudLimit, KirbyHudUsage } from '../../types'
+import type { KirbyHudCall, KirbyHudHelper, KirbyHudLimit, KirbyHudUsage, ModsState, RecallCard, RecallDeck } from '../../types'
+import { lookOf } from '../../flow/hooks/palette'
+import { AWAY_MS, BLINK_MS, MODS, NEW, RECALL_AFTER_MS, width as width_, backCard, clearCard, drawCard, dueCards, recallCard, recallRate, reviewed, statusLine, streakAfter } from './mods'
+import type { Card, Line } from './mods'
 
 const usage = atom({ plugin: 'loadout', key: 'usage' } as const, null)
 const isWorking = atom({ plugin: 'loadout', key: 'isWorking' } as const, false)
@@ -54,6 +58,14 @@ const framesOn = atom({ plugin: 'loadout', key: 'isOn' } as const, true)
 const flowView = atom({ plugin: 'loadout', key: 'view' } as const, FLOW_VIEW)
 // The Flow map's theme, the same way: told at once what a live file's source is.
 const flowTheme = atom({ plugin: 'loadout', key: 'flowTheme' } as const, '')
+// The Flow map's packs and plan, the same way: the mods paint with its palette and tell where its plan stands.
+const flowPacks = atom({ plugin: 'loadout', key: 'packs' } as const, { sig: '', list: [] })
+const flowPlan = atom({ plugin: 'loadout', key: 'plan' } as const, null)
+// What the status line and the cards read (mods.ts).
+const mods = atom({ plugin: 'loadout', key: 'mods' } as const, MODS)
+// The band's own beat: written when what it says has moved with the clock, read by the band alone, so the band is drawn
+// again and nothing else is (a pane's frames never start from it).
+const bandBeat = atom({ plugin: 'loadout', key: 'modsBeat' } as const, 0)
 
 const PANE = 'kirby'
 const PANE_COLUMNS = 34 // Sword Kirby, the widest form, and a column to spare
@@ -281,18 +293,48 @@ async function findAssets($: EngineInterface) {
 const hasPictures = (slot: Slot): boolean => assets !== null && (reels.has(slot) || stills.has(slot))
 
 /** The feed's frame at `now`: the slot's loop for the mood, from the first frame of a mood or a character new on screen; without footage its still portrait, a happy one played from the cheer's start, the others looping on the clock. */
-function portraitOf(slot: Slot, mood: Mood, now: number, happyUntil: number, doing: State | undefined = undefined): { file: string; format: 'png' } {
+/** The slot's loop and frame at `now`, null where it has no footage. */
+function reelFrame(slot: Slot, mood: Mood, now: number, doing: State | undefined): { clip: string; frame: number } | null {
   const reel = reels.get(slot)
-  if (reel !== undefined) {
-    // (A reel may have loops for a kind of call too, under its state's name: `scan`, `edit`, `exec`... They play while such a call runs.)
-    const played = playedOf(reel, mood, cueOf(mood, doing))
-    if (reelMood === null || reelMood.mood !== played || reelMood.slot !== slot) reelMood = { slot, mood: played, since: now }
-    const at = frameAt(reel, played, now - reelMood.since)
-    if (at !== null) return { file: `${assets}/${slot}/${at.clip}/${String(at.frame).padStart(3, '0')}.png`, format: 'png' }
-  }
+  if (reel === undefined) return null
+  // (A reel may have loops for a kind of call too, under its state's name: `scan`, `edit`, `exec`... They play while such a call runs.)
+  const played = playedOf(reel, mood, cueOf(mood, doing))
+  if (reelMood === null || reelMood.mood !== played || reelMood.slot !== slot) reelMood = { slot, mood: played, since: now }
+
+  return frameAt(reel, played, now - reelMood.since)
+}
+
+function portraitOf(slot: Slot, mood: Mood, now: number, happyUntil: number, doing: State | undefined = undefined): { file: string; format: 'png' } {
+  const at = reelFrame(slot, mood, now, doing)
+  if (at !== null) return { file: `${assets}/${slot}/${at.clip}/${String(at.frame).padStart(3, '0')}.png`, format: 'png' }
   const step = mood === 'happy' ? Math.min(PORTRAIT_FRAMES - 1, Math.max(0, Math.floor((now - (happyUntil - HAPPY_MS)) / PORTRAIT_MS.happy))) : Math.floor(now / PORTRAIT_MS[mood]) % PORTRAIT_FRAMES
 
   return { file: `${assets}/${slot}/${mood}-${String(step).padStart(2, '0')}.png`, format: 'png' }
+}
+
+// The Halo figures' footage drawn in characters (bin/ascii-footage), `<slot>/<clip>`: read once, for the slot on screen only.
+const drawnClips = new Map<string, Drawn>()
+const drawnTried = new Set<Slot>()
+
+/** Reads a slot's drawn clips, once. Never throws; a clip without them is drawn by halo.ts as before. */
+async function loadDrawn($: EngineInterface, slot: Slot) {
+  const reel = reels.get(slot)
+  if (reel === undefined || drawnTried.has(slot)) return
+  drawnTried.add(slot)
+  for (const clip of Object.keys(reel.clips)) {
+    const drawn = drawnOf(await $.fs.read(`${assets}/${slot}/${clip}/ascii.json`).then(read => (typeof read === 'string' ? read : ''), () => ''))
+    if (drawn !== null) drawnClips.set(`${slot}/${clip}`, drawn)
+  }
+}
+
+/** The Halo figure from its footage where that clip is drawn, else undefined. (Cortana's footage is the `halo` world's, the Chief's `halodark`'s.) */
+function drawnPicture(drawn: Layout, mood: Mood, now: number, doing: State | undefined): Grid | undefined {
+  if (!('text' in drawn) || drawnClips.size === 0) return undefined
+  const slot = slotOf(drawn.text.skin.variant === 'cortana' ? 'halo' : 'halodark', drawn.text.form)
+  const at = reelFrame(slot, mood, now, doing)
+  const clip = at === null ? undefined : drawnClips.get(`${slot}/${at.clip}`)
+
+  return clip === undefined ? undefined : drawnFrame(clip, at!.frame, drawn.size.columns, drawn.size.rows)
 }
 
 /** What a Raster or an Image shows: cells, or a source. */
@@ -308,7 +350,7 @@ function mascotPicture(drawn: Layout, mood: Mood, now: number, ground: number, i
       : { source: sourceOf(heroCanvas(drawn.hero, moment, drawn.art.mascot.width, drawn.art.mascot.height), PRESCALE) }
   }
   // (The chrome skins have no mask: their mascot is the model's object, in ASCII. Nor the Halo ones: theirs acts out the call that runs.)
-  if ('text' in drawn && isHalo(drawn.text.skin)) return { cells: packed(haloLive(drawn.text.skin, drawn.text.form, mood, now, drawn.size.columns, drawn.size.rows, doing), ground) }
+  if ('text' in drawn && isHalo(drawn.text.skin)) return { cells: packed(drawnPicture(drawn, mood, now, doing) ?? haloLive(drawn.text.skin, drawn.text.form, mood, now, drawn.size.columns, drawn.size.rows, doing), ground) }
   if ('text' in drawn) return { cells: packed((isChrome(drawn.text.skin) ? chromeFrame : maskFrame)(drawn.text.skin, drawn.text.form, mood, now, drawn.size.columns, drawn.size.rows), ground) }
   if (drawn.art === undefined) return { cells: encoded(mascotBlocks(drawn, mood, Math.floor(now / TICK_MS)), ground) }
   const { mascot, scale } = drawn.art
@@ -657,6 +699,8 @@ const sessionLook = async ($: EngineInterface): Promise<{ family: FamilyDef; for
 
 /** The slow work: what the engine does not tell by an event is read again. */
 async function slow($: EngineInterface) {
+  // The band first, and on its own: what the slow work below waits for or throws never holds its beat back.
+  void quiet(beatBand($))
   await seed($)
   // session.measure is not raised by a /clear or a /compact: without this
   // re-read the context row would keep the old fill until the next turn ends.
@@ -680,6 +724,38 @@ async function slow($: EngineInterface) {
     return
   }
   $.ui.invalidate('ui.render') // keeps the countdowns moving
+}
+
+const RECALL = { id: 'recall', title: 'Recall', rows: 7 }
+let isRecallOpen = false
+/** The recall pane opens when its card is due and closes when it no longer is: unasked, so not on a narrow terminal (ui.open). */
+async function beatRecall($: EngineInterface) {
+  const due = (await recallNow($, 60).catch(() => null)) !== null
+  if (due && !isRecallOpen) {
+    isRecallOpen = true
+    const { P } = lookOf(await read($, flowTheme), (await read($, flowPacks)).list)
+    await $.ui.open({ ...RECALL, backgroundColor: P.bg })
+  } else if (!due && isRecallOpen) {
+    isRecallOpen = false
+    await $.ui.close({ id: RECALL.id })
+  }
+}
+
+let bandSaid = ''
+/** The band is drawn again when what it says has moved with the clock: a minute gone by, a card due. */
+async function beatBand($: EngineInterface) {
+  void quiet(beatRecall($))
+  const shown = await cardNow($, 92).catch(() => null)
+  const said = `${JSON.stringify(await statusNow($, 96))}|${shown === null ? '' : `${shown.card.title}${shown.card.meta}${shown.card.right}`}`
+  if (said !== bandSaid) {
+    bandSaid = said
+    await update($, bandBeat, n => n + 1)
+  }
+}
+
+/** The alarm: its glyph alternates every 500 ms for BLINK_MS, then holds; each redraw asked on the clock. */
+function blink($: EngineInterface) {
+  for (let ms = 500; ms <= BLINK_MS; ms += 500) $.clock.after(ms, () => void quiet(update($, bandBeat, n => n + 1)))
 }
 
 // What the pane's last draw mounted and drew from: a frame repaints exactly those pictures, with
@@ -1305,6 +1381,7 @@ async function loadoutStatus($: EngineInterface): Promise<string> {
     `Pack: ${now.by} (${now.told}). Packs: ${now.packs}.`,
     `Pictures: ${now.pictures}. Footage: ${now.footage}.`,
     `Avatar pane: ${paneOf(PANE)}, style ${now.style}, background ${now.isTinting ? 'on' : 'off'}. Flow map: ${paneOf(FLOW_PANE.id)}. Frames: ${(await read($, framesOn)) ? 'on' : 'off'}.`,
+    await recallStatus($),
   ].join('\n')
 }
 
@@ -1343,6 +1420,161 @@ async function loadoutCommand($: EngineInterface, ask: LoadoutAsk): Promise<stri
   return switched($, found.setting, ask.scope, facts)
 }
 
+// --- the mods (docs/mods/grammar.md): the status line, and the cards of the band ---
+
+const DECK = 'loadout-deck.json' // in the config folder: bin/recall-deck writes it
+let deckCards: readonly RecallCard[] = []
+const NO_DECK: RecallDeck = { sched: {}, log: [] }
+
+async function home($: EngineInterface): Promise<string> {
+  return (await $.env.get('CLAUDE_CONFIG_DIR').catch(() => undefined)) ?? `${(await $.env.get('HOME').catch(() => undefined)) ?? '~'}/.claude`
+}
+
+async function loadDeck($: EngineInterface) {
+  const text = await $.fs.read(`${await home($)}/${DECK}`).then(got => (typeof got === 'string' ? got : ''), () => '')
+  try {
+    const list: unknown = JSON.parse(text)
+    if (Array.isArray(list)) deckCards = list.filter((c): c is RecallCard => typeof c === 'object' && c !== null && typeof c.id === 'string' && typeof c.q === 'string' && typeof c.a === 'string')
+  } catch {
+    // no deck yet: no recall card
+  }
+}
+
+const deckOf = async ($: EngineInterface): Promise<RecallDeck> => {
+  const kept = await $.store.get('recall').catch(() => undefined) as RecallDeck | undefined
+
+  return kept !== undefined && typeof kept === 'object' && kept !== null && 'sched' in kept && 'log' in kept ? kept : NO_DECK
+}
+
+/** Whether Professeur is on: its switch, state.json in the folder LOADOUT_PROF names, is read, never written. */
+async function isProfOn($: EngineInterface): Promise<boolean> {
+  const dir = await $.env.get('LOADOUT_PROF').catch(() => undefined)
+  if (!dir) return false
+  const path = `${dir.replace(/^~/, (await $.env.get('HOME').catch(() => undefined)) ?? '~')}/state.json`
+  const text = await $.fs.read(path).then(got => (typeof got === 'string' ? got : ''), () => '')
+  try {
+    return (JSON.parse(text) as { actif?: unknown }).actif === true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The answer to the recall card shown: the card turns over first, in one write, so a second press (a double tap, 1 then 2)
+ * finds it turned and does nothing; then its schedule moves and the answer is logged.
+ */
+async function answer($: EngineInterface, card: RecallCard, knew: boolean) {
+  const now = await $.clock.now()
+  let isMine = false
+  await update($, mods, m => {
+    if (m.flip !== null) return m
+    isMine = true
+
+    return { ...m, flip: { id: card.id, knew, next: knew ? 1 : 0 } }
+  })
+  if (!isMine) return
+  const deck = await deckOf($)
+  const next = reviewed(deck.sched[card.id] ?? NEW, knew, now)
+  await $.store.set('recall', { sched: { ...deck.sched, [card.id]: next }, log: [...deck.log, { at: now, id: card.id, knew }].slice(-2000) })
+  await update($, mods, m => (m.flip?.id === card.id ? { ...m, flip: { id: card.id, knew, next: next.interval } } : m))
+}
+
+/** `Recall: 84% known over 30 days, 4 due of 46.` for /loadout status. */
+async function recallStatus($: EngineInterface): Promise<string> {
+  const now = await $.clock.now()
+  const deck = await deckOf($)
+  const rate = recallRate(deck, now)
+  if (deckCards.length === 0) return 'Recall: no deck yet (run bin/recall-deck).'
+
+  return `Recall: ${rate === undefined ? 'no answer yet' : `${rate}% known over 30 days (${deck.log.filter(l => now - l.at <= 30 * 86_400_000).length} answers)`}, ${dueCards(deck, deckCards, now).length} due of ${deckCards.length}.`
+}
+
+/** The card the band shows now, by the grammar's order (before /clear, then back), and what pressing its keys does. */
+async function cardNow($: EngineInterface, inner: number): Promise<{ card: Card; press: (key: string) => Promise<void> } | null> {
+  const m = await read($, mods)
+  const now = await $.clock.now()
+  const working = await read($, isWorking)
+  const agents = (await read($, helpers)).filter(h => h.doneAt === undefined).length
+  const { P, S } = lookOf(await read($, flowTheme), (await read($, flowPacks)).list)
+  const u = await read($, usage)
+  // (PROBLEM takes the status line's head, not the card's place: the back and /clear cards stay beside it.)
+  const isTurn = !working && agents === 0 && m.endAt > m.idleAt
+  if (isTurn && ((u?.percent ?? 0) >= CONTEXT_FULL || /^\/clear\b/.test(m.prompt))) {
+    const isProf = await isProfOn($)
+
+    return {
+      card: clearCard(u?.percent, m.files, isProf, P),
+      press: async key => {
+        if (key === 'h') await $.prompt.submit({ text: `Write a handoff to HANDOFF.md before I /clear: the files touched (${m.files.length}), the decisions made, the open questions, and the next step. Short.` })
+        if (key === 'l' && isProf) await $.command.run({ command: 'prof', args: 'leçon' })
+      },
+    }
+  }
+  if (isTurn && m.endAt - m.turnAt >= 0 && now - m.endAt >= AWAY_MS && m.backSeen !== m.endAt) {
+    const plan = await read($, flowPlan)
+    const steps = plan === null || plan.steps.length === 0 ? null
+      : { done: plan.steps.filter(st => st.status === 'done').length, of: plan.steps.length, now: plan.steps.find(st => st.status === 'active')?.label ?? '' }
+
+    return { card: backCard(now - m.endAt, m.said, steps, P, S), press: async () => {} }
+  }
+
+  return null
+}
+
+/** The recall card, in a pane of its own (RECALL): due while a turn has run 20 s, the prompt empty, no PROBLEM; gone with the answer. */
+async function recallNow($: EngineInterface, inner: number): Promise<{ card: Card; press: (key: string) => Promise<void> } | null> {
+  const m = await read($, mods)
+  const now = await $.clock.now()
+  const working = await read($, isWorking)
+  const { P } = lookOf(await read($, flowTheme), (await read($, flowPacks)).list)
+  if (working && m.streak.n < 3 && m.prompt.trim() === '' && now - m.turnAt >= RECALL_AFTER_MS && m.recallShown !== m.turnAt) {
+    const deck = await deckOf($)
+    const due = dueCards(deck, deckCards, now)
+    const shown = m.flip === null ? due[0] : deckCards.find(c => c.id === m.flip?.id)
+    if (shown === undefined) return null
+
+    return {
+      card: recallCard(shown, due.length, recallRate(deck, now), m.flip === null ? null : { knew: m.flip.knew, next: m.flip.next }, P, inner),
+      press: async key => {
+        if (key === '1' || key === '2') await answer($, shown, key === '2')
+      },
+    }
+  }
+
+  return null
+}
+
+/** The status line's facts now, painted with the Flow palette. */
+async function statusNow($: EngineInterface, columns: number): Promise<Line> {
+  const m = await read($, mods)
+  const call = last(await read($, calls))
+  const { P } = lookOf(await read($, flowTheme), (await read($, flowPacks)).list)
+
+  return statusLine(m, {
+    working: await read($, isWorking),
+    agents: (await read($, helpers)).filter(h => h.doneAt === undefined).length,
+    ...(call === undefined ? {} : { tool: `${call.tool.replace(/^mcp__.*__/, '')} ${call.summary}`.trim() }),
+    now: await $.clock.now(),
+  }, P, columns)
+}
+
+/** Lines of segments as Text rows; a segment with a key is a plain Button of that hotkey. */
+function segRows(els: Pick<Elements['terminal'], 'Box' | 'Text' | 'Button'>, lines: readonly Line[], press: (key: string) => Promise<void>) {
+  const { Box, Text, Button } = els
+  const span = (seg: Line[number]) => (seg.bg === undefined
+    ? <Text color={seg.fg} bold={seg.bold === true}>{seg.t}</Text>
+    : <Text color={seg.fg} backgroundColor={seg.bg} bold={seg.bold === true}>{seg.t}</Text>)
+
+  return lines.map(line => (line.every(seg => seg.key === undefined)
+    ? <Text wrap="truncate-end">{line.map(span)}</Text>
+    : (
+      <Box flexDirection="row">
+        {line.map(seg => (seg.key === undefined ? <Text wrap="truncate-end">{span(seg)}</Text>
+          : <Button key={`mods-${seg.key}`} plain hotkey={seg.key} dimColor={seg.dim === true} onPress={() => void press(seg.key ?? '').catch(() => {})}>{seg.t}</Button>))}
+      </Box>
+    )))
+}
+
 // --- the events Loadout's parts share (hooks/part.ts): this part's work on each, kept from costing the others ---
 
 const started: Part<'session.start'> = async ($, e, next) => {
@@ -1362,6 +1594,9 @@ const started: Part<'session.start'> = async ($, e, next) => {
   await quiet(findAssets($))
   await quiet(installColours($))
   await quiet(loadOffers($))
+  await quiet(loadDeck($))
+  const at = await $.clock.now()
+  await quiet(update($, mods, m => ({ ...MODS, ...m, idleAt: at, endAt: 0, said: '', streak: MODS.streak, flip: null, files: [] })))
   // Unasked, the pane only seats on a wide terminal; /kirby seats it at any width.
   void $.ui.open(OPEN).catch(() => {})
 
@@ -1377,6 +1612,16 @@ const called: Part<'tool.call'> = async ($, e, next) => {
   try {
     const got = await next(e)
     isFailed = got.deny !== undefined || got.isError === true
+    if (e.agentId === undefined) {
+      const at = await $.clock.now()
+      const file = 'file_path' in e && typeof e.file_path === 'string' && /^(Edit|Write|MultiEdit|NotebookEdit)$/.test(call.tool) && !isFailed ? e.file_path : undefined
+      const m = await update($, mods, was => ({
+        ...was,
+        streak: streakAfter(was.streak, isFailed, call.tool, JSON.stringify(got).slice(0, 400), call.summary, at),
+        ...(file === undefined ? {} : { files: [...was.files.filter(f => f !== file), file] }),
+      })).catch(() => null)
+      if (m !== null && m.streak.n >= 3) blink($)
+    }
 
     return got
   } finally {
@@ -1396,10 +1641,14 @@ const spawned: Part<'agent.spawn'> = async ($, e, next) => {
   return got
 }
 
-// turn.start is the main loop's alone: no call of an earlier turn still runs.
+// A subagent's or a teammate's turn.start has an agentId: the main loop's state is not theirs.
 const turnStarted: Part<'turn.start'> = async ($, e, next) => {
+  if (e.agentId !== undefined) return next(e)
   await update($, isWorking, () => true)
   await quiet(update($, calls, () => []))
+  const at = await $.clock.now()
+  // (The prompt sent has left the box: a draft typed from now on is a new one.)
+  await quiet(update($, mods, m => ({ ...m, turnAt: at, flip: null, prompt: '' })))
 
   return next(e)
 }
@@ -1412,8 +1661,15 @@ const turnCompleted: Part<'turn.complete'> = async ($, e, next) => {
     await quiet(update($, calls, () => []))
     if (e.reason === 'answer') await cheer($)
   }
+  const got = await next(e)
+  if (e.agentId === undefined) {
+    const at = await $.clock.now()
+    // The recall card is put away with the answer: it never comes back in the same turn.
+    await quiet(update($, mods, m => ({ ...m, endAt: at, said: got.text ?? '', recallShown: m.turnAt, flip: null })))
+    await quiet(beatRecall($))
+  }
 
-  return next(e)
+  return got
 }
 
 export const register: Register = on => {
@@ -1474,20 +1730,58 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // The band: nothing while the pane shows, so the conversation reaches the
-  // prompt; one line of meters otherwise, with a button that opens the pane.
+  // The draft, for the mods: a recall card waits for an empty prompt, the /clear card comes as /clear is typed.
+  // A history recall, a clear, a fill:
+  on('prompt.change', async ($, e, next) => {
+    await quiet(update($, mods, m => (m.prompt === e.text ? m : { ...m, prompt: e.text })))
+
+    return next(e)
+  })
+
+  // A key typed or a paste: prompt.change does not carry those.
+  on('prompt.edit', async ($, e, next) => {
+    const got = await next(e)
+    await quiet(update($, mods, m => (m.prompt === got.text ? m : { ...m, prompt: got.text })))
+
+    return got
+  })
+
+  // A prompt sent puts the back card away.
+  on('prompt.submit', {}, async ($, e, next) => {
+    await quiet(update($, mods, m => ({ ...m, backSeen: m.endAt, prompt: '' })))
+
+    return next(e)
+  })
+
+  // The band: the mods' card where one is due, then (while the pane is closed) the status line and the meters,
+  // with a button that opens the pane.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     startTicking($)
     const isUp = (await $.ui.panes()).some(pane => pane.id === PANE && pane.isShown && pane.isPlaced)
-    if (e.props.hasSurvey || isUp) return next(e)
-
+    if (e.props.hasSurvey) return next(e)
+    await read($, bandBeat) // (drawn again on its beat)
     const { Box, Button, Text } = $.ui.resolve(e)
+    const width = e.props.bodyColumns
+    const shown = await cardNow($, Math.min(width, 96) - 4).catch(() => null)
+    const { P, S } = lookOf(await read($, flowTheme), (await read($, flowPacks)).list)
+    const card = shown === null ? null : segRows({ Box, Text, Button }, drawCard(shown.card, P, S, width), shown.press)
+    // The pane shows the meters: the band keeps the card and the status line alone, and says nothing at rest
+    // (an idle session, no card) so whatever else draws there has the band.
+    if (isUp) {
+      const status = await statusNow($, width)
+      const isQuiet = status.length === 1 && status[0]?.t === '○ IDLE'
+      if (card === null && isQuiet) return next(e)
+      const below = await next(e).catch(() => null)
+
+      return <Box flexDirection="column">{card}{isQuiet ? null : segRows({ Box, Text, Button }, [status], async () => {})}{below}</Box>
+    }
+
     const u = await read($, usage)
     const five = u?.limits.find(l => l.kind === 'five_hour')
     const week = u?.limits.find(l => l.kind === 'seven_day')
-    const part = (label: string, hue: string, percent: number | undefined, toneOf: typeof limitTone) => (
+    const part = (label: string, hue: string, percent: number | undefined, toneOf: typeof limitTone, isFirst = false) => (
       <Text>
-        <Text color={DIM}> · </Text>
+        {!isFirst && <Text color={DIM}> · </Text>}
         <Text color={hue}>{label} </Text>
         {percent === undefined
           ? <Text color={DIM}>n/a</Text>
@@ -1495,19 +1789,51 @@ export const register: Register = on => {
       </Text>
     )
 
+    // The meters at the right, the status line in the room they leave. The grammar's order of cuts: the status line's
+    // facts, then $, 5h and wk; never its glyph and word, nor ctx.
+    const pct = (p: number | undefined) => (p === undefined ? 'n/a' : `${Math.round(p)}%`)
+    const head = width_(await statusNow($, 0))
+    const sets = [['$', '5h', 'wk'], ['5h', 'wk'], ['wk'], []] as const
+    const textOf = (shown: readonly string[]) =>
+      `${[...(shown.includes('$') ? [money(u?.usd)] : []), ...(shown.includes('5h') ? [`5h ${pct(five?.percentUsed)}`] : []), ...(shown.includes('wk') ? [`wk ${pct(week?.percentUsed)}`] : []), `ctx ${pct(u?.percent)}`].join(' · ')} [ kirby ]`
+    const kept: readonly string[] = sets.find(shown => head + 2 + textOf(shown).length <= width) ?? []
+    const status = await statusNow($, Math.max(head, width - textOf(kept).length - 2))
+    const first = kept.includes('$') ? '$' : kept[0] ?? 'ctx'
+    const parts = [
+      ...(kept.includes('5h') ? [part('5h', FIVE, five?.percentUsed, limitTone, first === '5h')] : []),
+      ...(kept.includes('wk') ? [part('wk', WEEK, week?.percentUsed, limitTone, first === 'wk')] : []),
+      part('ctx', CONTEXT, u?.percent, contextTone, first === 'ctx'),
+    ]
+
     return (
-      <Box width={e.props.bodyColumns} justifyContent="flex-end">
+      <Box flexDirection="column">
+      {card}
+      <Box width={width} justifyContent="space-between">
+        <Box flexShrink={0}>{segRows({ Box, Text, Button }, [status], async () => {})}</Box>
+        <Box flexShrink={1}>
         <Text wrap="truncate-end">
-          <Text color={COST} bold>{money(u?.usd)}</Text>
-          {part('5h', FIVE, five?.percentUsed, limitTone)}
-          {part('wk', WEEK, week?.percentUsed, limitTone)}
-          {part('ctx', CONTEXT, u?.percent, contextTone)}
-          {(u?.percent ?? 0) >= CONTEXT_FULL && <Text color="error" bold> time to /clear</Text>}
+          {kept.includes('$') && <Text color={COST} bold>{money(u?.usd)}</Text>}
+          {parts}
           <Text> </Text>
         </Text>
         <Button key="open" label="kirby" onPress={() => $.ui.open(OPEN).then(() => {})} />
+        </Box>
+      </Box>
       </Box>
     )
+  })
+
+  // The recall pane: the card alone, its keys 1 and 2 (the pane focused) or a click.
+  on('ui.render', { component: 'Pane', requestId: RECALL.id }, async ($, e) => {
+    const { Box, Button, Text } = $.ui.resolve(e)
+    const width = e.props.bodyColumns
+    const shown = await recallNow($, Math.min(width, 96) - 4).catch(() => null)
+    const { P, S } = lookOf(await read($, flowTheme), (await read($, flowPacks)).list)
+    // Painted with the theme's ground over the whole pane, as the Flow map paints its own.
+    const ground = { width, minHeight: e.props.scroll.bodyRows, backgroundColor: P.bg }
+    if (shown === null) return <Box {...ground}><Text color={P.text3}>No card due.</Text></Box>
+
+    return <Box flexDirection="column" {...ground}>{segRows({ Box, Text, Button }, drawCard(shown.card, P, S, width), shown.press)}</Box>
   })
 
   // The pane: Kirby and the meters at the bottom of a narrow column beside
@@ -1541,6 +1867,7 @@ export const register: Register = on => {
     const slot = 'skin' in wanted.family ? slotOf(wanted.family.world, wanted.form) : undefined
     // (A pack may keep its family's drawn figure: `film` false.)
     const feed = slot !== undefined && hasPictures(slot) && look.pack?.film !== false ? slot : undefined
+    if (slot !== undefined && 'skin' in wanted.family && isHalo(wanted.family.skin) && !drawnTried.has(slot)) void loadDrawn($, slot).then(() => $.ui.invalidate('ui.render')).catch(() => {})
     // A world with cars is theirs wherever its feed does not play: they are drawn as any sprite family, never the mask.
     const cars = 'skin' in wanted.family && !(canPicture === true && table !== undefined && style !== 'text' && feed !== undefined) ? wanted.family.cars : undefined
     const session = cars === undefined ? wanted : { family: cars, form: wanted.form }

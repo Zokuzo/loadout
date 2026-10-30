@@ -35,9 +35,9 @@
       "tabActive": "#ffd23c"
     },
     "steps": {
-      "header": { "style": "banner", "prefix": "★ ", "color": "yellow", "frame": "border", "upper": true },
+      "header": { "style": "banner", "prefix": "★ ", "color": "yellow", "frame": "cardBorder", "upper": true },
       "layout": "path",
-      "meter": { "style": "pips", "fill": "■", "empty": "■" },
+      "meter": { "style": "pips", "fill": "★", "empty": "☆" },
       "states": {
         "done": { "glyph": "★", "color": "yellow", "labelColor": "text2", "bold": false, "rail": "║", "railColor": "railDone" },
         "active": { "glyph": "✦", "color": "yellow", "labelColor": "fg", "bold": true, "rail": "┊", "railColor": "railRun", "ground": "select" },

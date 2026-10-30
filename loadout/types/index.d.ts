@@ -41,6 +41,25 @@ export type KirbyHudHelper = {
   model?: string
 }
 
+// ── the mods (avatar/hooks/mods.ts, docs/mods/grammar.md) ──
+
+/**
+ * What the status line and the cards read: when the session was last at rest (its start, a /clear), when the
+ * main turn began and ended, what its answer said, the failures in a row (how many, their kind, the last call, when),
+ * the files written this session, the draft in the prompt, the end whose back card was put away, the turn whose
+ * recall card was, and the recall card turned over (its id, the answer, the days to the next time).
+ */
+export type ModsState = {
+  idleAt: number; turnAt: number; endAt: number; said: string
+  streak: { n: number; kind: string; what: string; at: number }
+  files: string[]; prompt: string; backSeen: number; recallShown: number
+  flip: { id: string; knew: boolean; next: number } | null
+}
+/** One card of ~/.claude/loadout-deck.json (bin/recall-deck): a question, its answer, where it came from. */
+export type RecallCard = { id: string; q: string; a: string; src: string }
+/** In the store: each card's SM-2 schedule by id, and every answer given (when, which, whether known). */
+export type RecallDeck = { sched: Record<string, { ef: number; reps: number; interval: number; due: number }>; log: { at: number; id: string; knew: boolean }[] }
+
 // ── flow ──
 export type AgentStatus = 'queued' | 'running' | 'done' | 'failed'
 
@@ -224,6 +243,9 @@ declare module 'claude-code' {
       pets: number
       /** The pane's theme picker: open (one row per theme) or folded to one line. */
       isPicking: boolean
+      mods: ModsState
+      /** The band's beat: bumped when what the mods say has moved with the clock, so the band alone is drawn again. */
+      modsBeat: number
       // flow
       runs: Run[]; plan: Plan | null; now: number; view: View; way: Way; map: WayMap | null; hist: History; flowTheme: string; solo: Agent[]; packs: { sig: string; list: Pack[] }
       // frames

@@ -27,6 +27,8 @@ What is shipped is the recipe of each feed: `footage/<slot>.json` names every lo
 
 The two Halo feeds are cut at 33 ms a frame, a video's own thirty frames a second (the pane then draws them on a beat of 30 ms), and their calm shots are marked `"bounce": true` in the recipe: `bin/footage` cuts half of such a loop's frames and writes them again in reverse, so the loop plays there and back and never jumps at its end. They have loops for kinds of tool call too, beside the four moods: a recipe's `moods` may name `scan` (a read), `edit`, `exec` (a shell command), `net` (the web), `call` (subagents), `load` (a skill), `ask` and `tool`, and such a loop plays while a call of that kind runs. Any slot's manifest may.
 
+The Halo figures can be drawn from the footage too, in characters: `bin/ascii-footage assets/halo-opus` (and `halodark-opus`) writes `<clip>/ascii.json` beside each loop, the character cut out of its background first where `hyperframes` and `ffmpeg` are found (about ten minutes a slot; the mattes are kept in `<clip>/cut/`). The pane then plays those in place of the figure halo.ts draws, wherever the feed does not play (`film: false`, `/loadout style text`). `GAMMA`, `EDGE` and `KEEP` in the environment tune the highlights, the outlines and how readily a cell changes its character.
+
 ## Rebuild one
 
 You need `ffmpeg`, `python3`, a terminal that draws pictures (kitty or Ghostty), and a video you are entitled to use: your own capture of the game, or a release of the anime you own.

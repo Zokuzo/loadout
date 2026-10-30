@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""Writes the cards the recall card draws from: bin/recall-deck [out]  (default ~/.claude/loadout-deck.json)
+
+Two sources, both the person's own:
+- the quizzes of the Professeur lessons ($LOADOUT_PROF/lecons/lecon-*.html, LOADOUT_PROF naming its folder):
+  the question, the right choice;
+- the sessions (~/.claude/projects/**/*.jsonl): a tool error that came back 5 times or more and says its own
+  remedy ("File has not been read yet. Read it first before writing to it."): the first sentence asks, the rest answers.
+Each card is {id, q, a, src}; the id is stable, so a rebuilt deck keeps each card's schedule in the store.
+"""
+import glob, hashlib, html, json, os, re, sys
+from collections import Counter
+
+HOME = os.path.expanduser('~')
+PROF = os.path.expanduser(os.environ.get('LOADOUT_PROF', ''))
+OUT = sys.argv[1] if len(sys.argv) > 1 else f'{HOME}/.claude/loadout-deck.json'
+MAX = 90  # characters a side holds: the card is two lines at 53 columns
+PATH = re.compile(r'(?<![\w.])[/~][^\s"\']+')
+
+
+def clip(s, n=MAX):
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s if len(s) <= n else s[:n - 1] + '…'
+
+
+def text(fragment):
+    return clip(html.unescape(re.sub(r'<[^>]+>', '', fragment)))
+
+
+def card(q, a, src, key=None):
+    # The id is what stays the same from one build to the next: the question, or the error's normalised head.
+    return {'id': hashlib.sha1(f'{src}|{key or q}'.encode()).hexdigest()[:12], 'q': q, 'a': a, 'src': src}
+
+
+def lessons():
+    for path in sorted(glob.glob(f'{PROF}/lecons/lecon-*.html')) if PROF else []:
+        page = open(path, encoding='utf-8').read()
+        for block in re.findall(r'<div class="quiz-q".*?</div>\s*<p class="explication"', page, re.S):
+            q = re.search(r'<p class="question">(.*?)</p>', block, re.S)
+            a = re.search(r'<button[^>]*data-bon[^>]*>(.*?)</button>', block, re.S)
+            if q and a: yield card(text(q.group(1)), text(a.group(1)), os.path.basename(path)[:-5])
+
+
+def errors():
+    seen, first = Counter(), {}
+    for path in sorted(glob.glob(f'{HOME}/.claude/projects/**/*.jsonl', recursive=True)):  # (sorted: the same first example each build)
+        try:
+            lines = open(path, encoding='utf-8', errors='replace').read().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            if '"is_error":true' not in line: continue
+            try:
+                content = json.loads(line)['message']['content']
+            except (ValueError, KeyError, TypeError):
+                continue
+            for part in content if isinstance(content, list) else []:
+                if not (isinstance(part, dict) and part.get('is_error')): continue
+                body = part.get('content')
+                body = ' '.join(b.get('text', '') for b in body if isinstance(b, dict)) if isinstance(body, list) else str(body or '')
+                said = re.sub(r'\s+', ' ', re.sub(r'</?tool_use_error>', '', body).strip().split('\n\n')[0])
+                head, _, rest = PATH.sub('…', said).partition('. ')
+                # No remedy said, or the person said no: no card.
+                if len(rest) < 12 or "doesn't want" in head or head.startswith('Exit code'): continue
+                key = re.sub(r'\d+', 'N', head)[:60]
+                seen[key] += 1
+                first.setdefault(key, (head, rest))
+    told = set()  # one card per remedy: five ways to hit the same wall are one lesson
+    for key, n in seen.most_common(40):
+        if n < 5: break
+        head, rest = first[key]
+        if rest[:40] in told: continue
+        told.add(rest[:40])
+        yield card(f'"{clip(head, 70)}": what fixes it?', clip(rest), 'sessions', key)
+
+
+taught, hit = list(lessons()), list(errors())
+json.dump(taught + hit, open(OUT, 'w'), ensure_ascii=False, indent=0)
+print(f'{len(taught)} lesson cards{"" if PROF else " (LOADOUT_PROF unset)"} + {len(hit)} session cards -> {OUT}')

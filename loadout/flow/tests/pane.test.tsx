@@ -85,13 +85,13 @@ test('each phase state has its node, its colours, its time and its rail', async 
   expect(cell(row(all, '○  ship'), 'ship')?.c).toBe(P.text4)
   expect(cell(row(all, '○  ship'), '~3m 00s')?.c).toBe(P.text4)
   expect(cell(all[all.findIndex(l => l.map(r => r.t).join('').includes('○  review')) + 1] ?? [], '┆')?.c).toBe(P.border)
-  // The spinner turns every 450 ms.
+  // The spinner holds still (only an alarm moves; the working line of frames/ is the one left turning).
   const frames = new Set<string>()
   for (let i = 0; i < 4; i++) {
     frames.add((await text(ui)).find(l => /polish ×2/.test(l))?.[2] ?? '')
     await clock.advance(450)
   }
-  expect([...frames].sort()).toEqual(['◐', '◑', '◒', '◓'])
+  expect([...frames]).toEqual(['◐'])
 
   // Stopped: x, then y. The run's task is stopped; the ETA reads a red dash at once.
   await ui.press({ key: 'key:x' })
@@ -397,9 +397,9 @@ test('x asks before it stops: only y, on a question that is showing, stops the r
 test('z folds the pane to one tab above the prompt, and the tab restores it', async ($, on) => {
   on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'Text', props: {}, children: ['the band beneath'] }) as never)
   const { ui, world, land } = await flight($, on)
-  // Not folded: the band is left to whoever else draws there.
+  // Not folded: the band is left to whoever else draws there (beneath the Avatar's status line while agents run).
   const before = await $.ui.mount(BAND)
-  expect(await before.drawn()).toMatchObject({ type: 'Text', children: ['the band beneath'] })
+  expect(lines((await before.drawn()) as Node)).toContain('the band beneath')
   await before.unmount()
 
   await ui.press({ key: 'key:z' })
@@ -413,7 +413,7 @@ test('z folds the pane to one tab above the prompt, and the tab restores it', as
   ])
   expect('◐◓◑◒').toContain(tab[1]?.[2] ?? 'x')
   // What else draws in the band stays, beneath the tab.
-  expect(tab[3]).toBe('the band beneath')
+  expect(tab.slice(3)).toContain('the band beneath')
   const all = paint((await band.drawn()) as Node)
   expect(cell(all[1] ?? [], 'flow map')?.c).toBe(P.cyan)
   expect(cell(all[1] ?? [], '38%')).toMatchObject({ c: P.fg, b: true })
@@ -424,7 +424,7 @@ test('z folds the pane to one tab above the prompt, and the tab restores it', as
   // The tab's Button (z while the band holds the keys, or a click) opens the pane again, with the keyboard.
   await band.press({ key: 'show' })
   expect(world.opened).toEqual([56])
-  expect(await band.drawn()).toMatchObject({ type: 'Text', children: ['the band beneath'] })
+  expect(lines((await band.drawn()) as Node)).toContain('the band beneath')
   await band.unmount()
   await ui.unmount()
   await land()

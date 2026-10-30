@@ -33,7 +33,7 @@
       "text3": "#c3857f",
       "text4": "#b77c77",
       "border": "#6a2228",
-      "cardBorder": "#8a2c33",
+      "cardBorder": "#b03a43",
       "track": "#56212b",
       "select": "#331017",
       "cyan": "#2fb8c4",
@@ -45,10 +45,10 @@
       "violet": "#ff8a80",
       "railDone": "#1f7f8a",
       "railRun": "#8a2c33",
-      "tabActive": "#ff6158"
+      "tabActive": "#5ef6ff"
     },
     "steps": {
-      "header": { "style": "boxed", "prefix": "JOB // ", "color": "yellow", "frame": "cardBorder", "upper": true, "corners": "┌┐└╱" },
+      "header": { "style": "boxed", "prefix": "› ", "color": "yellow", "frame": "cardBorder", "upper": true, "corners": "╱╲╲╱" },
       "layout": "list",
       "meter": { "style": "bar", "fill": "▰", "empty": "▱" },
       "states": {

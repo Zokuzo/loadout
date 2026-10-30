@@ -17,7 +17,7 @@
       "text3": "#999999",
       "text4": "#949494",
       "border": "#4e4e4e",
-      "cardBorder": "#5a5a5a",
+      "cardBorder": "#767676",
       "track": "#3a3a3a",
       "select": "#303030",
       "cyan": "#5fd7ff",
@@ -32,9 +32,9 @@
       "tabActive": "#d3c7ab"
     },
     "steps": {
-      "header": { "style": "boxed", "prefix": "", "color": "cyan", "frame": "border" },
+      "header": { "style": "boxed", "prefix": "", "color": "cyan", "frame": "cardBorder" },
       "layout": "path",
-      "meter": { "style": "bar", "fill": "■", "empty": "■" },
+      "meter": { "style": "bar", "fill": "█", "empty": "░" },
       "states": {
         "done": { "glyph": "●", "color": "railDone", "labelColor": "text2", "bold": false, "rail": "│", "railColor": "railDone" },
         "active": { "glyph": "◐", "color": "yellow", "labelColor": "fg", "bold": true, "rail": "┆", "railColor": "railRun", "ground": "select" },

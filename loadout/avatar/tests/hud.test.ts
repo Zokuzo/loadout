@@ -16,7 +16,7 @@ import { MASK_COLUMNS, MASK_LEAST, MASK_ROWS, NONE, SKINS, TAGS, agentRows, bloc
 import type { Grid, Runner, Skin, State } from '../hooks/hud'
 import { sheen } from '../hooks/hudpane'
 import { OBJECT_ROWS, chromeFrame, isChrome } from '../hooks/chrome'
-import { HALO_ROWS, cueOf, haloFrame, haloLive, isHalo } from '../hooks/halo'
+import { HALO_ROWS, cueOf, drawnFrame, drawnOf, haloFrame, haloLive, isHalo } from '../hooks/halo'
 import { TRACKER_COLUMNS, trackerRows } from '../hooks/halopane'
 import type { Pose as HiPose } from '../hooks/hires'
 import { CHROME_ROWS, laidOut, laidOutArt, laidOutText, mascotBlocks } from '../hooks/layout'
@@ -35,6 +35,8 @@ import { KIRBY } from '../hooks/sprite'
 import type { Pose } from '../hooks/minis'
 import { LEAVE_MS, NARROWEST, SKY, STAGE_ROWS, TICK_MS, actOf, capOf, sceneOf, stagedOf } from '../hooks/stage'
 import type { Agent } from '../hooks/stage'
+import { lookOf, toPack } from '../../flow/hooks/palette'
+import { PACK_TEXT } from '../../flow/tests/packs'
 
 // A test's limit is wall-clock time, and what these tests do is compute: frames, scenes, layouts. On a
 // machine busy with something else the same work takes several times as long, and the kit's default
@@ -2052,9 +2054,11 @@ for (const theme of ['custom:kirby', 'custom:kirby-pink', 'dark']) {
       await band.unmount()
       await $.turn.complete({ reason: 'aborted', answer: '', durationMs: 1, isAborted: true, turnId: `main-${n}` })
     }
-    // A fixed colour is an agent's dot, in its mini's colour, or the pane's own ground: nothing else.
+    // A fixed colour is an agent's dot, in its mini's colour, or the pane's own ground; or, in the band, the theme's
+    // own pack palette, which the status line and the cards are painted with: nothing else.
     const ground = groundOf(theme)
-    const allowed = [...SWAPS.map((_swap, slot) => colorOf(slot, isLightOf(theme))), ...(ground === undefined ? [] : [hex(ground.pane)])]
+    const pack = Object.values(lookOf(theme, Object.values(PACK_TEXT).flatMap(text => toPack(JSON.parse(text)) ?? [])).P)
+    const allowed = [...SWAPS.map((_swap, slot) => colorOf(slot, isLightOf(theme))), ...(ground === undefined ? [] : [hex(ground.pane)]), ...pack]
     expect([...new Set(seen)].filter(color => color.startsWith('#') && !allowed.includes(color))).toEqual([])
     expect(seen.some(color => color.startsWith('#') && color !== (ground === undefined ? '' : hex(ground.pane)))).toBe(true)
     // The border is the prompt's, a worry's the warning's, a context to clear the error's; the bars turn from success to
@@ -3323,11 +3327,11 @@ test('the Halo pane is the game\'s HUD: a comm line, the figure, the context lef
     const ui = await $.ui.mount(pane(columns))
     const lines = flow(under(await ui.drawn()))
     const said = lines.join('\n')
-    for (const words of ['UNSC LINK', 'COMM ▸ IDLE', 'WAKE ME WHEN YOU NEED ME.', 'MASTER CHIEF · OPUS-5-5', 'MJOLNIR MK VI', 'SHIELD // CONTEXT', 'CREDITS']) expect([columns, words, said.includes(words)]).toEqual([columns, words, true])
-    // The shield is what is left: three quarters of the context, three quarters of the bar.
+    for (const words of ['UNSC LINK', 'COMM ▸ IDLE', 'WAKE ME WHEN YOU NEED ME.', 'MASTER CHIEF · OPUS-5-5', 'MJOLNIR MK VI', 'SHIELD // CONTEXT', 'SESSION COST']) expect([columns, words, said.includes(words)]).toEqual([columns, words, true])
+    // The shield bar is what is left, three quarters of it; the figure is what is used, as /usage says it.
     const bar = lines.find(line => line.startsWith('▐'))
     expect([bar?.length, [...(bar ?? '')].filter(ch => ch === '█').length]).toEqual([columns - 4, Math.round(0.75 * (columns - 6))])
-    expect(lines).toContain(' 75')
+    expect(said.includes('25% USED')).toBe(true)
     for (const line of lines) if (!line.startsWith('<')) expect([columns, line, line.length < columns]).toEqual([columns, line, true])
     expect(widest(await ui.drawn())).toBe(columns - 1)
     // The figure has the pane's width and its own rows, and is drawn in his skin.
@@ -3969,4 +3973,21 @@ test('the Halo skins draw their figure in ASCII as the chrome ones do: Cortana b
   expect([day.family === FAMILIES.halo, dark.family === FAMILIES['halo-dark'], day.isLight, dark.isLight, day.pack?.film, dark.pack?.film]).toEqual([true, true, false, false, false, undefined])
   expect(FORMS.map(form => [nameOf({ family: day.family, form }), nameOf({ family: dark.family, form })])).toEqual([['CORTANA', 'MASTER CHIEF'], ['THE WEAPON', 'KELLY-087'], ['SERINA', 'LINDA-058'], ['ISABEL', 'FRED-104']])
   expect([packText('x', { family: 'halo', variant: 'red' }, '#000000'), packText('x', { family: 'halo' }, '#000000'), packText('x', { family: 'y2k', variant: 'cortana' }, '#000000')].map(text => packOf(text, 'x.json'))).toEqual(Array(3).fill('avatar.variant: red or yellow for cyber, cortana or mjolnir for halo, none elsewhere'))
+})
+
+test('a Halo clip drawn in characters plays centred, cut from the top down; a bad file is none', async () => {
+  const text = JSON.stringify({ columns: 4, rows: 2, frames: [{ glyphs: 'ab cdefg', fg: ['ff0000', '00ff00', '', '0000ff', '111111', '222222', '333333', '444444'] }] })
+  const drawn = drawnOf(text)!
+  expect(drawn.frames[0]!.fg[2]).toBe(NONE)
+  // Two columns of four, one row of two: the middle of the top row.
+  const grid = drawnFrame(drawn, 0, 2, 1)
+  expect(String.fromCharCode(grid.words[0]!, grid.words[3]!)).toBe('b ')
+  expect(grid.words[1]).toBe(0x00ff00)
+  expect(grid.words[4]).toBe(NONE)
+  // A wider pane pads both sides with the ground.
+  const wide = drawnFrame(drawn, 0, 6, 2)
+  expect(String.fromCharCode(...Array.from({ length: 12 }, (_, i) => wide.words[i * 3]!))).toBe(' ab c  defg ')
+  expect(drawnOf('{"columns":4,"rows":2,"frames":[{"glyphs":"short","fg":[]}]}')).toBe(null)
+  expect(drawnOf('{"columns":1,"rows":1,"frames":[{"glyphs":"\\u001b","fg":["ffffff"]}]}')).toBe(null)
+  expect(drawnOf('not json')).toBe(null)
 })

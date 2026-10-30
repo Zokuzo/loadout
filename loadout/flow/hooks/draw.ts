@@ -19,8 +19,11 @@ export type Piece = Seg | { btn: Btn } | { inp: { key: string; width: number } }
 export type Line = Piece[]
 
 export const SPIN = '◐◓◑◒'
-/** The spinner's frame: one step every 450 ms, the handoff's rate. */
-export const spinAt = (now: number): string => SPIN[Math.floor(now / 450) % SPIN.length] ?? '◐'
+/**
+ * The spinner's frame: held on its first. Only an alarm moves (docs/mods/grammar.md, the motion budget); the working
+ * line of frames/ is the one spinner left turning. `now` stays in the signature for the callers.
+ */
+export const spinAt = (_now: number): string => SPIN[0] ?? '◐'
 
 export const isSeg = (p: Piece): p is Seg => 't' in p
 // ponytail: a cell is one UTF-16 unit. A label holding wide characters (CJK, emoji) is counted short and its line is cut
@@ -119,9 +122,9 @@ export function compose(sc: Scene): Drawn {
   const solo = sc.solo ?? []
   // The clock the plain subagents are read at: the pane's, and never before the last thing one of them did.
   const T = Math.max(now, ...solo.flatMap(a => [a.startedAt, a.endedAt, a.flashAt ?? 0, ...a.calls.map(c => c.at)]))
-  /** A step state's node: the pack's cycle for the active one, turning with the clock. */
+  /** A step state's node: the first glyph of the pack's cycle for the active one, held (only an alarm moves). */
   const nodeOf = (name: StepStatusName): string =>
-    (name === 'active' && S.cycle !== null ? S.cycle.glyphs[Math.floor(now / S.cycle.ms) % S.cycle.glyphs.length] : undefined) ?? S.states[name].glyph
+    (name === 'active' && S.cycle !== null ? S.cycle.glyphs[0] : undefined) ?? S.states[name].glyph
   const up = (text: string): string => (S.header.upper ? text.toUpperCase() : text)
   const toolHue = (tool: string): string => {
     const kind = kindOf(tool)

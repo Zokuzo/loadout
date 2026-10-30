@@ -8,6 +8,8 @@ import type { HudView, Meter } from './hudpane'
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 const cut = (text: string, room: number): string => (text.length <= room ? text : room < 1 ? '' : `${text.slice(0, room - 1)}…`)
+/** A share used, as /usage writes it: `6% USED`. */
+const used = (percent: number): string => `${Math.round(percent)}% USED`
 
 /**
  * The colours a run of cells goes through, end to end, on each skin: the game's own. By night the shield's blues, the visor's
@@ -96,16 +98,16 @@ export function haloTree({ Box, Button, Text }: ElementTable, view: HudView): Re
   const left = context?.percent === undefined ? undefined : 100 - Math.min(100, context.percent)
   const charged = left === undefined ? 0 : Math.round((left / 100) * bar)
   const isLow = context?.isAlert === true
-  // A limit: the rounds left in its magazine, and when the next one comes.
+  // A limit: the rounds left in its magazine, and when the next one comes. The figure is what is used, as /usage says it.
   const side = Math.max(8, columns - TRACKER_COLUMNS - 1)
   const magazine = (meter: Meter | undefined, key: string) => {
     const rounds = meter?.percent === undefined ? undefined : 100 - Math.min(100, meter.percent)
     const loaded = rounds === undefined ? 0 : Math.round((rounds / 100) * side)
-    const count = rounds === undefined ? 'N/A' : String(Math.round(rounds)).padStart(3)
+    const count = meter?.percent === undefined ? 'N/A' : used(meter.percent)
 
     return [
       <Box key={`${key}-label`} width={side} justifyContent="space-between">
-        <Text color={dim} wrap="truncate-end">{cut(`${(meter?.label ?? key).replace(/ limit$/i, '')} · ${(meter?.detail ?? '').replace(/^resets in /i, '')}`.toUpperCase(), side - 4)}</Text>
+        <Text color={dim} wrap="truncate-end">{cut(`${(meter?.label ?? key).replace(/ limit$/i, '')} · ${(meter?.detail ?? '').replace(/^resets in /i, '')}`.toUpperCase(), side - count.length - 1)}</Text>
         {meter?.isAlert === true ? <Text color={ink} backgroundColor={alert} bold>{count}</Text> : <Text color={primary} bold>{count}</Text>}
       </Box>,
       <Text key={`${key}-rounds`} wrap="truncate-end">
@@ -154,9 +156,9 @@ export function haloTree({ Box, Button, Text }: ElementTable, view: HudView): Re
       <Box width={columns} justifyContent="space-between">
         <Text wrap="truncate-end">
           <Text color={isLow ? alert : blue} bold>SHIELD</Text>
-          <Text color={dim}>{cut(` // CONTEXT ${context?.detail ?? ''}`.toUpperCase(), Math.max(0, columns - 11))}</Text>
+          <Text color={dim}>{cut(` // CONTEXT ${context?.detail ?? ''}`.toUpperCase(), Math.max(0, columns - 17))}</Text>
         </Text>
-        {left === undefined ? <Text color={dim}>N/A</Text> : isLow ? <Text color={ink} backgroundColor={alert} bold>{String(Math.round(left)).padStart(3)}</Text> : <Text color={blue} bold>{String(Math.round(left)).padStart(3)}</Text>}
+        {context?.percent === undefined ? <Text color={dim}>N/A</Text> : isLow ? <Text color={ink} backgroundColor={alert} bold>{used(context.percent)}</Text> : <Text color={blue} bold>{used(context.percent)}</Text>}
       </Box>
       <Text wrap="truncate-end">
         <Text color={dim}>▐</Text>
@@ -174,7 +176,7 @@ export function haloTree({ Box, Button, Text }: ElementTable, view: HudView): Re
           {magazine(five, '5h')}
           {magazine(week, 'week')}
           <Box width={side} justifyContent="space-between">
-            <Text color={dim}>CREDITS</Text>
+            <Text color={dim}>SESSION COST</Text>
             <Text color={value} bold>{view.cost}</Text>
           </Box>
         </Box>

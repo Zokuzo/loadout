@@ -33,7 +33,7 @@ test('every pack file is a pack; the one that serves a theme is its slug, else i
   expect(packOf('', packs)).toBeNull()
   // The pack's palette is the file's, and its steps style the file's with every optional field filled.
   for (const slug of SLUGS) expect([slug, lookOf(`custom:${slug}`, packs).P]).toEqual([slug, Object.fromEntries(Object.entries(paletteIn(slug)).map(([k, v]) => [k, v.toLowerCase()]))])
-  expect(lookOf('custom:ghostrunner', packs).S).toMatchObject({ layout: 'list', header: { upper: true, corners: '┌┐└╱' }, meter: { fill: '▰', empty: '▱' }, states: { done: { strike: true, edge: '▌' }, active: { ground: 'select', labelColor: 'blue' } }, captions: { optional: 'OPTIONAL' } })
+  expect(lookOf('custom:ghostrunner', packs).S).toMatchObject({ layout: 'list', header: { upper: true, corners: '╱╲╲╱' }, meter: { fill: '▰', empty: '▱' }, states: { done: { strike: true, edge: '▌' }, active: { ground: 'select', labelColor: 'blue' } }, captions: { optional: 'OPTIONAL' } })
   expect(filled('stage {i} of {n} · {left} to go, {what}', { i: 3, n: 6, left: 4 })).toBe('stage 3 of 6 · 4 to go, {what}')
 })
 
@@ -111,8 +111,8 @@ test('the mod reads the packs at session start and applies the active theme\'s: 
   const C = paletteIn('ghostrunner')
   expect((await ui.drawn()) as Node).toMatchObject({ props: { backgroundColor: C.bg } })
   const job = await text(ui)
-  expect(job[0]).toMatch(/^ {2}┌─ JOB \/\/ TUNE THE DOWNHILL SETUP ─+ 2\/6 ─┐$/)
-  expect(job[3]).toMatch(/^ {2}└─+╱$/)
+  expect(job[0]).toMatch(/^ {2}╱─ › TUNE THE DOWNHILL SETUP ─+ 2\/6 ─╲$/)
+  expect(job[3]).toMatch(/^ {2}╲─+╱$/)
   expect(job).toContain('  ▌ ✓ Import the clips')
   expect(await styleOf(ui, 'Import the clips')).toMatchObject({ c: C.text4, x: true })
   expect(job.some(l => /^ {2}█ [◈◆] Rough cut +TRACKED 3\/6$/.test(l))).toBe(true)
@@ -191,10 +191,10 @@ test('each pack draws the four states its own way, readably, and fits every widt
     const active = segOf('Rough cut')
     expect([pack.slug, active.b, states.filter(([label]) => segOf(label).b === true).map(([, name]) => name)]).toEqual([pack.slug, true, S.states.blocked.bold ? ['active', 'blocked'] : ['active']])
     for (const [label, name] of states) if (name !== 'active') expect([pack.slug, name, contrast(active.c ?? P.fg, active.bg ?? P.bg) >= contrast(segOf(label).c ?? P.fg, P.bg)]).toEqual([pack.slug, name, true])
-    // Its node turns with the clock, at the pack's rate, and the same clock draws the same node.
+    // Its node holds still (only an alarm moves): the cycle's first glyph, whatever the clock.
     if (S.cycle !== null) {
       const nodeAt = (now: number) => draw(56, PLAN, false, now).lines.map(shown).find(l => l.includes('Rough cut'))
-      expect([pack.slug, nodeAt(0) === nodeAt(S.cycle.ms - 1), nodeAt(0) !== nodeAt(S.cycle.ms)]).toEqual([pack.slug, true, true])
+      expect([pack.slug, nodeAt(0) === nodeAt(S.cycle.ms), nodeAt(0)?.includes(S.cycle.glyphs[0] ?? '')]).toEqual([pack.slug, true, true])
     }
     // The map: here, next and blocked each under the pack's node, and what blocks a ticket named beside it.
     const way = draw(56, PLAN, true).lines.map(shown)

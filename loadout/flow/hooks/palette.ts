@@ -11,7 +11,7 @@ export type PaletteName = 'handoff' | 'kirby' | 'kirby-pink' | 'ghostrunner' | '
 export const PALETTES: Readonly<Record<PaletteName, Palette>> = {
   handoff: {
     bg: '#262626', page: '#1c1c1c', fg: '#e4e4e4', text2: '#9e9e9e', text3: '#999999', text4: '#949494',
-    border: '#4e4e4e', cardBorder: '#5a5a5a', track: '#3a3a3a', select: '#303030',
+    border: '#4e4e4e', cardBorder: '#767676', track: '#3a3a3a', select: '#303030',
     cyan: '#5fd7ff', green: '#5fd75f', yellow: '#ffd75f', orange: '#ffaf5f', red: '#ff5f5f', blue: '#5fafff', violet: '#af87ff',
     railDone: '#5f875f', railRun: '#8a7a45', tabActive: '#d3c7ab',
   },
@@ -26,15 +26,15 @@ export const PALETTES: Readonly<Record<PaletteName, Palette>> = {
   'kirby-pink': {
     bg: '#2b1724', page: '#2b1724', fg: '#fbe8f0', text2: '#dcc3d0', text3: '#c4a8b7', text4: '#ad8fa0',
     border: '#6b4159', cardBorder: '#9c5f82', track: '#5a3350', select: '#4a2a3e',
-    cyan: '#7fd8f0', green: '#7fe0a8', yellow: '#ffd75e', orange: '#ffa05c', red: '#ff6b7d', blue: '#8ccfff', violet: '#cbb4ff',
+    cyan: '#7fd8f0', green: '#7fe0a8', yellow: '#ffd75e', orange: '#ffa05c', red: '#ff6450', blue: '#8ccfff', violet: '#cbb4ff',
     railDone: '#4f9a72', railRun: '#b8963c', tabActive: '#ff9ec4',
   },
   // Cyberpunk 2077's inventory screen: only red, dark red and light blue. What runs is red, what is done is light blue.
   ghostrunner: {
     bg: '#120608', page: '#120608', fg: '#ffaca1', text2: '#cf8f88', text3: '#c3857f', text4: '#b77c77',
-    border: '#6a2228', cardBorder: '#8a2c33', track: '#56212b', select: '#331017',
+    border: '#6a2228', cardBorder: '#b03a43', track: '#56212b', select: '#331017',
     cyan: '#2fb8c4', green: '#5ef6ff', yellow: '#ff6158', orange: '#ffd2cb', red: '#ff1f47', blue: '#8feaf2', violet: '#ff8a80',
-    railDone: '#1f7f8a', railRun: '#8a2c33', tabActive: '#ff6158',
+    railDone: '#1f7f8a', railRun: '#8a2c33', tabActive: '#5ef6ff',
   },
   // Cyberpunk Edgerunners: the same HUD leaning yellow, on near-black.
   'cyberpunk-edgerunners': {

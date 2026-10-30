@@ -8,7 +8,8 @@
      another state's glyph; caption templates use only {i} {n} {done} {left};
   5. WCAG contrast on flow.palette.bg: text tokens and the steps' label colours 4.5 or more (on the row's ground too,
      where a state has one), accent tokens and the steps' node colours 3 or more; a skin's foreground colours
-     3 or more on the terminal background.
+     3 or more on the terminal background; the mods' pills (bg on tabActive, on red, on a banner's colour) 4.5 or
+     more, a card's frame (header.frame) 3 or more.
 
   6. ../loadout/flow/tests/packs.ts, the copy the plugin's tests draw from, is what the packs say (`--sync` writes it).
 
@@ -128,6 +129,14 @@ def beyond_schema(pack):
     wanted = [(f'flow.palette.{key}', palette[key], 4.5) for key in TEXT] + [(f'flow.palette.{key}', palette[key], 3) for key in ACCENT]
     wanted.append((f'flow.steps.header.color ({steps["header"]["color"]})', palette[steps['header']['color']], 4.5))
     errors += [f'{where} {color} on bg {bg}: contrast {contrast(color, bg):.2f}, needs {least}' for where, color, least in wanted if contrast(color, bg) < least]
+    # The mods' pills (docs/mods/grammar.md): YOUR TURN is bg on tabActive, PROBLEM bg on red, a banner title bg on its colour.
+    pills = [('tabActive', 'YOUR TURN'), ('red', 'PROBLEM')] + ([(steps['header']['color'], 'the banner title')] if steps['header']['style'] == 'banner' else [])
+    errors += [f'flow.palette.bg {bg} on {token} {palette[token]} ({what}): contrast {contrast(bg, palette[token]):.2f}, needs 4.5'
+               for token, what in pills if contrast(bg, palette[token]) < 4.5]
+    # A card's frame (and the rule that closes a frameless one) reads at 3, as any edge.
+    frame = steps['header']['frame']
+    if contrast(palette[frame], bg) < 3:
+        errors.append(f'flow.steps.header.frame ({frame}) {palette[frame]} on bg {bg}: contrast {contrast(palette[frame], bg):.2f}, needs 3 (a card\'s frame)')
     # A step's label reads at 4.5, its node at 3: on the pane, and on the row's own ground where the state has one.
     for name, state in steps['states'].items():
         grounds = [('bg', bg)] + ([(f'ground {state["ground"]}', palette[state['ground']])] if 'ground' in state else [])

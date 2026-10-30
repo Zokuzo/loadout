@@ -731,14 +731,15 @@ test('/loadout avatar and flow open that pane; frames, background and style are 
   expect(w.kept.get('style')).toBe('text')
   expect(await run('style')).toBe('Usage: /loadout style pixel|text|auto (now text).')
 
-  // Status: the three parts in four lines.
+  // Status: the three parts in four lines, and the recall card's rate.
   w.panes = [{ id: 'kirby', title: 'Avatar', isShown: true, isFocused: false, isPlaced: true }]
   const status = (await run('status')).split('\n')
-  expect(status.length).toBe(4)
+  expect(status.length).toBe(5)
   expect(status[0]).toBe('Theme: custom:ghostrunner (the global theme).')
   expect(status[1]).toMatch(/^Pack: the built-in table \(\w+ red, dark, background #[0-9a-f]{6}\)\. Packs: none found/)
   expect(status[2]).toBe(`Pictures: not found. Footage: ${['ghostrunner', 'edgerunners', 'initiald', 'y2k', 'y2kdark', 'halo', 'halodark'].flatMap(world => ['opus', 'sonnet', 'haiku', 'fable'].map(form => `${world}-${form} missing`)).join(', ')}.`)
   expect(status[3]).toBe('Avatar pane: open, style text, background on. Flow map: closed. Frames: on.')
+  expect(status[4]).toMatch(/^Recall: /)
 
   expect(await run('help')).toBe(HELP)
   for (const form of ['/loadout <theme> ', '/loadout <theme> here', '/loadout follow', '/loadout avatar | flow', '/loadout frames on|off', '/loadout background on|off', '/loadout style pixel|text|auto', '/loadout status']) expect(HELP).toContain(form)

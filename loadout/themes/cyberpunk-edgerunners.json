@@ -48,7 +48,7 @@
       "tabActive": "#fcee0a"
     },
     "steps": {
-      "header": { "style": "plain", "prefix": "◆ ", "color": "yellow", "frame": "border", "upper": true },
+      "header": { "style": "plain", "prefix": "◆ ", "color": "yellow", "frame": "cardBorder", "upper": true },
       "layout": "list",
       "meter": { "style": "bar", "fill": "━", "empty": "─" },
       "states": {

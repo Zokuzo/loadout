@@ -568,3 +568,50 @@ export function haloLive(skin: Skin, form: Form, mood: Mood, now: number, column
 
   return haloFrame(skin, form, mood, now, columns, rows, doing, shown.before === undefined ? undefined : { cue: shown.before, at: shown.at })
 }
+
+// --- the footage drawn in characters ---------------------------------------------------------------
+
+/** A clip of footage drawn in characters by `bin/ascii-footage`: per frame, a character and a colour (NONE: the ground) for each cell. */
+export type Drawn = { columns: number; rows: number; frames: readonly { glyphs: string; fg: Uint32Array }[] }
+
+/** A clip's `ascii.json` as read from disk, or null where it is not one: every frame whole, printable characters only. */
+export function drawnOf(text: string): Drawn | null {
+  try {
+    const raw = JSON.parse(text) as { columns?: unknown; rows?: unknown; frames?: { glyphs?: unknown; fg?: unknown }[] }
+    const { columns, rows } = raw
+    if (!Number.isInteger(columns) || !Number.isInteger(rows) || !Array.isArray(raw.frames) || raw.frames.length === 0) return null
+    const cells = (columns as number) * (rows as number)
+    if (cells < 1 || cells > 40_000) return null
+    const frames = raw.frames.map(({ glyphs, fg }) => {
+      if (typeof glyphs !== 'string' || glyphs.length !== cells || !/^[\x20-\x7e]*$/.test(glyphs) || !Array.isArray(fg) || fg.length !== cells) throw new Error('not a frame')
+      return { glyphs, fg: Uint32Array.from(fg, c => (typeof c === 'string' && /^[0-9a-f]{6}$/i.test(c) ? parseInt(c, 16) : NONE)) }
+    })
+
+    return { columns: columns as number, rows: rows as number, frames }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Frame `frame` of a drawn clip in a grid of `columns` by `rows`: centred across, cut at the sides where the pane is
+ * narrower; from the top down, so a pane shorter than the clip keeps the face and loses the chest.
+ */
+export function drawnFrame(drawn: Drawn, frame: number, columns: number, rows: number): Grid {
+  const words = new Uint32Array(Math.max(0, columns * rows) * 3).fill(NONE)
+  for (let i = 0; i < words.length; i += 3) words[i] = 0x20
+  const { glyphs, fg } = drawn.frames[((frame % drawn.frames.length) + drawn.frames.length) % drawn.frames.length]!
+  const left = Math.floor((drawn.columns - columns) / 2)
+  for (let y = 0; y < Math.min(rows, drawn.rows); y++) {
+    for (let x = 0; x < columns; x++) {
+      const from = x + left
+      if (from < 0 || from >= drawn.columns) continue
+      const at = y * drawn.columns + from
+      if (glyphs.charCodeAt(at) === 0x20) continue
+      words[(y * columns + x) * 3] = glyphs.charCodeAt(at)
+      words[(y * columns + x) * 3 + 1] = fg[at]!
+    }
+  }
+
+  return { columns, rows, words }
+}

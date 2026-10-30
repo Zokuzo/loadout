@@ -27,7 +27,7 @@
       "green": "#7fe0a8",
       "yellow": "#ffd75e",
       "orange": "#ffa05c",
-      "red": "#ff6b7d",
+      "red": "#ff6450",
       "blue": "#8ccfff",
       "violet": "#cbb4ff",
       "railDone": "#4f9a72",
@@ -35,9 +35,9 @@
       "tabActive": "#ff9ec4"
     },
     "steps": {
-      "header": { "style": "banner", "prefix": "♥ ", "color": "tabActive", "frame": "border", "upper": true },
+      "header": { "style": "banner", "prefix": "♥ ", "color": "tabActive", "frame": "cardBorder", "upper": true },
       "layout": "path",
-      "meter": { "style": "pips", "fill": "■", "empty": "■" },
+      "meter": { "style": "pips", "fill": "♥", "empty": "♡" },
       "states": {
         "done": { "glyph": "★", "color": "yellow", "labelColor": "text2", "bold": false, "rail": "║", "railColor": "railDone" },
         "active": { "glyph": "●", "color": "tabActive", "labelColor": "fg", "bold": true, "rail": "┊", "railColor": "railRun", "ground": "select" },
