@@ -246,6 +246,8 @@ declare module 'claude-code' {
       mods: ModsState
       /** The band's beat: bumped when what the mods say has moved with the clock, so the band alone is drawn again. */
       modsBeat: number
+      /** Bumped as the Avatar pane goes: the band (and it alone) draws the mods again. */
+      modsBand: number
       // flow
       runs: Run[]; plan: Plan | null; now: number; view: View; way: Way; map: WayMap | null; hist: History; flowTheme: string; solo: Agent[]; packs: { sig: string; list: Pack[] }
       // frames

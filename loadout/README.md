@@ -7,7 +7,7 @@ It is three parts in one plugin (they were the mods `kirby-hud`, `flow-map` and 
 | Part | Folder | What it draws |
 |---|---|---|
 | Avatar | `avatar/` | The "Avatar" side pane: the theme picker, a mascot or character per theme, the agents on a stage, the usage meters. It also tints the terminal background per theme (and, on a light theme, sets the terminal's text colours to dark inks, so code stays readable). |
-| Flow map | `flow/` | The "Flow map" pane: workflow runs, plain subagents, the step plan, the wayfinder map. Registers the tool `mcp__loadout__steps`. |
+| Flow map | `flow/` | The "Flow map" pane: workflow runs, plain subagents (each with its model: `◆ haiku 4.5` on a running card, the family on a finished row, opus orange, sonnet cyan, haiku green, fable violet), the step plan, the wayfinder map. Registers the tool `mcp__loadout__steps`. |
 | Frames | `frames/` | A coloured frame around each conversation row, one hue per kind of action; and the working line in the theme's own words behind its own turning icon (a pack's `spinner`, `THEMES.md`). |
 
 ## The command
@@ -85,19 +85,23 @@ alias cl="$HOME/.claude/plugins/marketplaces/zokuzo/loadout/bin/loadout"
 
 To add a theme, see `THEMES.md`.
 
-## The band above the prompt
+## The status line and the cards, in the Avatar pane
+
+They live at the top of the Avatar pane, above the avatar (the prompt's suggestions cover the pane's foot while `/clear` is typed), each sentence whole on as many lines as it takes. While that pane is not shown (closed, behind another tab, or waiting for a wider terminal), the status line and the /clear and back cards are drawn above the prompt instead, beside the meters; the recall card waits for the pane.
 
 One line tells where the session stands, in the same words on every theme (only the colours are the theme's):
 
 - `▶ RUNNING` a turn runs, or an agent still works after it; `● YOUR TURN` Claude has answered; `○ IDLE` at rest.
 - `△ 2× DENIED` one or two failed calls in a row; `▲ PROBLEM` from three, its glyph blinking for 3 s. The first call that goes through clears it.
 
-Above that line, one card at a time, in the theme's own frame (Halo's `MISSION ▸`, Ghostrunner's hexagon, Kirby's plate):
+In the pane, a calm `RUNNING` and `IDLE` with no card are left unsaid (the avatar's bubble names the call, its legend the agents), so the avatar keeps its rows.
 
-- **before /clear**: the context is past 70 %, or `/clear` is typed. `h` asks Claude for a handoff, `l` for a Professeur lesson where it is on (`LOADOUT_PROF` names its folder; its switch is read, never written).
+Under that line, one card at a time, in the theme's own frame (Halo's `MISSION ▸`, Ghostrunner's hexagon, Kirby's plate):
+
+- **before /clear**: the context is past 70 %, or `/clear` is typed. `h` asks Claude for a handoff, `e` for a Professeur lesson where it is on (`LOADOUT_PROF` names its folder; its switch is read, never written).
 - **back**: after 15 minutes away, what Claude's last answer asks of you, and where the Flow plan stands.
 
-The recall card has a pane of its own, **Recall**: it opens when a turn has run 20 s and the prompt is empty, with a card from your own work, and closes when Claude answers. Click `forgot` or `knew it`, or press `1` or `2` with the pane focused (ctrl+x tab). Spaced by SM-2; `/loadout status` gives the rate known over 30 days. Opened unasked, it shows on a terminal of 144 columns or more (110 once you have opened it), as any pane.
+Then the recall card, when a turn has run 20 s and the prompt is empty: a card from your own work, gone when Claude answers. `f` forgot, `k` knew it (or a click). Spaced by SM-2; `/loadout status` gives the rate known over 30 days. In the pane a key works with the pane focused (ctrl+x tab); the pane's own keys stay theirs (`p` pets, `l` and `0` to `9` the theme picker).
 
 The recall cards come from `bin/recall-deck`, which writes `~/.claude/loadout-deck.json` from the quizzes of the Professeur lessons (in `$LOADOUT_PROF/lecons`) and from the tool errors your sessions hit 5 times or more that say their own remedy. Run it again now and then: a card keeps its schedule.
 

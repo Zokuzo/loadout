@@ -14,7 +14,7 @@ import { CAST, FEED_SHAPE, SLOTS, frameAt, playedOf, reelOf, slotOf } from '../h
 import type { Slot } from '../hooks/reel'
 import { MASK_COLUMNS, MASK_LEAST, MASK_ROWS, NONE, SKINS, TAGS, agentRows, blockRowsOf, hex, maskFrame, modelTag, stateOf, textOf } from '../hooks/hud'
 import type { Grid, Runner, Skin, State } from '../hooks/hud'
-import { sheen } from '../hooks/hudpane'
+import { HUD_ROWS, sheen } from '../hooks/hudpane'
 import { OBJECT_ROWS, chromeFrame, isChrome } from '../hooks/chrome'
 import { HALO_ROWS, cueOf, drawnFrame, drawnOf, haloFrame, haloLive, isHalo } from '../hooks/halo'
 import { TRACKER_COLUMNS, trackerRows } from '../hooks/halopane'
@@ -173,7 +173,7 @@ test('the pane draws Kirby, cost, limits and context; a pet persists', async ($,
   expect([...bytes.slice(0, 12)].map(c => c.charCodeAt(0))).toEqual([0x20, 0, 0, 0, 0x14, 0x24, 0x1b, 0, 0x14, 0x24, 0x1b, 0])
 
   expect(await text()).toContain('$1.23')
-  expect(await text()).toContain('resets in 2h14')
+  expect(await text()).not.toContain('resets in 2h14')
   expect(await text()).toContain('resets in 3d04h')
   expect(await text()).toContain('40k / 200k')
   expect(await text()).toContain('almost used up')
@@ -706,6 +706,41 @@ test('the band is one line of meters while no pane shows, and never a fake 0%', 
   await pane.unmount()
 })
 
+test('the mods live in the Avatar pane, above the avatar: YOUR TURN there and the band empty while the pane shows, the band again while it does not', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  store(on)
+  on('session.usage', () => ({ value: USAGE }))
+  on('ui.blit', () => ({ value: {} }))
+  on('turn.start', () => ({ turnId: 'main' }))
+  on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'Text', props: {}, children: ['the band beneath'] }) as never)
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const said = async (ui: { drawn: () => Promise<unknown> }) => flow(await ui.drawn()).join('\n')
+  // At rest they say nothing: the pane is the avatar's alone.
+  const rest = await $.ui.mount(KIRBY_PANE)
+  expect(await said(rest)).not.toContain('IDLE')
+  await rest.unmount()
+
+  await clock.advance(1000)
+  await $.turn.start({ text: 'go', turnId: 'main' })
+  await clock.advance(1000)
+  await $.turn.complete({ reason: 'answer', answer: 'Done. Shall I push?', durationMs: 1, isAborted: false, turnId: 'main' })
+  const pane = await $.ui.mount(KIRBY_PANE)
+  const lines = flow(await pane.drawn())
+  expect(lines.some(line => line.includes('YOUR TURN'))).toBe(true)
+  expect(lines.findIndex(line => line.includes('YOUR TURN'))).toBeLessThan(lines.findIndex(line => line.startsWith('<')))
+  await pane.unmount()
+  const band = await $.ui.mount(BAND)
+  expect(await said(band)).toBe('the band beneath')
+  await band.unmount()
+
+  panes = []
+  const alone = await $.ui.mount(BAND)
+  expect(await said(alone)).toContain('YOUR TURN')
+  await alone.unmount()
+})
+
 // --- true pixels -------------------------------------------------------------
 
 /** A terminal that draws pictures, its cells 9 by 21 device pixels: kitty. */
@@ -729,7 +764,9 @@ function flow(node: unknown): string[] {
 }
 
 /** The pane under the Loadouts line (picker.tsx; given up where it would cost the mascot): the avatar's own tree, the pane's last child, as these tests read it. */
-const under = (root: unknown): unknown => ((root as { children?: unknown[] }).children ?? []).filter(kid => kid !== null && kid !== undefined && kid !== false).at(-1)
+// (The avatar's tree: the pane's last child. The mods above it, where they show, open on the status line.)
+const isMods = (kid: unknown) => /^ ?[▶●○▲△ ] ?[A-Z]/.test(flow(kid)[0] ?? '')
+const under = (root: unknown): unknown => ((root as { children?: unknown[] }).children ?? []).filter(kid => kid !== null && kid !== undefined && kid !== false && !isMods(kid)).at(-1)
 
 const rgbaOf = (source: unknown) => atob(String((source as { rgba: string }).rgba))
 
@@ -1221,13 +1258,14 @@ test('a ghostrunner theme skins the whole pane as a HUD: Raijin under the banner
 
   // Its captions carry real values: the session's id, its cost, the limits and when they reset, the context; the worry is told in its voice.
   expect(alone[0]).toBe('CONNECTION A1B2.C3.D4')
-  for (const said of ['$1.23', '5H LIMIT // RESETS IN 2H14', 'WEEK LIMIT // RESETS IN 3D04H', 'CONTEXT // 40K / 200K', 'WEEKLY QUOTA RUNNING DRY', 'PROTOCOL // WORRIED']) expect(await text()).toContain(said)
+  expect(await text()).not.toContain('5H LIMIT')
+  for (const said of ['$1.23', 'WEEK LIMIT // RESETS IN 3D04H', 'CONTEXT // 40K / 200K', 'WEEKLY QUOTA RUNNING DRY', 'PROTOCOL // WORRIED']) expect(await text()).toContain(said)
   // Flat bars, the number at the right. Past the worry threshold a bar is not only another colour (a hotter red, on the red
   // skin): it is notched as hazard tape, at the height of any bar, its number a filled tag; and the banner, filled in that colour, ends in stripes.
   const bars = (await ui.findAll({ type: 'Text' })).filter(t => /^[▄▂]+$/.test(String(t.text)))
-  expect(bars.map(t => t.props.color)).toEqual([hex(SKINS.red.primary), hex(SKINS.red.shadow), hex(SKINS.red.alert), hex(SKINS.red.shadow), hex(SKINS.red.primary), hex(SKINS.red.shadow)])
-  expect(bars.map(t => String(t.text).slice(0, 2))).toEqual(['▄▄', '▄▄', '▄▂', '▄▄', '▄▄', '▄▄'])
-  expect(alone.filter(line => /^[▄▂]+ +\d+ 100$/.test(line)).map(line => line.length)).toEqual([33, 33, 33])
+  expect(bars.map(t => t.props.color)).toEqual([hex(SKINS.red.alert), hex(SKINS.red.shadow), hex(SKINS.red.primary), hex(SKINS.red.shadow)])
+  expect(bars.map(t => String(t.text).slice(0, 2))).toEqual(['▄▂', '▄▄', '▄▄', '▄▄'])
+  expect(alone.filter(line => /^[▄▂]+ +\d+ 100$/.test(line)).map(line => line.length)).toEqual([33, 33])
   const filled = (await ui.findAll({ type: 'Text' })).filter(t => t.props.backgroundColor === hex(SKINS.red.alert)).map(t => String(t.text))
   expect(filled).toEqual([' WEEKLY QUOTA RUNNING DRY ▞▞▞', ' 90'])
   // The banner is one line, closed and underlined whatever it says; the block of meters is closed by a cut corner.
@@ -1320,12 +1358,13 @@ test('a ghostrunner theme skins the whole pane as a HUD: Raijin under the banner
   await ui.unmount()
 
   // A pane too short for the whole mask crops it about its visor; shorter still, the HUD alone.
-  // (A pane of `bodyRows` rows for the avatar, and the one above them the Loadouts line takes.)
-  const pane = (bodyRows: number, bodyColumns = 34) => ({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns, scroll: { offset: 0, bodyRows: bodyRows + 1 } } })
-  const short = await $.ui.mount(pane(24))
+  // (A pane of `bodyRows` rows for the avatar, the one above them the Loadouts line takes, and the two under them
+  // the mods take: the turn over, YOUR TURN and a blank row.)
+  const pane = (bodyRows: number, bodyColumns = 34) => ({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns, scroll: { offset: 0, bodyRows: bodyRows + 3 } } })
+  const short = await $.ui.mount(pane(22))
   expect((await short.find({ key: 'kirby' }))?.props.rows).toBe(7)
   await short.unmount()
-  const tiny = await $.ui.mount(pane(18))
+  const tiny = await $.ui.mount(pane(16))
   expect(await tiny.find({ type: 'Raster' })).toBeUndefined()
   expect(flow(await tiny.drawn()).join('\n')).toContain('RAIJIN TACHI')
   await tiny.unmount()
@@ -1336,8 +1375,8 @@ test('a ghostrunner theme skins the whole pane as a HUD: Raijin under the banner
   await roomy.unmount()
 
   // Whatever the pane's height, a running agent is told: the mask never takes the rows of the rule and one block,
-  // and is the same with and without the agent. (From 17 rows: the HUD's fifteen and those two.)
-  const heights = Array.from({ length: 26 }, (_row, i) => 17 + i)
+  // and is the same with and without the agent. (From 15 rows: the HUD's thirteen and those two.)
+  const heights = Array.from({ length: 26 }, (_row, i) => 15 + i)
   const bare = new Map<number, unknown>()
   for (const rows of heights) {
     const before = await $.ui.mount(pane(rows))
@@ -1345,17 +1384,19 @@ test('a ghostrunner theme skins the whole pane as a HUD: Raijin under the banner
     await before.unmount()
   }
   await $.tool.call(inAgent('late', { tool: 'Bash', command: 'true' }))
+  // (An agent at work, the mods say nothing and give their two rows back: the pane is that much shorter for the same avatar.)
   for (const rows of heights) {
-    const ui = await $.ui.mount(pane(rows))
+    const ui = await $.ui.mount({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns: 34, scroll: { offset: 0, bodyRows: rows + 1 } } })
+    expect(((await ui.drawn()) as { children?: unknown[] }).children?.some(isMods)).toBe(false)
     const lines = flow(under(await ui.drawn()))
     expect(lines.some(line => line.includes('SUBNET // 01 PROC'))).toBe(true)
     expect(written(await ui.find({ key: 'stage' })).join('\n')).toContain('[THNK]')
     const maskRows = (await ui.find({ key: 'kirby' }))?.props.rows
     expect(maskRows).toBe(bare.get(rows))
-    // The column fits the pane: the HUD's fifteen rows, the mask, the rule and the blocks.
+    // The column fits the pane: the HUD's thirteen rows, the mask, the rule and the blocks.
     // (The Loadouts line gives its row up at the one height where it would cost the pane its mask: the avatar then has `rows + 1`.)
     const own = rows + ((await ui.find({ key: 'loadout' })) === undefined ? 1 : 0)
-    expect(15 + Number(maskRows ?? 0) + 1 + Number((await ui.find({ key: 'stage' }))?.props.rows)).toBeLessThan(own + 1)
+    expect(HUD_ROWS + Number(maskRows ?? 0) + 1 + Number((await ui.find({ key: 'stage' }))?.props.rows)).toBeLessThan(own + 1)
     await ui.unmount()
   }
 })
@@ -1400,7 +1441,7 @@ test('the Cyberpunk Edgerunners theme is the same HUD in yellow', async ($, on) 
   expect(lines.join('\n')).toContain('ICE HOLDING. STANDING BY.')
   // No session id told, no limits: the captions say so rather than show a made-up figure.
   expect(lines[0]).toBe('CONNECTION')
-  expect(lines.filter(line => line.includes('UNAVAILABLE')).length).toBe(2)
+  expect(lines.filter(line => line.includes('UNAVAILABLE')).length).toBe(1)
   expect(lines.some(line => /\b0 100$/.test(line))).toBe(false)
   const colours = new Set((await ui.findAll({ type: 'Text' })).flatMap(t => [t.props.color, t.props.backgroundColor]))
   expect(colours.has(hex(SKINS.yellow.primary))).toBe(true)
@@ -1706,7 +1747,7 @@ test('in true pixels a short pane keeps the mascot its size and the legend alone
 
   // Whatever the height, from the shortest pane that holds him whole: never a mascot a third of its size to make room for the stage.
   const widths: number[] = []
-  for (let rows = 23; rows <= 40; rows++) {
+  for (let rows = 21; rows <= 38; rows++) {
     const ui = await $.ui.mount(pane(rows))
     const mascot = (await ui.find({ key: 'kirby' }))?.props
     const stage = (await ui.find({ key: 'stage' }))?.props
@@ -1714,12 +1755,12 @@ test('in true pixels a short pane keeps the mascot its size and the legend alone
     widths.push(width)
     expect(width).toBeGreaterThan(45) // two art pixels to a sprite pixel at the least: 20 * 2 + 6
     // The column fits the pane: the meters and the bubble, the mascot, and the stage where there is one.
-    expect(14 + Number(mascot?.rows) + Number(stage?.rows ?? 0)).toBeLessThan(rows + 1)
-    if (rows < 32) expect(stage).toBeUndefined()
-    if (rows < 32 || rows > 33) expect(width).toBe(69)
+    expect(CHROME_ROWS + Number(mascot?.rows) + Number(stage?.rows ?? 0)).toBeLessThan(rows + 1)
+    if (rows < 30) expect(stage).toBeUndefined()
+    if (rows < 30 || rows > 31) expect(width).toBe(69)
     // No stage, the agents are still told: a line of legend each while rows are left, the last one counting the rest.
     const lines = (await ui.findAll({ type: 'Text' })).map(t => String(t.text)).filter(t => /^[●○] .|more$/.test(t))
-    expect(lines.length).toBe(Math.min(5, rows - 14 - Number(mascot?.rows) - Number(stage?.rows ?? 0)))
+    expect(lines.length).toBe(Math.min(5, rows - CHROME_ROWS - Number(mascot?.rows) - Number(stage?.rows ?? 0)))
     await ui.unmount()
   }
   expect(new Set(widths).size).toBeLessThan(3)
@@ -2094,7 +2135,7 @@ test('every mascot form at every pane height is its own pixels, each a whole num
           if (drawn.look.form !== form && drawn.look.form !== 'opus') wrong.push(`${where}, cell blocks: another form`)
           // He is never shrunk for the stage: with agents he is what he is alone, and the column fits the pane wherever plain Kirby does.
           if (JSON.stringify(drawn.size) !== JSON.stringify(laidOut(look, 0, 34, rows, true).size)) wrong.push(`${where}: the mascot moves for the stage`)
-          if (rows >= 24 && CHROME_ROWS + drawn.size.rows + (drawn.stage?.rows ?? 0) + drawn.lines > rows) wrong.push(`${where}, cell blocks: taller than the pane`)
+          if (rows >= 22 && CHROME_ROWS + drawn.size.rows + (drawn.stage?.rows ?? 0) + drawn.lines > rows) wrong.push(`${where}, cell blocks: taller than the pane`)
           // A model's form never takes the pane's last rows: where it is drawn, both agents are still told, on the stage or by name.
           if (alive === 2 && drawn.look.form !== 'opus' && drawn.stage === null && drawn.lines < 2) wrong.push(`${where}, cell blocks: the agents are not told`)
         }
@@ -2119,16 +2160,16 @@ test('every mascot form at every pane height is its own pixels, each a whole num
   expect(wrong).toEqual([])
   // What a short pane shows, by looking at it: a form sliced flat under its cheeks reads worse than plain Kirby, so a model's
   // form is whole or not there; and it is not there on a pane it would fill to the last row, the agents told by nothing at all:
-  // it leaves three rows of legend. Sword Kirby from 42 rows, Fire Kirby from 38, Beam Kirby from 33; plain Kirby, whole, below.
+  // it leaves three rows of legend. Sword Kirby from 40 rows, Fire Kirby from 36, Beam Kirby from 31; plain Kirby, whole, below.
   const kirby = sprites.find(family => family.key === 'kirby')!
   const shownAt = (form: (typeof FORMS)[number], rows: number) => {
     const drawn = laidOut({ family: kirby, form }, 0, 34, rows, true)
 
     return `${nameOf(drawn.look)} ${drawn.size.rows * 2 - 2 >= framesOf(drawn.look)[0]!.length ? 'whole' : 'cut'}`
   }
-  expect([24, 34, 38, 41, 42].map(rows => shownAt('sonnet', rows))).toEqual(['Kirby whole', 'Kirby whole', 'Kirby whole', 'Kirby whole', 'Sword Kirby whole'])
-  expect([24, 30, 34, 37, 38].map(rows => shownAt('fable', rows))).toEqual(['Kirby whole', 'Kirby whole', 'Kirby whole', 'Kirby whole', 'Fire Kirby whole'])
-  expect([24, 29, 32, 33].map(rows => shownAt('haiku', rows))).toEqual(['Kirby whole', 'Kirby whole', 'Kirby whole', 'Beam Kirby whole'])
+  expect([22, 32, 36, 39, 40].map(rows => shownAt('sonnet', rows))).toEqual(['Kirby whole', 'Kirby whole', 'Kirby whole', 'Kirby whole', 'Sword Kirby whole'])
+  expect([22, 28, 32, 35, 36].map(rows => shownAt('fable', rows))).toEqual(['Kirby whole', 'Kirby whole', 'Kirby whole', 'Kirby whole', 'Fire Kirby whole'])
+  expect([22, 27, 30, 31].map(rows => shownAt('haiku', rows))).toEqual(['Kirby whole', 'Kirby whole', 'Kirby whole', 'Beam Kirby whole'])
   // Too narrow for the form, the plain one, whatever the height.
   expect(nameOf(laidOut({ family: kirby, form: 'sonnet' }, 0, 22, 60, true).look)).toBe('Kirby')
 })
@@ -2458,8 +2499,8 @@ test('without footage the cyber Opus is a drawn character of its own, Jack on Gh
   sessionTheme = 'custom:ghostrunner'
   sessionModel = 'claude-opus-5-5'
   await clock.advance(4400)
-  // (28 rows for the avatar, and the Loadouts line above them.)
-  const short = await $.ui.mount({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns: 34, scroll: { offset: 0, bodyRows: 29 } } })
+  // (26 rows for the avatar, and the Loadouts line above them.)
+  const short = await $.ui.mount({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns: 34, scroll: { offset: 0, bodyRows: 27 } } })
   expect((await short.find({ key: 'kirby' }))?.props.rows).toBe(11)
   expect(flow(await short.drawn()).join('\n')).toContain('RAIJIN // OPUS-5-5')
   await short.unmount()
@@ -3350,12 +3391,12 @@ test('the Halo pane is the game\'s HUD: a comm line, the figure, the context lef
   expect([lines.some(line => line.includes('SHIELDS DOWN. /clear')), lines.some(line => line.includes('COMM ▸ WORRIED'))]).toEqual([true, true])
   for (const line of lines) if (!line.startsWith('<')) expect(line.length).toBeLessThan(34)
   await ui.unmount()
-  // A limit nearly spent: said in his words, its magazine nearly empty, and its caption whole on the narrowest pane.
+  // A limit nearly spent: said in his words, its magazine nearly empty (the week's, the one limit there is), and its caption whole on the narrowest pane.
   usage = USAGE
   await clock.advance(4400)
   const low = await $.ui.mount(pane(34))
   const told = flow(under(await low.drawn()))
-  expect([told.some(line => line.includes('LIMIT: SHIELDS LOW')), told.filter(line => /^[▮▯]+$/.test(line)).map(line => line.length), told.some(line => line.endsWith('…') && /LIMIT/.test(line))]).toEqual([true, [21, 21], false])
+  expect([told.some(line => line.includes('LIMIT: SHIELDS LOW')), told.filter(line => /^[▮▯]+$/.test(line)).map(line => line.length), told.some(line => line.endsWith('…') && /LIMIT/.test(line))]).toEqual([true, [21], false])
   await low.unmount()
 })
 

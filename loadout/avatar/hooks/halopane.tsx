@@ -1,6 +1,7 @@
 // The pane as the Halo skins draw it: the game's own HUD in place of the cyber one. A comm line in a round-cornered box, the
 // figure, then the suit's instruments: the context left as a shield bar, a motion tracker with a contact per agent at work,
-// and each limit as rounds left in a magazine. Same rows as the cyber HUD (HUD_ROWS), so the layout is one for both.
+// and the week's limit as rounds left in a magazine. Two rows more than the cyber HUD (HALO_HUD_ROWS in layout.ts): the
+// tracker's five stand beside the magazine and the cost.
 import type { ElementTable, RenderElement } from 'claude-code'
 
 import { hex, mix } from './hud'
@@ -92,7 +93,7 @@ export function haloTree({ Box, Button, Text }: ElementTable, view: HudView): Re
   const model = cut(id, Math.max(0, columns - view.name.length - 7))
   const critical = ['[!] SHIELDS DOWN > /clear', '[!] /clear'].find(text => text.length <= columns) ?? '[!]'
 
-  const [five, week, context] = view.meters as [Meter | undefined, Meter | undefined, Meter | undefined]
+  const [week, context] = view.meters as [Meter | undefined, Meter | undefined]
   // The shield: what is left of the context, as the game's bar across the top of the visor.
   const bar = Math.max(4, columns - 5)
   const left = context?.percent === undefined ? undefined : 100 - Math.min(100, context.percent)
@@ -173,7 +174,6 @@ export function haloTree({ Box, Button, Text }: ElementTable, view: HudView): Re
           ))}
         </Box>
         <Box flexDirection="column" width={side}>
-          {magazine(five, '5h')}
           {magazine(week, 'week')}
           <Box width={side} justifyContent="space-between">
             <Text color={dim}>SESSION COST</Text>

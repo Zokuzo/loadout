@@ -29,7 +29,11 @@ const BLINK_EVERY = 10 // of the cell-block mascot's steps
 const sizeOf = (width: number, height: number) => ({ columns: width + 2, rows: Math.ceil((height + 2) / 2) })
 
 export const LEGEND_MAX = 5 // as many as the widest stage has minis: every mini on stage has its line
-export const CHROME_ROWS = 14 // the bubble's four, name, pet, a blank, cost, three meters of two
+export const CHROME_ROWS = 12 // the bubble's four, name, pet, a blank, cost, two meters of two (week, context)
+// The Halo HUD's: the cyber HUD's, and two more, as its motion tracker is five rows beside the week's magazine and the cost.
+export const HALO_HUD_ROWS = HUD_ROWS + 2
+/** The rows a layout's frame takes besides its mascot and its agents: the HUD's, the Halo HUD's, or the plain pane's. */
+export const chromeRows = (l: Layout): number => ('text' in l ? (isHalo(l.text.skin) ? HALO_HUD_ROWS : HUD_ROWS) : CHROME_ROWS)
 const NARROWEST = KIRBY[0]!.length // no mascot is drawn narrower than plain Kirby
 const PLAIN_ROWS = sizeOf(NARROWEST, KIRBY.length).rows
 const TEXT_RESERVED = 2 // of a text family's pane: the agents' rule and one row of them
@@ -128,7 +132,7 @@ export function laidOutArt(look: Look, alive: number, width: number, rows: numbe
  */
 export function laidOutText(text: TextLook, alive: number, width: number, rows: number, canDraw: boolean, hero?: { who?: Who; cell?: Cell; feed?: Slot }): Layout {
   const columns = Math.max(8, width - 1)
-  const spare = rows - HUD_ROWS
+  const spare = rows - (isHalo(text.skin) ? HALO_HUD_ROWS : HUD_ROWS)
   const room = spare - TEXT_RESERVED
   const laid = (size: { columns: number; rows: number }, more: Partial<Layout> = {}): Layout => {
     const blocks = canDraw && alive > 0 ? blockRowsOf(alive, spare - size.rows - 1) : 0

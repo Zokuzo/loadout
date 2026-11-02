@@ -1,7 +1,7 @@
 // The pane as lines of cells, in the designer's handoff layout: no engine here, so a line's width is
 // known before it is drawn. register.tsx turns each line into Text, Button and Input elements.
 import type { Agent, Plan, Run, Ticket, View, Way, WayMap } from '../../types'
-import { brisk, dur, ENTER_MS, fit, FLASH_MS, inState, isOver, kindOf, LEAVE_MS, LINGER_MS, targetOf, tok, TOOL_MS, TOOL_STEP, toolName, verbOf } from './lib'
+import { brisk, dur, ENTER_MS, fit, FLASH_MS, inState, isOver, kindOf, LEAVE_MS, LINGER_MS, modelOf, targetOf, tok, TOOL_MS, TOOL_STEP, toolName, verbOf } from './lib'
 import type { AgentView, PhaseView, RunView } from './lib'
 import { filled, gradient, mix, STEPS } from './palette'
 import type { Palette, StepState, StepStatusName, StepsStyle } from './palette'
@@ -19,6 +19,8 @@ export type Piece = Seg | { btn: Btn } | { inp: { key: string; width: number } }
 export type Line = Piece[]
 
 export const SPIN = '◐◓◑◒'
+/** The cells a finished row gives its model's family: `sonnet`, the longest. */
+const MODEL_COLS = 6
 /**
  * The spinner's frame: held on its first. Only an alarm moves (docs/mods/grammar.md, the motion budget); the working
  * line of frames/ is the one spinner left turning. `now` stays in the signature for the callers.
@@ -129,6 +131,18 @@ export function compose(sc: Scene): Drawn {
   const toolHue = (tool: string): string => {
     const kind = kindOf(tool)
     return kind === 'read' ? P.blue : kind === 'edit' ? P.yellow : kind === 'shell' ? P.violet : kind === 'web' ? P.cyan : P.text2
+  }
+  // Each model its own colour, the same on every card, row and count: opus warm, sonnet cyan, haiku green, fable violet.
+  const modelHue = (family: string): string => (family === 'opus' ? P.orange : family === 'sonnet' ? P.cyan : family === 'haiku' ? P.green : family === 'fable' ? P.violet : P.text3)
+  /** A running card's model: `◆ haiku 4.5`, bold in its colour; null before the agent has started. */
+  const badge = (a: Agent): Seg | null => {
+    const m = modelOf(a.model)
+    return m === null ? null : s(`◆ ${m.full}`, modelHue(m.family), true)
+  }
+  /** A finished row's model: its family in its colour, in a column of MODEL_COLS cells (blank before it is known). */
+  const modelCol = (a: Agent, bg?: string): Seg => {
+    const m = modelOf(a.model)
+    return s((m === null ? '' : m.family).padEnd(MODEL_COLS), m === null ? P.text4 : modelHue(m.family), false, bg)
   }
   const flow = (x: number) => gradient([[0, P.cyan], [1, P.green]], x)
   const card = (x: number) => gradient([[0, P.cyan], [0.7, P.green], [1, P.yellow]], x)
@@ -266,7 +280,7 @@ export function compose(sc: Scene): Drawn {
       return { btn: { key, label, pad: width, dim: true, act: { a: 'agent', key }, ...(key === cur && view.mode === '' ? { auto: true } : {}), ...(bg === undefined ? {} : { bg }) } }
     }
     // One name column for the finished rows, as a run's: every bar starts at the same column.
-    const room = W - 3 - 11
+    const room = W - 3 - 11 - MODEL_COLS // (the 2-cell gap before the mark became a cell either side of the model)
     const want = Math.min(22, Math.max(9, ...solo.filter(isOver).map(a => a.label.length + 1)))
     const cols = room - want >= 6 ? { name: want, bar: room - want } : { name: room, bar: 0 }
 
@@ -281,8 +295,11 @@ export function compose(sc: Scene): Drawn {
       const dash = k < 0.5 ? '╌' : '─'
       const call = a.calls[a.calls.length - 1]
       const mark = a.steer === '' ? '' : ' ↳'
-      const kind = a.kind === undefined || a.kind === a.label || inner - a.kind.length - mark.length < 14 ? '' : a.kind
-      const name = fit(a.label, Math.max(4, inner - mark.length - (kind === '' ? 0 : kind.length + 1)))
+      // At the right of the name, the model (what the agent runs on, in its colour), else the agent's kind.
+      const model = badge(a)
+      const kind = model !== null || a.kind === undefined || a.kind === a.label || inner - a.kind.length - mark.length < 14 ? '' : a.kind
+      const right = model !== null && inner - model.t.length - mark.length >= 10 ? model : s(kind, P.text3)
+      const name = fit(a.label, Math.max(4, inner - mark.length - (right.t === '' ? 0 : right.t.length + 1)))
       const took = call === undefined ? '' : dur(T - call.at)
       const space = Math.max(4, inner - took.length - (took === '' ? 0 : 2))
       const doing = call !== undefined ? s(fit(`▸ ${verbOf(call.tool)} ${targetOf(call.tool, call.what)}`, space), toolHue(call.tool))
@@ -303,7 +320,7 @@ export function compose(sc: Scene): Drawn {
         return behind >= 0 && behind < 6 ? mix(toolHue(call.tool), P.track, behind / 6) : P.track
       }
       const rows: Line[] = [
-        spread(inner, [s(name, P.fg, true), s(mark, P.blue)], [s(kind, P.text3)]),
+        spread(inner, [s(name, P.fg, true), s(mark, P.blue)], [right]),
         bar(inner, inner, '■', x => hueAt(Math.round(x * (inner - 1))), P.track),
         spread(inner, [doing], [s(took, P.text3)]),
         stats(a, T - a.startedAt, inner, label => pick(a, label, 0)),
@@ -328,7 +345,9 @@ export function compose(sc: Scene): Drawn {
         rail(),
         pick(a, fit(a.label, Math.min(22, cols.name - 1)), cols.name, bg),
         ...(cols.bar > 0 ? bar(cols.bar, Math.round(cols.bar * (1 - gone)), '━', x => dim(fill(x)), dim(P.track)).map(seg => ({ ...seg, ...(bg === undefined ? {} : { bg }) })) : []),
-        s('  ', undefined, false, bg),
+        s(' ', undefined, false, bg),
+        modelCol(a, bg),
+        s(' ', undefined, false, bg),
         // Done, failed (an error or a refusal), stopped (interrupted).
         s(isBad ? (a.stopped === true ? '■' : '✗') : '✓', dim(isBad ? P.red : P.green), isFresh, bg),
         s(dur(a.endedAt - a.startedAt).padStart(8), dim(P.text3), false, bg),
@@ -372,7 +391,9 @@ export function compose(sc: Scene): Drawn {
         rail(),
         pick(v, fit(v.a.label, Math.min(22, cols.name - 1)), cols.name, true, bg),
         ...(cols.bar > 0 ? bar(cols.bar, filledOf(cols.bar, v.prog ?? 0), '━', fill, P.track).map(seg => ({ ...seg, ...(bg === undefined ? {} : { bg }) })) : []),
-        s('  ', undefined, false, bg),
+        s(' ', undefined, false, bg),
+        modelCol(v.a, bg),
+        s(' ', undefined, false, bg),
         v.state === 'done' ? s('✓', P.green, false, bg) : v.state === 'stop' ? s('■', P.red, false, bg) : s('·', P.text4, false, bg),
         s(tok(v.a.tokOut).padStart(7), P.text3, false, bg),
       ]
@@ -385,7 +406,10 @@ export function compose(sc: Scene): Drawn {
       const a = v.a
       const pct = v.prog === null ? '' : `${Math.round(v.prog * 100)}%`
       const mark = a.steer === '' ? '' : ' ↳'
-      const name = fit(a.label, Math.max(4, inner - pct.length - mark.length - 1))
+      // The model first at the right, in its colour, then how far the agent is.
+      const found = badge(a)
+      const model = found !== null && inner - found.t.length - pct.length - mark.length - 2 >= 8 ? found : null
+      const name = fit(a.label, Math.max(4, inner - pct.length - mark.length - 1 - (model === null ? 0 : model.t.length + (pct === '' ? 0 : 2))))
       const call = a.calls[a.calls.length - 1]
       const right = v.est === null ? s('eta —', P.text2) : v.over > 0 ? s(`+${dur(v.over)} over`, P.orange) : s(`eta ${dur(v.rem ?? 0)}`, P.text2)
       const room = Math.max(4, inner - right.t.length - 2)
@@ -398,7 +422,7 @@ export function compose(sc: Scene): Drawn {
         ? bar(inner, inner, '■', x => (Math.abs(Math.round(x * (inner - 1)) - at) <= 1 ? card(x) : P.track), P.track)
         : bar(inner, filledOf(inner, v.prog), '■', card, P.track)
       const rows: Line[] = [
-        spread(inner, [s(name, P.fg, true), s(mark, P.blue)], [s(pct, P.yellow, true)]),
+        spread(inner, [s(name, P.fg, true), s(mark, P.blue)], [...(model === null ? [] : [model, s(pct === '' ? '' : '  ')]), s(pct, P.yellow, true)]),
         cellsOf,
         spread(inner, [doing], [right]),
         stats(a, v.el, inner, label => pick(v, label, 0, true)),
@@ -427,7 +451,7 @@ export function compose(sc: Scene): Drawn {
     const level = { ...fold, agents: fold.agents || view.folded.includes(k) }
     // One name column for the whole run, so every bar starts at the same column; the bar goes first when it is narrow.
     const names = rv.phases.flatMap(p => p.agents.filter(v => v.state !== 'run').map(v => v.a.label.length))
-    const room = W - 3 - 10
+    const room = W - 3 - 10 - MODEL_COLS
     const want = Math.min(22, Math.max(9, ...names.map(n => n + 1)))
     const cols = room - want >= 6 ? { name: want, bar: room - want } : { name: room, bar: 0 }
     const gone = r.spawned - r.agents.length

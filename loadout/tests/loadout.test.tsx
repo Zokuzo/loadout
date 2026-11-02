@@ -876,7 +876,7 @@ for (const theme of ['custom:kirby', 'custom:ghostrunner'] as const) {
       heads.push(head)
       const mascot = Number((await short.find({ key: 'kirby' }))?.props.rows ?? 0)
       // Open, the avatar's own rows (its chrome and its mascot) still fit under the picker.
-      if (head > 1) expect(head + 14 + mascot).toBeLessThan(rows + 1)
+      if (head > 1) expect(head + 12 + mascot).toBeLessThan(rows + 1)
       expect(((await short.drawn()) as { props: { height: number } }).props.height).toBe(rows)
       await short.unmount()
     }
@@ -922,7 +922,7 @@ for (const theme of ['custom:kirby', 'custom:ghostrunner'] as const) {
     }
     // (Kirby's mascot is drawn at every height: its line is never given up. The mask's first height is the one row that gives it up.)
     expect(given).toBe(theme === 'custom:ghostrunner' ? 1 : 0)
-    if (theme === 'custom:ghostrunner') expect(trace.slice(10, 13)).toEqual(['22:0', '23:6', '24:6'])
+    if (theme === 'custom:ghostrunner') expect(trace.slice(8, 11)).toEqual(['20:0', '21:6', '22:6'])
     // Narrow and wide: every line of the picker, open and folded, fits the pane (its body less the dock's last column).
     for (const columns of [22, 28, 34, 46]) {
       const ui = await $.ui.mount(pane(60, columns))

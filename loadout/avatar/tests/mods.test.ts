@@ -23,7 +23,7 @@ test('every pack draws every card and status line within 34, 53 and 96 columns, 
       const inner = Math.min(w, 96) - 4
       const cards = [
         clearCard(91, ['/a/draw.ts', '/a/register.tsx', '/a/mods.ts'], false, P),
-        backCard(47 * 60_000, 'Done.\nShould I approve the schema for T8, then go on to T9 and T10 right away?', { done: 7, of: 10, now: 'T8 auth retry on 401' }, P, S),
+        backCard(47 * 60_000, 'Done.\nShould I approve the schema for T8, then go on to T9 and T10 right away?', { done: 7, of: 10, now: 'T8 auth retry on 401' }, P, S, inner),
         recallCard(card, 4, 84, null, P, inner),
         recallCard(card, 4, 84, { knew: true, next: 6 }, P, inner),
       ]
@@ -102,10 +102,32 @@ test('durations to the minute, what the last answer asks, text wrapped in two li
   expect(wrap('one two three four five six', 9, 2)).toEqual(['one two', 'three fo…'])
 })
 
+test('a card says its sentence whole, on as many lines as it takes: the recall question, the answer and the ask', () => {
+  const pack = PACKS[0]
+  if (pack === null || pack === undefined) return
+  const { palette: P, steps: S } = pack
+  const q = 'Your Bash call failed with "command not found" for a tool you installed this morning in a new shell: what do you check before you try it again?'
+  const ask = 'Do you want me to push the branch, open the pull request and ask for a review now, or wait until the tests are green on CI?'
+  const text = (lines: ReturnType<typeof drawCard>) => lines.map(line => line.map(seg => seg.t).join('')).join(' ').replace(/[│╭╮╰╯─]/g, ' ').replace(/\s+/g, ' ')
+  for (const w of [34, 53]) {
+    const inner = Math.min(w, 96) - 4
+    const recall = text(drawCard(recallCard({ id: 'q', q, a: 'which -a, then the PATH of that shell', src: 't' }, 1, undefined, null, P, inner), P, S, w))
+    const back = text(drawCard(backCard(20 * 60_000, `Done.\n${ask}`, null, P, S, inner), P, S, w))
+    expect([w, recall.includes(q), recall.includes('…')]).toEqual([w, true, false])
+    expect([w, back.includes(ask), back.includes('…')]).toEqual([w, true, false])
+  }
+  // Short of rows, the question gives up lines, never the keys nor the frame.
+  const tight = drawCard(recallCard({ id: 'q', q, a: 'a', src: 't' }, 1, undefined, null, P, 30, 2), P, S, 34)
+  expect([tight.length, tight.flat().filter(seg => seg.key !== undefined).length]).toEqual([5, 2])
+  // Its keys are the pane's free ones: f and k (1 to 9 and 0 pick a theme, l opens the picker, p pets).
+  const keys = drawCard(recallCard({ id: 'q', q, a: 'a', src: 't' }, 1, undefined, null, P, 49), P, S, 53).flat().flatMap(seg => (seg.key === undefined ? [] : [seg.key]))
+  expect([...keys, ...clearCard(80, [], true, P).rows.flat().flatMap(seg => (seg.key === undefined ? [] : [seg.key]))]).toEqual(['f', 'k', 'h', 'e'])
+})
+
 test('widths are terminal cells: an emoji or a CJK character is two, a joiner none, the theme glyphs one', () => {
   expect([cells('ok'), cells('🎓 ok'), cells('漢字'), cells('★♥▶●'), cells('e\u0301')]).toEqual([2, 5, 4, 4, 1])
   const pack = PACKS[0]
   if (pack === null || pack === undefined) return
   const said = 'Fini.\n🎓 Leçon en préparation → /prof ouvre, et la suite du travail est décrite dans le fichier de passation 漢字'
-  for (const w of WIDTHS) for (const line of drawCard(backCard(20 * 60_000, said, null, pack.palette, pack.steps), pack.palette, pack.steps, w)) expect([w, width(line)]).toEqual([w, Math.min(w, 96)])
+  for (const w of WIDTHS) for (const line of drawCard(backCard(20 * 60_000, said, null, pack.palette, pack.steps, Math.min(w, 96) - 4), pack.palette, pack.steps, w)) expect([w, width(line)]).toEqual([w, Math.min(w, 96)])
 })

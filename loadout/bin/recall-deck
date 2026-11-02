@@ -14,7 +14,7 @@ from collections import Counter
 HOME = os.path.expanduser('~')
 PROF = os.path.expanduser(os.environ.get('LOADOUT_PROF', ''))
 OUT = sys.argv[1] if len(sys.argv) > 1 else f'{HOME}/.claude/loadout-deck.json'
-MAX = 90  # characters a side holds: the card is two lines at 53 columns
+MAX = 400  # characters a side holds: the card wraps its sentence whole, 8 lines at most
 PATH = re.compile(r'(?<![\w.])[/~][^\s"\']+')
 
 

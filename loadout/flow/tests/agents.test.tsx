@@ -40,10 +40,10 @@ test('a plain subagent shows on its start, names its tool in the tool\'s colour,
     '  ╰──────────────────────────────────────────────────╯',
   ])
   expect(seen.some(l => /^ {2}[◐◓◑◒] {2}agents ×1 +0s$/.test(l))).toBe(true)
-  // The card: its description as the name, bold; its type beside it, dim; thinking until a tool runs.
-  expect(seen.some(l => /│ Reading kosmos_hs1-2\.png scan general-purpose │$/.test(l))).toBe(true)
+  // The card: its description as the name, bold; the model it runs on beside it, bold in its colour, in place of its type; thinking until a tool runs.
+  expect(seen.some(l => /│ Reading kosmos_hs1-2\.png scan +◆ sonnet │$/.test(l))).toBe(true)
   expect(cell(row(await painted(ui), '│ Reading kosmos'), 'Reading kosmos_hs1-2.png scan')).toMatchObject({ c: P.fg, b: true })
-  expect(cell(row(await painted(ui), '│ Reading kosmos'), 'general-purpose')?.c).toBe(P.text3)
+  expect(cell(row(await painted(ui), '│ Reading kosmos'), '◆ sonnet')).toMatchObject({ c: P.cyan, b: true })
   expect(cell(row(await painted(ui), /^ {2}[◐◓◑◒] {2}agents/), 'agents')).toMatchObject({ c: P.yellow, b: true })
   expect(seen.some(l => /│ ∴ thinking +│$/.test(l))).toBe(true)
   expect(seen.some(l => /│ ↓ 0 out {3}0 tools +0s │$/.test(l))).toBe(true)
@@ -68,10 +68,11 @@ test('a plain subagent shows on its start, names its tool in the tool\'s colour,
   // It answers: one compact row, its mark and how long it ran; the group is done.
   await answer($, 'solo-1', 2_100)
   seen = await text(ui)
-  expect(seen.some(l => /^ {2}│ {2}Reading kosmos_hs1-2… ━+ {2}✓ +10s$/.test(l))).toBe(true)
+  expect(seen.some(l => /^ {2}│ {2}Reading kosmos_hs1-2… ━+ sonnet ✓ +10s$/.test(l))).toBe(true)
   expect(seen.some(l => /^ {2}● {2}agents ×1$/.test(l))).toBe(true)
   expect(seen[0]).toMatch(/ 0 running ─╮$/)
   expect(cell(row(await painted(ui), /✓ +10s/), '✓')?.c).toBe(P.green)
+  expect(cell(row(await painted(ui), /✓ +10s/), 'sonnet')?.c).toBe(P.cyan)
   expect(seen.some(l => /╭─+╮/.test(l) && /[┆│] {2}╭/.test(l))).toBe(false)
   // A while later it is gone, and the pane is as it was.
   await clock.advance(LINGER_MS - 2_000)
@@ -126,12 +127,12 @@ test('an agent whose start was not seen is taken in on its first tool call, from
   await Promise.all([known, mate, unknown])
   await ui.unmount()
 
-  // A teammate's start is not shown either; a fork is, as a fork.
+  // A teammate's start is not shown either; a fork is, its model in place of its kind.
   await $.agent.spawn(solo('a named teammate', 'reviewer', { isTeammate: true }))
   await $.agent.spawn(solo('continue the refactor', 'general-purpose', { fork: true }))
   const again = await $.ui.mount(pane(56, 30))
   expect(await has(again, /a named teammate/)).toBe(false)
-  expect(await has(again, /│ continue the refactor +fork │$/)).toBe(true)
+  expect(await has(again, /│ continue the refactor +◆ sonnet │$/)).toBe(true)
   await again.unmount()
 })
 
@@ -186,7 +187,7 @@ test('selection, the last tool calls and steering work on a plain subagent as on
   expect(await has(ui, /steer Reading kosmos.* ›/)).toBe(true)
   await $.ui.input({ plugin: 'loadout', key: 'steer', text: 'only the first page' })
   expect(world.sent).toEqual([{ to: 'solo-1', text: 'only the first page' }])
-  expect(await has(ui, /│ Reading kosmos.*… ↳ general-purpose │$/)).toBe(true)
+  expect(await has(ui, /│ Reading kosmos_hs1-2\.png scan ↳ +◆ sonnet │$/)).toBe(true)
   expect(await has(ui, /│ ↳ "only the first page" +│$/)).toBe(true)
   await ui.unmount()
 })
