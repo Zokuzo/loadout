@@ -99,6 +99,15 @@ export function tok(n: number): string {
   return `${(n / 1_000_000).toFixed(2)}M`
 }
 
+/** An agent's model as the map names it, from its id: `claude-haiku-4-5` is haiku 4.5; null for none or one it does not know. */
+export function modelOf(id: string): { family: 'opus' | 'sonnet' | 'haiku' | 'fable'; full: string } | null {
+  const m = /(opus|sonnet|haiku|fable)(?:-(\d{1,2})(?!\d)(?:-(\d{1,2})(?!\d))?)?/i.exec(id)
+  if (m === null || m[1] === undefined) return null
+  const family = m[1].toLowerCase() as 'opus' | 'sonnet' | 'haiku' | 'fable'
+
+  return { family, full: m[2] === undefined ? family : `${family} ${m[2]}${m[3] === undefined ? '' : `.${m[3]}`}` }
+}
+
 export const fit = (s: string, n: number): string => (s.length <= n ? s : `${s.slice(0, Math.max(1, n - 1))}…`)
 
 // The kinds of the color-rows mod, so a call is classed the same in both; the pane colours them from its palette.

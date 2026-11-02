@@ -219,11 +219,11 @@ test('a two-phase run is drawn as the handoff draws it: the summary, the rail, c
   // Agent 1 answers: it becomes one row with its bar, its mark and its tokens out, and the summary follows.
   await answer($, 'agent-1')
   seen = await text(ui)
-  expect(seen.some(l => /^ {2}┆ {2}scan the repo ━+ {2}✓ {5}50$/.test(l))).toBe(true)
+  expect(seen.some(l => /^ {2}┆ {2}scan the repo ━+ sonnet ✓ {5}50$/.test(l))).toBe(true)
   expect((await styleOf(ui, '✓'))?.c).toBe(P.green)
   // One agent finished, so the other has an estimate (99% of it); the Review phase has no history, so the run's ETA stays open.
   expect(seen.some(l => /│ —\s+1m 00s\s+50\s+│$/.test(l))).toBe(true)
-  expect(seen.some(l => /│ review auth +99% │$/.test(l))).toBe(true)
+  expect(seen.some(l => /│ review auth +◆ sonnet {2}99% │$/.test(l))).toBe(true)
 
   // Both finished, then a third agent starts: its label is the script's "write the report", so it is in Review.
   await answer($, 'agent-2')
@@ -254,7 +254,7 @@ test('a two-phase run is drawn as the handoff draws it: the summary, the rail, c
   expect(seen.some(l => /│ ■+ +100% │$/.test(l))).toBe(true)
   // Agent 3 never reported its end: it took the run's outcome, and its phase is done.
   expect(seen.some(l => /^ {2}● {2}Review ×1 /.test(l))).toBe(true)
-  expect(seen.some(l => /write the report +━+ {2}✓ +0$/.test(l))).toBe(true)
+  expect(seen.some(l => /write the report +━+ sonnet ✓ +0$/.test(l))).toBe(true)
   expect(seen.some(l => /[◐◓◑◒]/.test(l))).toBe(false)
   await noList(ui)
   // No agent runs: none is selected.
@@ -273,7 +273,7 @@ test('a short pane folds the finished phase to its header and keeps the running 
   const seen = await text(ui)
   expect(seen.some(l => /^ ● {2}Scan ×1 +0s$/.test(l))).toBe(true)
   expect(seen.some(l => /scan the repo/.test(l))).toBe(false)
-  expect(seen.some(l => /│ write the report +│$/.test(l))).toBe(true)
+  expect(seen.some(l => /│ write the report ◆ sonnet │$/.test(l))).toBe(true)
   expect(seen.some(l => /∴ thinking/.test(l))).toBe(true)
   expect(seen.length).toBeLessThanOrEqual(19)
   await ui.unmount()
@@ -335,7 +335,7 @@ test('a resumed run puts the agent it runs again back in its own phase, in place
   let seen = await text(ui)
   expect(seen.some(l => /^ {2}■ {2}Review ×1 +failed$/.test(l))).toBe(true)
   expect((await styleOf(ui, 'Review'))).toMatchObject({ c: P.red, b: true })
-  expect(seen.some(l => /write the report +━* {2}■ +0$/.test(l))).toBe(true)
+  expect(seen.some(l => /write the report +━* sonnet ■ +0$/.test(l))).toBe(true)
   await $.agent.spawn({ ...spawn(3, 'write the report'), tool_use_id: 'call-2' })
   seen = await text(ui)
   expect(seen.some(l => /^ {2}[◐◓◑◒] {2}Review ×1 /.test(l))).toBe(true)
@@ -359,7 +359,7 @@ test('an ended run shows no agent still running: one that never reported took th
   seen = await text(ui)
   expect(seen.some(l => /^ {2}● {2}Scan ×1 /.test(l))).toBe(true)
   expect(seen.some(l => /│ done\s/.test(l))).toBe(true)
-  expect(seen.some(l => /scan the repo +━* {2}✓ /.test(l))).toBe(true)
+  expect(seen.some(l => /scan the repo +━* sonnet ✓ /.test(l))).toBe(true)
   await ui.unmount()
 })
 
@@ -422,7 +422,7 @@ test('agents spawned before the Workflow call answered, with no call id, end up 
   seen = await text(ui)
   expect(await boxes(ui)).toEqual(['ship-it'])
   expect(seen.some(l => /^ {2}■ {2}Scan ×1 +stopped$/.test(l))).toBe(true)
-  expect(seen.some(l => /early bird +━* {2}■ /.test(l))).toBe(true)
+  expect(seen.some(l => /early bird +━* sonnet ■ /.test(l))).toBe(true)
   await ui.unmount()
 })
 

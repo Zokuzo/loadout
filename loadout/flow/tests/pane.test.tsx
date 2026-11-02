@@ -73,6 +73,8 @@ test('each phase state has its node, its colours, its time and its rail', async 
   expect(cell(row(all, '●  review'), '×2')?.c).toBe(P.text4)
   expect(cell(row(all, '●  review'), '7m 00s')?.c).toBe(P.text3)
   expect(cell(row(all, /^ {2}│ {2}code-review/), '│')?.c).toBe(P.railDone)
+  // A finished row names its model's family in the model's colour.
+  expect(cell(row(all, /^ {2}│ {2}code-review/), 'sonnet')?.c).toBe(P.cyan)
   // Running: the spinner, yellow and bold, its elapsed time, a dashed rail.
   expect(seen.some(l => /^ {2}[◐◓◑◒] {2}polish ×2 +17m 17s$/.test(l))).toBe(true)
   expect(cell(row(all, /polish ×2/), 'polish')).toMatchObject({ c: P.yellow, b: true })
@@ -111,7 +113,7 @@ test('each phase state has its node, its colours, its time and its rail', async 
   all = await painted(ui)
   expect(seen).toContain('  ■  polish ×2                                 stopped')
   expect(cell(row(all, '■  polish'), 'polish')).toMatchObject({ c: P.red, b: true })
-  expect(seen.some(l => /^ {2}┆ {2}polish:round-1 +━+ {2}■ {2}24\.3k$/.test(l))).toBe(true)
+  expect(seen.some(l => /^ {2}┆ {2}polish:round-1 +━+ sonnet ■ {2}24\.3k$/.test(l))).toBe(true)
   expect(cell(row(all, /polish:round-1 /), '━')?.c).toBe(P.red)
   // On hold: every phase after it.
   expect(seen.filter(l => /^ {2}○ {2}\w+ +on hold$/.test(l))).toHaveLength(3)
@@ -133,8 +135,9 @@ test('compact rows share one name column, so every bar starts at the same column
     const rows = (await text(ui)).filter(l => /[✓■] +\d+$/.test(l))
     expect(rows).toHaveLength(3)
     // A long name is cut with an ellipsis, to 22 cells at most; the mark and the tokens end every row at the same column.
-    const long = rows.map(l => l.match(/a much longer[^…]*…/)?.[0] ?? '').find(n => n !== '') ?? ''
-    expect([columns, long.length >= 18 && long.length <= 22]).toEqual([columns, true])
+    // At 34 the model column leaves the name 11 cells.
+    const long = rows.map(l => l.match(/a much lon[^…]*…/)?.[0] ?? '').find(n => n !== '') ?? ''
+    expect([columns, long.length >= (columns === 34 ? 11 : 18) && long.length <= 22]).toEqual([columns, true])
     expect(new Set(rows.map(l => l.length)).size).toBe(1)
     // The thin bar is what goes first when the pane narrows.
     expect(new Set(rows.map(l => l.indexOf('━'))).size).toBe(1)
@@ -157,7 +160,7 @@ test('a running agent\'s card: name, percent, gradient bar, the action by tool k
   const at = seen.findIndex(l => /│ polish:round-1 /.test(l))
   expect(seen.slice(at - 1, at + 5)).toEqual([
     '  ┆  ╭───────────────────────────────────────────────╮',
-    '  ┆  │ polish:round-1                            78% │',
+    '  ┆  │ polish:round-1                  ◆ sonnet  78% │',
     '  ┆  │ ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ │',
     '  ┆  │ ▸ editing hud.tsx                  eta 4m 53s │',
     '  ┆  │ ↓ 24.3k out   4 tools                 17m 17s │',
@@ -166,6 +169,8 @@ test('a running agent\'s card: name, percent, gradient bar, the action by tool k
   let all = await painted(ui)
   expect(cell(row(all, '78%'), '78%')).toMatchObject({ c: P.yellow, b: true })
   expect(cell(row(all, '78%'), 'polish:round-1')).toMatchObject({ c: P.fg, b: true })
+  // The model the agent runs on, bold in its colour: sonnet is cyan.
+  expect(cell(row(all, '78%'), '◆ sonnet')).toMatchObject({ c: P.cyan, b: true })
   // An edit is yellow; the eta is dim; the arrow of tokens out is blue.
   expect(cell(row(all, '▸ editing'), '▸ editing hud.tsx')?.c).toBe(P.yellow)
   expect(cell(row(all, '▸ editing'), 'eta 4m 53s')?.c).toBe(P.text2)
@@ -179,7 +184,7 @@ test('a running agent\'s card: name, percent, gradient bar, the action by tool k
   // The other agent searches (blue) and is past its 12m estimate: orange, and its bar reaches the gradient's yellow end.
   expect(cell(row(all, '▸ searching'), '▸ searching "floatSpeed"')?.c).toBe(P.blue)
   expect(cell(row(all, '▸ searching'), '+5m 17s over')?.c).toBe(P.orange)
-  expect(seen.some(l => /│ sprites:round-1 +99% │$/.test(l))).toBe(true)
+  expect(seen.some(l => /│ sprites:round-1 +◆ sonnet {2}99% │$/.test(l))).toBe(true)
 
   // The other kinds, as each tool starts on the second agent: read, write, shell; then none.
   await wait(31_000)
@@ -209,7 +214,7 @@ test('an agent of the running phase that has not started is a compact row with a
   const ui = await $.ui.mount(pane(56, 48))
   const seen = await text(ui)
   expect(seen.some(l => /^ {2}[◐◓◑◒] {2}polish ×3 /.test(l))).toBe(true)
-  expect(seen.some(l => /^ {2}┆ {2}polish:round-1 +━+ {2}· +0$/.test(l))).toBe(true)
+  expect(seen.some(l => /^ {2}┆ {2}polish:round-1 +━+ {8}· +0$/.test(l))).toBe(true)
   const queued = row(await painted(ui), /polish:round-1 +━/)
   expect(cell(queued, '·')?.c).toBe(P.text4)
   expect(queued.filter(r => r.t.includes('━')).every(r => r.c === P.track)).toBe(true)
@@ -227,7 +232,7 @@ test('with no history: "eta —", no percent, and a bar that only walks', async 
   const ui = await $.ui.mount(pane(56, 30))
   await clock.advance(30_000)
   const seen = await text(ui)
-  expect(seen.some(l => /│ scan the repo +│$/.test(l))).toBe(true)
+  expect(seen.some(l => /│ scan the repo +◆ sonnet │$/.test(l))).toBe(true)
   expect(seen.some(l => /│ ∴ thinking +eta — │$/.test(l))).toBe(true)
   expect(seen.some(l => /│ — +30s +0 +│$/.test(l))).toBe(true)
   expect(seen.some(l => / 0% │$/.test(l))).toBe(true)
@@ -324,7 +329,7 @@ test('s steers the selected running agent: the footer becomes a field, Enter sen
   await $.ui.input({ plugin: 'loadout', key: 'steer', text: 'keep the palette at 4 colours' })
   expect(world.sent).toEqual([{ to: 'agent-3', text: 'keep the palette at 4 colours' }])
   seen = await text(ui)
-  expect(seen.some(l => /│ polish:round-1 ↳ +78% │$/.test(l))).toBe(true)
+  expect(seen.some(l => /│ polish:round-1 ↳ +◆ sonnet {2}78% │$/.test(l))).toBe(true)
   expect(cell(row(await painted(ui), 'polish:round-1 ↳'), '↳')?.c).toBe(P.blue)
   expect(seen.slice(-1)).toEqual(['  ↑↓ select  ⏎ actions  s: steer  x: stop  z: hide'])
   // Once its tool call ended, the steered agent's line quotes the message.
