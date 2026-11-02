@@ -8,8 +8,8 @@ import { hex, mix } from './hud'
 import type { Skin } from './hud'
 import type { Mood } from './mascot'
 
-/** The rows the HUD takes besides the mask and the agents: a caption, the banner's three, the name, the controls, a rule, the cost, three meters of two, the frame's foot. */
-export const HUD_ROWS = 15
+/** The rows the HUD takes besides the mask and the agents: a caption, the banner's three, the name, the controls, a rule, the cost, two meters of two (week, context), the frame's foot. */
+export const HUD_ROWS = 13
 
 /** A HUD's own words: what heads the pane, the agents' rule and what it counts them as, the banner's head, the meters' rule. */
 export type Captions = { link: string; crew: string; unit: string; banner: string; meters: string }

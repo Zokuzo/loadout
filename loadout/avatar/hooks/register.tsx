@@ -16,7 +16,7 @@ import { haloTree } from './halopane'
 import { NONE, STATES, agentRows, hex, maskFrame } from './hud'
 import type { Grid, State } from './hud'
 import { HUD_ROWS, hudTree } from './hudpane'
-import { CHROME_ROWS, LEGEND_MAX, encoded, laidOut, laidOutArt, laidOutText, mascotBlocks } from './layout'
+import { CHROME_ROWS, LEGEND_MAX, chromeRows, encoded, laidOut, laidOutArt, laidOutText, mascotBlocks } from './layout'
 import type { Layout } from './layout'
 import { formOf } from './look'
 import type { Form } from './look'
@@ -37,7 +37,7 @@ import { LEAVE_MS, NARROWEST as STAGE_NARROWEST, TICK_MS, sceneOf, stagedOf, too
 import { FLOW_PANE, VIEW as FLOW_VIEW } from '../../flow/hooks/register'
 import type { KirbyHudCall, KirbyHudHelper, KirbyHudLimit, KirbyHudUsage, ModsState, RecallCard, RecallDeck } from '../../types'
 import { lookOf } from '../../flow/hooks/palette'
-import { AWAY_MS, BLINK_MS, MODS, NEW, RECALL_AFTER_MS, width as width_, backCard, clearCard, drawCard, dueCards, recallCard, recallRate, reviewed, statusLine, streakAfter } from './mods'
+import { AWAY_MS, BLINK_MS, CARD_MAX, MODS, NEW, RECALL_AFTER_MS, width as width_, backCard, clearCard, drawCard, dueCards, recallCard, recallRate, reviewed, statusLine, streakAfter } from './mods'
 import type { Card, Line } from './mods'
 
 const usage = atom({ plugin: 'loadout', key: 'usage' } as const, null)
@@ -66,6 +66,7 @@ const mods = atom({ plugin: 'loadout', key: 'mods' } as const, MODS)
 // The band's own beat: written when what it says has moved with the clock, read by the band alone, so the band is drawn
 // again and nothing else is (a pane's frames never start from it).
 const bandBeat = atom({ plugin: 'loadout', key: 'modsBeat' } as const, 0)
+const bandBack = atom({ plugin: 'loadout', key: 'modsBand' } as const, 0)
 
 const PANE = 'kirby'
 const PANE_COLUMNS = 34 // Sword Kirby, the widest form, and a column to spare
@@ -92,7 +93,6 @@ const LIMIT_NEAR = 85
 
 // One accent per meaning, each a key of the person's theme: every theme recolours the pane by itself.
 const COST = 'claude'
-const FIVE = 'suggestion'
 const WEEK = 'planMode'
 const CONTEXT = 'merged' // (not the theme's orange: beside a bar that turns amber it reads as a warning)
 const TRACK = 'subtle'
@@ -102,13 +102,14 @@ const DIM = 'inactive'
 const toUsage = (u: Pick<SessionMeasureInput, 'context' | 'rateLimits' | 'cost'>, startedAt: number | undefined): KirbyHudUsage => ({
   ...(startedAt === undefined ? {} : { startedAt }),
   usd: u.cost?.usd,
-  limits: u.rateLimits.map(l => ({ kind: l.kind, percentUsed: l.percentUsed, resetsAt: l.resetsAt })),
+  // (No 5-hour window: the plan it is drawn for has none, so it is neither shown nor worried about.)
+  limits: u.rateLimits.filter(l => l.kind !== 'five_hour').map(l => ({ kind: l.kind, percentUsed: l.percentUsed, resetsAt: l.resetsAt })),
   tokens: u.context.tokens,
   window: u.context.window,
   percent: u.context.percent,
 })
 
-const LIMIT_NAMES: Record<string, string> = { five_hour: '5h', seven_day: 'weekly' }
+const LIMIT_NAMES: Record<string, string> = { seven_day: 'weekly' }
 
 const WORRY: Worry = { full: 'context is getting full… /clear?', near: limit => `${limit} limit is almost used up…` }
 
@@ -718,6 +719,7 @@ async function slow($: EngineInterface) {
   // A pane behind another tab, or closed, is not drawn: its frames stop, and nothing asks for a
   // redraw that would start them again. Shown again, the engine draws it and they resume.
   if (!(await $.ui.panes()).some(pane => pane.id === PANE && pane.isShown && pane.isPlaced)) {
+    if (isPaneUp) await quiet(update($, bandBack, n => n + 1)) // the band takes the mods back (the hidden pane is not asked to draw)
     isPaneUp = false
     shown = null
 
@@ -726,27 +728,12 @@ async function slow($: EngineInterface) {
   $.ui.invalidate('ui.render') // keeps the countdowns moving
 }
 
-const RECALL = { id: 'recall', title: 'Recall', rows: 7 }
-let isRecallOpen = false
-/** The recall pane opens when its card is due and closes when it no longer is: unasked, so not on a narrow terminal (ui.open). */
-async function beatRecall($: EngineInterface) {
-  const due = (await recallNow($, 60).catch(() => null)) !== null
-  if (due && !isRecallOpen) {
-    isRecallOpen = true
-    const { P } = lookOf(await read($, flowTheme), (await read($, flowPacks)).list)
-    await $.ui.open({ ...RECALL, backgroundColor: P.bg })
-  } else if (!due && isRecallOpen) {
-    isRecallOpen = false
-    await $.ui.close({ id: RECALL.id })
-  }
-}
-
 let bandSaid = ''
-/** The band is drawn again when what it says has moved with the clock: a minute gone by, a card due. */
+/** The mods (in the Avatar pane, or in the band) are drawn again when what they say has moved: a minute gone by, a card due or changed. */
 async function beatBand($: EngineInterface) {
-  void quiet(beatRecall($))
   const shown = await cardNow($, 92).catch(() => null)
-  const said = `${JSON.stringify(await statusNow($, 96))}|${shown === null ? '' : `${shown.card.title}${shown.card.meta}${shown.card.right}`}`
+  const recall = await recallNow($, 92).catch(() => null)
+  const said = `${JSON.stringify(await statusNow($, 96))}|${JSON.stringify(shown?.card ?? null)}|${JSON.stringify(recall?.card ?? null)}`
   if (said !== bandSaid) {
     bandSaid = said
     await update($, bandBeat, n => n + 1)
@@ -1506,7 +1493,7 @@ async function cardNow($: EngineInterface, inner: number): Promise<{ card: Card;
       card: clearCard(u?.percent, m.files, isProf, P),
       press: async key => {
         if (key === 'h') await $.prompt.submit({ text: `Write a handoff to HANDOFF.md before I /clear: the files touched (${m.files.length}), the decisions made, the open questions, and the next step. Short.` })
-        if (key === 'l' && isProf) await $.command.run({ command: 'prof', args: 'leçon' })
+        if (key === 'e' && isProf) await $.command.run({ command: 'prof', args: 'leçon' })
       },
     }
   }
@@ -1515,14 +1502,14 @@ async function cardNow($: EngineInterface, inner: number): Promise<{ card: Card;
     const steps = plan === null || plan.steps.length === 0 ? null
       : { done: plan.steps.filter(st => st.status === 'done').length, of: plan.steps.length, now: plan.steps.find(st => st.status === 'active')?.label ?? '' }
 
-    return { card: backCard(now - m.endAt, m.said, steps, P, S), press: async () => {} }
+    return { card: backCard(now - m.endAt, m.said, steps, P, S, inner), press: async () => {} }
   }
 
   return null
 }
 
-/** The recall card, in a pane of its own (RECALL): due while a turn has run 20 s, the prompt empty, no PROBLEM; gone with the answer. */
-async function recallNow($: EngineInterface, inner: number): Promise<{ card: Card; press: (key: string) => Promise<void> } | null> {
+/** The recall card, in the Avatar pane: due while a turn has run 20 s, the prompt empty, no PROBLEM; gone with the turn. */
+async function recallNow($: EngineInterface, inner: number, rows = 8): Promise<{ card: Card; press: (key: string) => Promise<void> } | null> {
   const m = await read($, mods)
   const now = await $.clock.now()
   const working = await read($, isWorking)
@@ -1534,9 +1521,9 @@ async function recallNow($: EngineInterface, inner: number): Promise<{ card: Car
     if (shown === undefined) return null
 
     return {
-      card: recallCard(shown, due.length, recallRate(deck, now), m.flip === null ? null : { knew: m.flip.knew, next: m.flip.next }, P, inner),
+      card: recallCard(shown, due.length, recallRate(deck, now), m.flip === null ? null : { knew: m.flip.knew, next: m.flip.next }, P, inner, rows),
       press: async key => {
-        if (key === '1' || key === '2') await answer($, shown, key === '2')
+        if (key === 'f' || key === 'k') await answer($, shown, key === 'k')
       },
     }
   }
@@ -1556,6 +1543,39 @@ async function statusNow($: EngineInterface, columns: number): Promise<Line> {
     ...(call === undefined ? {} : { tool: `${call.tool.replace(/^mcp__.*__/, '')} ${call.summary}`.trim() }),
     now: await $.clock.now(),
   }, P, columns)
+}
+
+/**
+ * The mods at the top of the Avatar pane: the status line, then the card due (before /clear, back), then the recall card, each
+ * drawn whole at the pane's width. Their keys work with the pane focused (ctrl+x tab), or with a click.
+ */
+async function modsBlock($: EngineInterface, columns: number, budget = Infinity): Promise<{ lines: Line[]; press: (key: string) => Promise<void> }> {
+  const inner = Math.min(columns, CARD_MAX) - 4
+  const shown = await cardNow($, inner).catch(() => null)
+  const recall = await recallNow($, inner).catch(() => null)
+  const { P, S } = lookOf(await read($, flowTheme), (await read($, flowPacks)).list)
+  const status = await statusNow($, columns)
+  // With no card, IDLE and a calm RUNNING say nothing the avatar does not (its bubble names the call, its legend the
+  // agents): the avatar keeps the whole pane. YOUR TURN, PROBLEM and a △ warning are said.
+  const isCalm = status[0]?.t === '○ IDLE' || (status[0]?.t === '▶' && !status.some(seg => seg.t.includes('△')))
+  const isQuiet = isCalm && shown === null && recall === null
+
+  const lines: Line[] = isQuiet ? [] : [status]
+  const card = shown === null || isQuiet ? [] : drawCard(shown.card, P, S, columns)
+  if (lines.length + card.length <= budget) lines.push(...card)
+  // The recall card keeps its keys and its frame: its question gives up lines first (title, keys and frame are 3).
+  if (recall !== null && !isQuiet && budget - lines.length >= 4) {
+    const cut = await recallNow($, inner, Math.min(8, budget - lines.length - 3)).catch(() => null)
+    if (cut !== null) lines.push(...drawCard(cut.card, P, S, columns))
+  }
+
+  return {
+    lines,
+    press: async key => {
+      await shown?.press(key)
+      await recall?.press(key)
+    },
+  }
 }
 
 /** Lines of segments as Text rows; a segment with a key is a plain Button of that hotkey. */
@@ -1666,7 +1686,7 @@ const turnCompleted: Part<'turn.complete'> = async ($, e, next) => {
     const at = await $.clock.now()
     // The recall card is put away with the answer: it never comes back in the same turn.
     await quiet(update($, mods, m => ({ ...m, endAt: at, said: got.text ?? '', recallShown: m.turnAt, flip: null })))
-    await quiet(beatRecall($))
+    await quiet(beatBand($))
   }
 
   return got
@@ -1753,31 +1773,23 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // The band: the mods' card where one is due, then (while the pane is closed) the status line and the meters,
-  // with a button that opens the pane.
+  // The band, only while the Avatar pane is not shown (closed, behind another tab, or waiting for a wider terminal):
+  // the mods' card where one is due, then the status line and the meters, with a button that opens the pane.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     startTicking($)
     const isUp = (await $.ui.panes()).some(pane => pane.id === PANE && pane.isShown && pane.isPlaced)
     if (e.props.hasSurvey) return next(e)
     await read($, bandBeat) // (drawn again on its beat)
+    await read($, bandBack)
     const { Box, Button, Text } = $.ui.resolve(e)
     const width = e.props.bodyColumns
     const shown = await cardNow($, Math.min(width, 96) - 4).catch(() => null)
     const { P, S } = lookOf(await read($, flowTheme), (await read($, flowPacks)).list)
     const card = shown === null ? null : segRows({ Box, Text, Button }, drawCard(shown.card, P, S, width), shown.press)
-    // The pane shows the meters: the band keeps the card and the status line alone, and says nothing at rest
-    // (an idle session, no card) so whatever else draws there has the band.
-    if (isUp) {
-      const status = await statusNow($, width)
-      const isQuiet = status.length === 1 && status[0]?.t === '○ IDLE'
-      if (card === null && isQuiet) return next(e)
-      const below = await next(e).catch(() => null)
-
-      return <Box flexDirection="column">{card}{isQuiet ? null : segRows({ Box, Text, Button }, [status], async () => {})}{below}</Box>
-    }
+    // The Avatar pane shows the mods above the avatar: the band is left to whatever else draws there.
+    if (isUp) return next(e)
 
     const u = await read($, usage)
-    const five = u?.limits.find(l => l.kind === 'five_hour')
     const week = u?.limits.find(l => l.kind === 'seven_day')
     const part = (label: string, hue: string, percent: number | undefined, toneOf: typeof limitTone, isFirst = false) => (
       <Text>
@@ -1790,17 +1802,16 @@ export const register: Register = on => {
     )
 
     // The meters at the right, the status line in the room they leave. The grammar's order of cuts: the status line's
-    // facts, then $, 5h and wk; never its glyph and word, nor ctx.
+    // facts, then $ and wk; never its glyph and word, nor ctx.
     const pct = (p: number | undefined) => (p === undefined ? 'n/a' : `${Math.round(p)}%`)
     const head = width_(await statusNow($, 0))
-    const sets = [['$', '5h', 'wk'], ['5h', 'wk'], ['wk'], []] as const
+    const sets = [['$', 'wk'], ['wk'], []] as const
     const textOf = (shown: readonly string[]) =>
-      `${[...(shown.includes('$') ? [money(u?.usd)] : []), ...(shown.includes('5h') ? [`5h ${pct(five?.percentUsed)}`] : []), ...(shown.includes('wk') ? [`wk ${pct(week?.percentUsed)}`] : []), `ctx ${pct(u?.percent)}`].join(' · ')} [ kirby ]`
+      `${[...(shown.includes('$') ? [money(u?.usd)] : []), ...(shown.includes('wk') ? [`wk ${pct(week?.percentUsed)}`] : []), `ctx ${pct(u?.percent)}`].join(' · ')} [ kirby ]`
     const kept: readonly string[] = sets.find(shown => head + 2 + textOf(shown).length <= width) ?? []
     const status = await statusNow($, Math.max(head, width - textOf(kept).length - 2))
     const first = kept.includes('$') ? '$' : kept[0] ?? 'ctx'
     const parts = [
-      ...(kept.includes('5h') ? [part('5h', FIVE, five?.percentUsed, limitTone, first === '5h')] : []),
       ...(kept.includes('wk') ? [part('wk', WEEK, week?.percentUsed, limitTone, first === 'wk')] : []),
       part('ctx', CONTEXT, u?.percent, contextTone, first === 'ctx'),
     ]
@@ -1823,19 +1834,6 @@ export const register: Register = on => {
     )
   })
 
-  // The recall pane: the card alone, its keys 1 and 2 (the pane focused) or a click.
-  on('ui.render', { component: 'Pane', requestId: RECALL.id }, async ($, e) => {
-    const { Box, Button, Text } = $.ui.resolve(e)
-    const width = e.props.bodyColumns
-    const shown = await recallNow($, Math.min(width, 96) - 4).catch(() => null)
-    const { P, S } = lookOf(await read($, flowTheme), (await read($, flowPacks)).list)
-    // Painted with the theme's ground over the whole pane, as the Flow map paints its own.
-    const ground = { width, minHeight: e.props.scroll.bodyRows, backgroundColor: P.bg }
-    if (shown === null) return <Box {...ground}><Text color={P.text3}>No card due.</Text></Box>
-
-    return <Box flexDirection="column" {...ground}>{segRows({ Box, Text, Button }, drawCard(shown.card, P, S, width), shown.press)}</Box>
-  })
-
   // The pane: Kirby and the meters at the bottom of a narrow column beside
   // the transcript, on a background of its own where the theme brings one.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -1847,7 +1845,6 @@ export const register: Register = on => {
     const u = await read($, usage)
     const now = await $.clock.now()
     const width = e.props.bodyColumns
-    const five = u?.limits.find(l => l.kind === 'five_hour')
     const week = u?.limits.find(l => l.kind === 'seven_day')
     const isFull = (u?.percent ?? 0) >= CONTEXT_FULL
     const working = await read($, isWorking)
@@ -1883,16 +1880,25 @@ export const register: Register = on => {
       : { ...(hero === undefined ? {} : { who: hero.who }), ...(isArt ? { cell: cell ?? ASSUMED, ...(feed === undefined ? {} : { feed }) } : {}) })
       : canPicture === true && table !== undefined ? laidOutArt({ family, form }, alive.length, width, rows, cell ?? ASSUMED)
       : laidOut({ family, form }, alive.length, width, rows, table !== undefined))
+    // The mods over the avatar (the status line, a card, the recall card), drawn again on their beat. They take the
+    // rows they need: half the pane at most, and never the rows the avatar's own frame cannot do without (its chrome
+    // and its smallest mascot). A card that does not fit is left out whole; the recall question is cut shorter first.
+    await read($, bandBeat)
+    const least = laid(0)
+    const budget = Math.min(Math.floor(bodyRows / 2), bodyRows - (isFull ? 1 : 0) - 1 - chromeRows(least) - least.size.rows) - 1
+    const block = budget < 1 ? null : await modsBlock($, width - 1, budget).catch(() => null)
+    const modsShown = block?.lines ?? []
+    const modsRows = modsShown.length === 0 ? 0 : modsShown.length + 1
     // The Loadouts picker heads the pane: one line folded, a row per theme open. It opens only where
     // the mascot still has its rows under it (and is not dropped for it): on a shorter pane it stays folded.
-    const room = bodyRows - (isFull ? 1 : 0)
+    const room = bodyRows - (isFull ? 1 : 0) - modsRows
     const openRows = pickerRows(offers.length, 'skin' in family)
     // Folded, its line gives way where it would cost the pane its mascot: the avatar is drawn as without the picker.
     const foldRows = laid(room).size.rows > 0 && laid(room - 1).size.rows === 0 ? 0 : 1
     const holds = (rows: number) => {
       const left = laid(rows)
 
-      return rows >= ('text' in left ? HUD_ROWS : CHROME_ROWS) + left.size.rows && (left.size.rows > 0 || laid(room - foldRows).size.rows === 0)
+      return rows >= chromeRows(left) + left.size.rows && (left.size.rows > 0 || laid(room - foldRows).size.rows === 0)
     }
     const canOpen = offers.length > 0 && holds(room - openRows)
     const isPickerOpen = (await read($, isPicking)) && canOpen
@@ -2013,7 +2019,7 @@ export const register: Register = on => {
       ...(family.captions === undefined ? {} : { captions: family.captions }),
       ...(paneGround === undefined ? {} : { ground: { color: hex(paneGround), columns: width } }),
       columns: bubbleColumns,
-      height: bodyRows - headRows,
+      height: bodyRows - headRows - modsRows,
       session: await $.session.id().catch(() => ''),
       model: await read($, model),
       minutes: u?.startedAt === undefined ? undefined : Math.max(0, Math.floor((now - u.startedAt) / 60_000)),
@@ -2031,13 +2037,12 @@ export const register: Register = on => {
       onPet: pet,
       cost: money(u?.usd),
       meters: [
-        limit('5h limit', five),
         limit('week limit', week),
         { label: 'context', percent: u?.percent, isAlert: isFull, detail: u?.tokens === undefined ? 'pending' : `${tokens(u.tokens)} / ${tokens(u.window)}` },
       ],
       isFull,
     }) : (
-      <Box flexDirection="column" height={bodyRows - headRows} justifyContent="flex-end" {...filled}>
+      <Box flexDirection="column" height={bodyRows - headRows - modsRows} justifyContent="flex-end" {...filled}>
         <Box flexDirection="column" alignItems="center" width={width}>
           <Box flexDirection="column" width={Math.max(8, width - 1)}>
             {named.map(legend)}
@@ -2059,7 +2064,6 @@ export const register: Register = on => {
             <Text color={COST} bold>{'cost'.padEnd(5)}{money(u?.usd)}</Text>
             <Text color={DIM}> session</Text>
           </Text>
-          {meter('5h', FIVE, five?.percentUsed, limitTone, reset(five))}
           {meter('week', WEEK, week?.percentUsed, limitTone, reset(week))}
           {meter('ctx', CONTEXT, u?.percent, contextTone, u?.tokens === undefined ? 'pending' : `${tokens(u.tokens)} / ${tokens(u.window)}`)}
           {isFull && <Text color="error" bold inverse> time to /clear </Text>}
@@ -2080,6 +2084,10 @@ export const register: Register = on => {
     // pictures the tree handed back does not hold. (Only a terminal mounts pictures: elsewhere there is nothing to repaint.)
     shown = table === undefined ? null : { layout: drawn, ground, isLight, usage: u, isWorking: working, isBusy: call !== undefined, doing, happyUntil: happy, crew: alive, keys }
 
-    return <Box flexDirection="column" height={bodyRows} {...filled}>{head}{tree}</Box>
+    const mods = block === null || modsRows === 0 ? null
+      : <Box flexDirection="column" {...filled}>{segRows({ Box, Text, Button }, modsShown, block.press)}<Text> </Text></Box>
+
+    // The mods at the top, under the Loadouts line: the prompt's suggestions (typing /clear) cover the pane's foot.
+    return <Box flexDirection="column" height={bodyRows} {...filled}>{head}{mods}{tree}</Box>
   })
 }

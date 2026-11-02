@@ -1,6 +1,6 @@
 // The five mods of docs/mods/grammar.md, as pure functions: the status line (live state and the error light),
-// and the cards of the band above the prompt (before /clear, back after a while away, a recall card while Claude
-// works). Words and glyphs are fixed; a theme only paints them, with its Flow palette and its steps header and meter.
+// and the cards drawn in the Avatar pane (before /clear, back after a while away, a recall card while Claude
+// works), or above the prompt where the Avatar pane is not shown. Words and glyphs are fixed; a theme only paints them, with its Flow palette and its steps header and meter.
 import type { Palette, StepsStyle } from '../../flow/hooks/palette'
 import type { ModsState, RecallCard, RecallDeck } from '../../types'
 
@@ -15,7 +15,7 @@ export const MODS: ModsState = { idleAt: 0, turnAt: 0, endAt: 0, said: '', strea
 
 /**
  * One run of text in one colour: a line of the status or of a card is a list of them. A run with a `key` is a
- * control: drawn `1: forgot` (a plain Button of that hotkey), pressing it does what the key names.
+ * control: drawn `f: forgot` (a plain Button of that hotkey), pressing it does what the key names.
  */
 export type Seg = { t: string; fg?: string; bg?: string; bold?: boolean; key?: string; dim?: boolean }
 export type Line = Seg[]
@@ -212,15 +212,18 @@ export function meter(done: number, of: number, P: Palette, S: StepsStyle): Line
 }
 
 /** The card after a while away: what waits for the person first, then where the plan stands. */
-export function backCard(away: number, said: string, steps: { done: number; of: number; now: string } | null, P: Palette, S: StepsStyle): Card {
+export function backCard(away: number, said: string, steps: { done: number; of: number; now: string } | null, P: Palette, S: StepsStyle, inner: number): Card {
   const ask = lastAsk(said)
+  // The ask whole, on as many lines as it takes (8 at most): the first beside the pill, the others under its words.
+  const [first = '', ...more] = wrap(ask === '' ? 'Claude is waiting for you' : ask, Math.max(8, inner - 11), 8)
 
   return {
     title: 'back',
     meta: `away ${minutes(away)}`,
     right: '',
     rows: [
-      [{ t: '● FOR YOU', fg: P.bg, bg: P.tabActive, bold: true }, cell(`  ${ask === '' ? 'Claude is waiting for you' : ask}`, P.fg)],
+      [{ t: '● FOR YOU', fg: P.bg, bg: P.tabActive, bold: true }, cell(`  ${first}`, P.fg)],
+      ...more.map(l => [cell(`${' '.repeat(11)}${l}`, P.fg)]),
       ...(steps === null ? [] : [meter(steps.done, steps.of, P, S), ...(steps.now === '' ? [] : [[cell('now  ', P.text3), cell(steps.now, P.fg)]])]),
     ],
   }
@@ -243,7 +246,7 @@ export function clearCard(context: number | undefined, files: readonly string[],
     meta: context === undefined ? '' : `ctx ${Math.round(context)}%`,
     right: 'then /clear',
     rows: [
-      [{ t: 'handoff', key: 'h', fg: P.fg }, cell('   '), { t: 'lesson', key: 'l', fg: P.fg, dim: !isProf }],
+      [{ t: 'handoff', key: 'h', fg: P.fg }, cell('   '), { t: 'lesson', key: 'e', fg: P.fg, dim: !isProf }],
       [cell('keeps  ', P.text3), cell(`${files.length} file${files.length === 1 ? '' : 's'}`, P.fg), cell(names.length === 0 ? '' : ` · ${names.join(' ')}${files.length > 2 ? ` +${files.length - 2}` : ''}`, P.text2)],
       [cell('prof   ', P.text3), isProf ? cell('● on', P.green) : cell('○ off (read only)', P.text3)],
     ],
@@ -280,14 +283,14 @@ export function recallRate(deck: RecallDeck, now: number): number | undefined {
 }
 
 /** The recall card: the question, then on the same place the answer and when it comes back. */
-export function recallCard(card: RecallCard, due: number, rate: number | undefined, flipped: { knew: boolean; next: number } | null, P: Palette, inner: number): Card {
+export function recallCard(card: RecallCard, due: number, rate: number | undefined, flipped: { knew: boolean; next: number } | null, P: Palette, inner: number, rows = 8): Card {
   return {
     title: 'recall',
     meta: rate === undefined ? 'new' : `${rate}%`,
     right: `${due} due`,
     rows: flipped === null
-      ? [...wrap(card.q, inner, 2).map(l => [cell(l, P.fg)]), [{ t: 'forgot', key: '1', fg: P.fg }, cell('   '), { t: 'knew it', key: '2', fg: P.fg }]]
-      : [...wrap(`→ ${card.a}`, inner, 2).map(l => [cell(l, P.fg)]), [cell(flipped.knew ? '✓ knew it' : '↺ again soon', flipped.knew ? P.green : P.text2), cell(` · next in ${flipped.next < 1 ? '10m' : `${flipped.next} d`}`, P.text3)]],
+      ? [...wrap(card.q, inner, rows).map(l => [cell(l, P.fg)]), [{ t: 'forgot', key: 'f', fg: P.fg }, cell('   '), { t: 'knew it', key: 'k', fg: P.fg }]]
+      : [...wrap(`→ ${card.a}`, inner, rows).map(l => [cell(l, P.fg)]), [cell(flipped.knew ? '✓ knew it' : '↺ again soon', flipped.knew ? P.green : P.text2), cell(` · next in ${flipped.next < 1 ? '10m' : `${flipped.next} d`}`, P.text3)]],
   }
 }
 
