@@ -2,18 +2,16 @@ import { expect, test } from 'claude-code/testing'
 
 import { toPack } from '../../flow/hooks/palette'
 import { PACK_TEXT } from '../../flow/tests/packs'
-import { MODS, NEW, PROBLEM_AT, cells, backCard, clearCard, drawCard, dueCards, headOf, kindOf, lastAsk, minutes, recallCard, recallRate, reviewed, statusLine, streakAfter, width, wrap } from '../hooks/mods'
+import { MODS, PROBLEM_AT, cells, backCard, clearCard, drawCard, headOf, kindOf, lastAsk, minutes, statusLine, streakAfter, width, wrap } from '../hooks/mods'
 import type { ModsState } from '../../types'
 
 const PACKS = Object.values(PACK_TEXT).map(text => toPack(JSON.parse(text)))
 const WIDTHS = [34, 53, 96] as const
-const DAY = 86_400_000
-const NOW = 100 * DAY
+const NOW = 100 * 86_400_000
 const text = (line: { t: string; key?: string }[]) => line.map(s => (s.key === undefined ? s.t : `${s.key}: ${s.t}`)).join('')
 const failing = (n: number): ModsState => ({ ...MODS, endAt: 5, streak: { n, kind: 'DENIED', what: 'Bash git push', at: NOW - 60_000 } })
 
 test('every pack draws every card and status line within 34, 53 and 96 columns, a card exactly as wide as asked', () => {
-  const card = { id: 'a', q: 'Edit fails: "old_string not found": what do you check first, before anything else?', a: 're-Read the file: it changed since your last Read, so the old text is gone', src: 't' }
   let lines = 0
   for (const pack of PACKS) {
     expect(pack).not.toBeNull()
@@ -24,8 +22,6 @@ test('every pack draws every card and status line within 34, 53 and 96 columns, 
       const cards = [
         clearCard(91, ['/a/draw.ts', '/a/register.tsx', '/a/mods.ts'], false, P),
         backCard(47 * 60_000, 'Done.\nShould I approve the schema for T8, then go on to T9 and T10 right away?', { done: 7, of: 10, now: 'T8 auth retry on 401' }, P, S, inner),
-        recallCard(card, 4, 84, null, P, inner),
-        recallCard(card, 4, 84, { knew: true, next: 6 }, P, inner),
       ]
       for (const one of cards) {
         for (const line of drawCard(one, P, S, w)) {
@@ -81,20 +77,6 @@ test('a run of failures: its kind, and the first call that goes through ends it'
   expect(streakAfter(s, false, 'Bash', '', '', 9).n).toBe(0)
 })
 
-test('recall: SM-2 on two grades, the cards due first, the rate over 30 days', () => {
-  const one = reviewed(NEW, true, 0)
-  const two = reviewed(one, true, 0)
-  const three = reviewed(two, true, 0)
-  expect([one.interval, two.interval, three.interval]).toEqual([1, 6, Math.round(6 * two.ef)])
-  const lost = reviewed(three, false, 0)
-  expect([lost.reps, lost.due, lost.ef < three.ef]).toEqual([0, 10 * 60_000, true])
-  const cards = [{ id: 'a', q: 'qa', a: 'aa', src: '' }, { id: 'b', q: 'qb', a: 'ab', src: '' }, { id: 'c', q: 'qc', a: 'ac', src: '' }]
-  const deck = { sched: { a: { ...NEW, due: NOW + DAY }, b: { ...NEW, due: NOW - DAY } }, log: [{ at: NOW, id: 'b', knew: true }, { at: NOW, id: 'a', knew: false }, { at: NOW - 40 * DAY, id: 'a', knew: false }] }
-  expect(dueCards(deck, cards, NOW).map(c => c.id)).toEqual(['b', 'c']) // a seen card due first (a forgotten one is back in 10 minutes), then the new ones
-  expect(recallRate(deck, NOW)).toBe(50)
-  expect(recallRate({ sched: {}, log: [] }, NOW)).toBeUndefined()
-})
-
 test('durations to the minute, what the last answer asks, text wrapped in two lines', () => {
   expect([minutes(59_999), minutes(4 * 60_000), minutes(72 * 60_000)]).toEqual(['0m', '4m', '1h12'])
   expect(lastAsk('Done: **3 files**.\n\n1. Should I commit?\nThat is all.')).toBe('Should I commit?')
@@ -102,26 +84,19 @@ test('durations to the minute, what the last answer asks, text wrapped in two li
   expect(wrap('one two three four five six', 9, 2)).toEqual(['one two', 'three fo…'])
 })
 
-test('a card says its sentence whole, on as many lines as it takes: the recall question, the answer and the ask', () => {
+test('a card says its sentence whole, on as many lines as it takes: what the last answer asks', () => {
   const pack = PACKS[0]
   if (pack === null || pack === undefined) return
   const { palette: P, steps: S } = pack
-  const q = 'Your Bash call failed with "command not found" for a tool you installed this morning in a new shell: what do you check before you try it again?'
   const ask = 'Do you want me to push the branch, open the pull request and ask for a review now, or wait until the tests are green on CI?'
   const text = (lines: ReturnType<typeof drawCard>) => lines.map(line => line.map(seg => seg.t).join('')).join(' ').replace(/[│╭╮╰╯─]/g, ' ').replace(/\s+/g, ' ')
   for (const w of [34, 53]) {
     const inner = Math.min(w, 96) - 4
-    const recall = text(drawCard(recallCard({ id: 'q', q, a: 'which -a, then the PATH of that shell', src: 't' }, 1, undefined, null, P, inner), P, S, w))
     const back = text(drawCard(backCard(20 * 60_000, `Done.\n${ask}`, null, P, S, inner), P, S, w))
-    expect([w, recall.includes(q), recall.includes('…')]).toEqual([w, true, false])
     expect([w, back.includes(ask), back.includes('…')]).toEqual([w, true, false])
   }
-  // Short of rows, the question gives up lines, never the keys nor the frame.
-  const tight = drawCard(recallCard({ id: 'q', q, a: 'a', src: 't' }, 1, undefined, null, P, 30, 2), P, S, 34)
-  expect([tight.length, tight.flat().filter(seg => seg.key !== undefined).length]).toEqual([5, 2])
-  // Its keys are the pane's free ones: f and k (1 to 9 and 0 pick a theme, l opens the picker, p pets).
-  const keys = drawCard(recallCard({ id: 'q', q, a: 'a', src: 't' }, 1, undefined, null, P, 49), P, S, 53).flat().flatMap(seg => (seg.key === undefined ? [] : [seg.key]))
-  expect([...keys, ...clearCard(80, [], true, P).rows.flat().flatMap(seg => (seg.key === undefined ? [] : [seg.key]))]).toEqual(['f', 'k', 'h', 'e'])
+  // Drawn at the narrowest pane a card keeps its keys, the pane's free ones: h and e (1 to 9 and 0 pick a theme, l opens the picker, p pets).
+  expect(drawCard(clearCard(80, [], true, P), P, S, 34).flat().flatMap(seg => (seg.key === undefined ? [] : [seg.key]))).toEqual(['h', 'e'])
 })
 
 test('widths are terminal cells: an emoji or a CJK character is two, a joiner none, the theme glyphs one', () => {

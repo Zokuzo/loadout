@@ -81,13 +81,13 @@ alias cl="$HOME/.claude/plugins/marketplaces/zokuzo/loadout/bin/loadout"
 - Claude themes (colours): `~/.claude/themes/<slug>.json`, and the built-in ones. The plugin ships its own in `colors/` and copies them there at its first start (see Install). `loadout.json` and `loadout-<tag>.json` there are the live files, written by Loadout: do not edit them.
 - Theme packs (background, mascot, Flow map look): `themes/<slug>.json`, in this folder. Without that folder the built-in tables answer.
 - Pictures and footage: `assets/<slot>/`, one folder per character (below).
-- What is kept between sessions (pet count, style, background switch, frames on or off, the Flow map's learned durations, the recall cards' schedule and answers): this plugin's own store. At its first start it copies what the three old mods kept.
+- What is kept between sessions (pet count, style, background switch, frames on or off, the Flow map's learned durations): this plugin's own store. At its first start it copies what the three old mods kept.
 
 To add a theme, see `THEMES.md`.
 
 ## The status line and the cards, in the Avatar pane
 
-They live at the top of the Avatar pane, above the avatar (the prompt's suggestions cover the pane's foot while `/clear` is typed), each sentence whole on as many lines as it takes. While that pane is not shown (closed, behind another tab, or waiting for a wider terminal), the status line and the /clear and back cards are drawn above the prompt instead, beside the meters; the recall card waits for the pane.
+They live at the top of the Avatar pane, above the avatar (the prompt's suggestions cover the pane's foot while `/clear` is typed), each sentence whole on as many lines as it takes. While that pane is not shown (closed, behind another tab, or waiting for a wider terminal), the status line and the cards are drawn above the prompt instead, beside the meters.
 
 One line tells where the session stands, in the same words on every theme (only the colours are the theme's):
 
@@ -101,9 +101,7 @@ Under that line, one card at a time, in the theme's own frame (Halo's `MISSION â
 - **before /clear**: the context meter is past 70 % (of the model's window, or of 300k tokens where the window is wider: a 1M model raises it at 210k), or `/clear` is typed. `h` asks Claude for a handoff, `e` for a Professeur lesson where it is on (`LOADOUT_PROF` names its folder; its switch is read, never written).
 - **back**: after 15 minutes away, what Claude's last answer asks of you, and where the Flow plan stands.
 
-Then the recall card, when a turn has run 20 s and the prompt is empty: a card from your own work, gone when Claude answers. `f` forgot, `k` knew it (or a click). Spaced by SM-2; `/loadout status` gives the rate known over 30 days. In the pane a key works with the pane focused (ctrl+x tab); the pane's own keys stay theirs (`p` pets, `l` and `0` to `9` the theme picker).
-
-The recall cards come from `bin/recall-deck`, which writes `~/.claude/loadout-deck.json` from the quizzes of the Professeur lessons (in `$LOADOUT_PROF/lecons`) and from the tool errors your sessions hit 5 times or more that say their own remedy. Run it again now and then: a card keeps its schedule.
+In the pane a card's key works with the pane focused (ctrl+x tab), or with a click; the pane's own keys stay theirs (`p` pets, `l` and `0` to `9` the theme picker).
 
 ## The characters: one per theme and model
 

@@ -35,9 +35,9 @@ import { SWAPS, colorOf } from './minis'
 import { stageFrame, stagedOf as stagedArt } from './scene'
 import { LEAVE_MS, NARROWEST as STAGE_NARROWEST, TICK_MS, sceneOf, stagedOf, toolAct } from './stage'
 import { FLOW_PANE, VIEW as FLOW_VIEW } from '../../flow/hooks/register'
-import type { KirbyHudCall, KirbyHudHelper, KirbyHudLimit, KirbyHudUsage, ModsState, RecallCard, RecallDeck } from '../../types'
+import type { KirbyHudCall, KirbyHudHelper, KirbyHudLimit, KirbyHudUsage } from '../../types'
 import { lookOf } from '../../flow/hooks/palette'
-import { AWAY_MS, BLINK_MS, CARD_MAX, MODS, NEW, RECALL_AFTER_MS, width as width_, backCard, clearCard, drawCard, dueCards, recallCard, recallRate, reviewed, statusLine, streakAfter } from './mods'
+import { AWAY_MS, BLINK_MS, CARD_MAX, MODS, width as width_, backCard, clearCard, drawCard, statusLine, streakAfter } from './mods'
 import type { Card, Line } from './mods'
 
 const usage = atom({ plugin: 'loadout', key: 'usage' } as const, null)
@@ -734,8 +734,7 @@ let bandSaid = ''
 /** The mods (in the Avatar pane, or in the band) are drawn again when what they say has moved: a minute gone by, a card due or changed. */
 async function beatBand($: EngineInterface) {
   const shown = await cardNow($, 92).catch(() => null)
-  const recall = await recallNow($, 92).catch(() => null)
-  const said = `${JSON.stringify(await statusNow($, 96))}|${JSON.stringify(shown?.card ?? null)}|${JSON.stringify(recall?.card ?? null)}`
+  const said = `${JSON.stringify(await statusNow($, 96))}|${JSON.stringify(shown?.card ?? null)}`
   if (said !== bandSaid) {
     bandSaid = said
     await update($, bandBeat, n => n + 1)
@@ -1370,7 +1369,6 @@ async function loadoutStatus($: EngineInterface): Promise<string> {
     `Pack: ${now.by} (${now.told}). Packs: ${now.packs}.`,
     `Pictures: ${now.pictures}. Footage: ${now.footage}.`,
     `Avatar pane: ${paneOf(PANE)}, style ${now.style}, background ${now.isTinting ? 'on' : 'off'}. Flow map: ${paneOf(FLOW_PANE.id)}. Frames: ${(await read($, framesOn)) ? 'on' : 'off'}.`,
-    await recallStatus($),
   ].join('\n')
 }
 
@@ -1411,30 +1409,6 @@ async function loadoutCommand($: EngineInterface, ask: LoadoutAsk): Promise<stri
 
 // --- the mods (docs/mods/grammar.md): the status line, and the cards of the band ---
 
-const DECK = 'loadout-deck.json' // in the config folder: bin/recall-deck writes it
-let deckCards: readonly RecallCard[] = []
-const NO_DECK: RecallDeck = { sched: {}, log: [] }
-
-async function home($: EngineInterface): Promise<string> {
-  return (await $.env.get('CLAUDE_CONFIG_DIR').catch(() => undefined)) ?? `${(await $.env.get('HOME').catch(() => undefined)) ?? '~'}/.claude`
-}
-
-async function loadDeck($: EngineInterface) {
-  const text = await $.fs.read(`${await home($)}/${DECK}`).then(got => (typeof got === 'string' ? got : ''), () => '')
-  try {
-    const list: unknown = JSON.parse(text)
-    if (Array.isArray(list)) deckCards = list.filter((c): c is RecallCard => typeof c === 'object' && c !== null && typeof c.id === 'string' && typeof c.q === 'string' && typeof c.a === 'string')
-  } catch {
-    // no deck yet: no recall card
-  }
-}
-
-const deckOf = async ($: EngineInterface): Promise<RecallDeck> => {
-  const kept = await $.store.get('recall').catch(() => undefined) as RecallDeck | undefined
-
-  return kept !== undefined && typeof kept === 'object' && kept !== null && 'sched' in kept && 'log' in kept ? kept : NO_DECK
-}
-
 /** Whether Professeur is on: its switch, state.json in the folder LOADOUT_PROF names, is read, never written. */
 async function isProfOn($: EngineInterface): Promise<boolean> {
   const dir = await $.env.get('LOADOUT_PROF').catch(() => undefined)
@@ -1446,36 +1420,6 @@ async function isProfOn($: EngineInterface): Promise<boolean> {
   } catch {
     return false
   }
-}
-
-/**
- * The answer to the recall card shown: the card turns over first, in one write, so a second press (a double tap, 1 then 2)
- * finds it turned and does nothing; then its schedule moves and the answer is logged.
- */
-async function answer($: EngineInterface, card: RecallCard, knew: boolean) {
-  const now = await $.clock.now()
-  let isMine = false
-  await update($, mods, m => {
-    if (m.flip !== null) return m
-    isMine = true
-
-    return { ...m, flip: { id: card.id, knew, next: knew ? 1 : 0 } }
-  })
-  if (!isMine) return
-  const deck = await deckOf($)
-  const next = reviewed(deck.sched[card.id] ?? NEW, knew, now)
-  await $.store.set('recall', { sched: { ...deck.sched, [card.id]: next }, log: [...deck.log, { at: now, id: card.id, knew }].slice(-2000) })
-  await update($, mods, m => (m.flip?.id === card.id ? { ...m, flip: { id: card.id, knew, next: next.interval } } : m))
-}
-
-/** `Recall: 84% known over 30 days, 4 due of 46.` for /loadout status. */
-async function recallStatus($: EngineInterface): Promise<string> {
-  const now = await $.clock.now()
-  const deck = await deckOf($)
-  const rate = recallRate(deck, now)
-  if (deckCards.length === 0) return 'Recall: no deck yet (run bin/recall-deck).'
-
-  return `Recall: ${rate === undefined ? 'no answer yet' : `${rate}% known over 30 days (${deck.log.filter(l => now - l.at <= 30 * 86_400_000).length} answers)`}, ${dueCards(deck, deckCards, now).length} due of ${deckCards.length}.`
 }
 
 /** The card the band shows now, by the grammar's order (before /clear, then back), and what pressing its keys does. */
@@ -1510,29 +1454,6 @@ async function cardNow($: EngineInterface, inner: number): Promise<{ card: Card;
   return null
 }
 
-/** The recall card, in the Avatar pane: due while a turn has run 20 s, the prompt empty, no PROBLEM; gone with the turn. */
-async function recallNow($: EngineInterface, inner: number, rows = 8): Promise<{ card: Card; press: (key: string) => Promise<void> } | null> {
-  const m = await read($, mods)
-  const now = await $.clock.now()
-  const working = await read($, isWorking)
-  const { P } = lookOf(await read($, flowTheme), (await read($, flowPacks)).list)
-  if (working && m.streak.n < 3 && m.prompt.trim() === '' && now - m.turnAt >= RECALL_AFTER_MS && m.recallShown !== m.turnAt) {
-    const deck = await deckOf($)
-    const due = dueCards(deck, deckCards, now)
-    const shown = m.flip === null ? due[0] : deckCards.find(c => c.id === m.flip?.id)
-    if (shown === undefined) return null
-
-    return {
-      card: recallCard(shown, due.length, recallRate(deck, now), m.flip === null ? null : { knew: m.flip.knew, next: m.flip.next }, P, inner, rows),
-      press: async key => {
-        if (key === 'f' || key === 'k') await answer($, shown, key === 'k')
-      },
-    }
-  }
-
-  return null
-}
-
 /** The status line's facts now, painted with the Flow palette. */
 async function statusNow($: EngineInterface, columns: number): Promise<Line> {
   const m = await read($, mods)
@@ -1548,36 +1469,24 @@ async function statusNow($: EngineInterface, columns: number): Promise<Line> {
 }
 
 /**
- * The mods at the top of the Avatar pane: the status line, then the card due (before /clear, back), then the recall card, each
+ * The mods at the top of the Avatar pane: the status line, then the card due (before /clear, back), each
  * drawn whole at the pane's width. Their keys work with the pane focused (ctrl+x tab), or with a click.
  */
 async function modsBlock($: EngineInterface, columns: number, budget = Infinity): Promise<{ lines: Line[]; press: (key: string) => Promise<void> }> {
   const inner = Math.min(columns, CARD_MAX) - 4
   const shown = await cardNow($, inner).catch(() => null)
-  const recall = await recallNow($, inner).catch(() => null)
   const { P, S } = lookOf(await read($, flowTheme), (await read($, flowPacks)).list)
   const status = await statusNow($, columns)
   // With no card, IDLE and a calm RUNNING say nothing the avatar does not (its bubble names the call, its legend the
   // agents): the avatar keeps the whole pane. YOUR TURN, PROBLEM and a △ warning are said.
   const isCalm = status[0]?.t === '○ IDLE' || (status[0]?.t === '▶' && !status.some(seg => seg.t.includes('△')))
-  const isQuiet = isCalm && shown === null && recall === null
+  const isQuiet = isCalm && shown === null
 
   const lines: Line[] = isQuiet ? [] : [status]
   const card = shown === null || isQuiet ? [] : drawCard(shown.card, P, S, columns)
   if (lines.length + card.length <= budget) lines.push(...card)
-  // The recall card keeps its keys and its frame: its question gives up lines first (title, keys and frame are 3).
-  if (recall !== null && !isQuiet && budget - lines.length >= 4) {
-    const cut = await recallNow($, inner, Math.min(8, budget - lines.length - 3)).catch(() => null)
-    if (cut !== null) lines.push(...drawCard(cut.card, P, S, columns))
-  }
 
-  return {
-    lines,
-    press: async key => {
-      await shown?.press(key)
-      await recall?.press(key)
-    },
-  }
+  return { lines, press: async key => shown?.press(key) }
 }
 
 /** Lines of segments as Text rows; a segment with a key is a plain Button of that hotkey. */
@@ -1616,9 +1525,9 @@ const started: Part<'session.start'> = async ($, e, next) => {
   await quiet(findAssets($))
   await quiet(installColours($))
   await quiet(loadOffers($))
-  await quiet(loadDeck($))
+  await quiet($.store.delete('recall')) // 1.11 and 1.12 kept the recall card's schedule and answers there
   const at = await $.clock.now()
-  await quiet(update($, mods, m => ({ ...MODS, ...m, idleAt: at, endAt: 0, said: '', streak: MODS.streak, flip: null, files: [] })))
+  await quiet(update($, mods, m => ({ ...MODS, ...m, idleAt: at, endAt: 0, said: '', streak: MODS.streak, files: [] })))
   // Unasked, the pane only seats on a wide terminal; /kirby seats it at any width.
   void $.ui.open(OPEN).catch(() => {})
 
@@ -1670,7 +1579,7 @@ const turnStarted: Part<'turn.start'> = async ($, e, next) => {
   await quiet(update($, calls, () => []))
   const at = await $.clock.now()
   // (The prompt sent has left the box: a draft typed from now on is a new one.)
-  await quiet(update($, mods, m => ({ ...m, turnAt: at, flip: null, prompt: '' })))
+  await quiet(update($, mods, m => ({ ...m, turnAt: at, prompt: '' })))
 
   return next(e)
 }
@@ -1686,8 +1595,7 @@ const turnCompleted: Part<'turn.complete'> = async ($, e, next) => {
   const got = await next(e)
   if (e.agentId === undefined) {
     const at = await $.clock.now()
-    // The recall card is put away with the answer: it never comes back in the same turn.
-    await quiet(update($, mods, m => ({ ...m, endAt: at, said: got.text ?? '', recallShown: m.turnAt, flip: null })))
+    await quiet(update($, mods, m => ({ ...m, endAt: at, said: got.text ?? '' })))
     await quiet(beatBand($))
   }
 
@@ -1752,7 +1660,7 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // The draft, for the mods: a recall card waits for an empty prompt, the /clear card comes as /clear is typed.
+  // The draft, for the mods: the /clear card comes as /clear is typed.
   // A history recall, a clear, a fill:
   on('prompt.change', async ($, e, next) => {
     await quiet(update($, mods, m => (m.prompt === e.text ? m : { ...m, prompt: e.text })))
@@ -1882,9 +1790,9 @@ export const register: Register = on => {
       : { ...(hero === undefined ? {} : { who: hero.who }), ...(isArt ? { cell: cell ?? ASSUMED, ...(feed === undefined ? {} : { feed }) } : {}) })
       : canPicture === true && table !== undefined ? laidOutArt({ family, form }, alive.length, width, rows, cell ?? ASSUMED)
       : laidOut({ family, form }, alive.length, width, rows, table !== undefined))
-    // The mods over the avatar (the status line, a card, the recall card), drawn again on their beat. They take the
+    // The mods over the avatar (the status line, a card), drawn again on their beat. They take the
     // rows they need: half the pane at most, and never the rows the avatar's own frame cannot do without (its chrome
-    // and its smallest mascot). A card that does not fit is left out whole; the recall question is cut shorter first.
+    // and its smallest mascot). A card that does not fit is left out whole.
     await read($, bandBeat)
     const least = laid(0)
     const budget = Math.min(Math.floor(bodyRows / 2), bodyRows - (isFull ? 1 : 0) - 1 - chromeRows(least) - least.size.rows) - 1

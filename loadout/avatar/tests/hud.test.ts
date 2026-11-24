@@ -755,6 +755,39 @@ test('the mods live in the Avatar pane, above the avatar: YOUR TURN there and th
   await alone.unmount()
 })
 
+test('a long turn asks nothing of the person: no recall card in the pane, whatever deck file an older version left; that file is not read, and the answers that version kept are dropped', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  const kept = store(on, { pets: 3, recall: { sched: {}, log: [{ at: NOW, id: 'q1', knew: true }] } })
+  on('store.delete', (_$, e) => {
+    kept.delete(e.key)
+
+    return { value: undefined }
+  })
+  const read: string[] = []
+  on('fs.read', (_$, e) => {
+    read.push(e.path)
+    if (!e.path.endsWith('/loadout-deck.json')) throw new Error('ENOENT')
+
+    return { value: JSON.stringify([{ id: 'q1', q: 'What do you check first?', a: 'the file again', src: 't' }]) }
+  })
+  on('session.usage', () => ({ value: USAGE }))
+  on('ui.blit', () => ({ value: {} }))
+  on('turn.start', () => ({ turnId: 'main' }))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect([...kept.keys()]).toEqual(['pets'])
+  await clock.advance(1000)
+  await $.turn.start({ text: 'go', turnId: 'main' })
+  await clock.advance(25_000)
+  const wide = { ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns: 53 } }
+  const pane = await $.ui.mount(wide)
+  expect(flow(await pane.drawn()).join('\n')).not.toMatch(/recall|What do you check first/)
+  expect((await pane.findAll({ type: 'Button' })).map(button => button.props.hotkey).filter(key => key === 'f' || key === 'k')).toEqual([])
+  await pane.unmount()
+  // The deck file is the person's own and no longer Loadout's to read.
+  expect(read.filter(path => path.endsWith('/loadout-deck.json'))).toEqual([])
+})
+
 // --- true pixels -------------------------------------------------------------
 
 /** A terminal that draws pictures, its cells 9 by 21 device pixels: kitty. */

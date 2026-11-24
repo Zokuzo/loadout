@@ -1,21 +1,18 @@
-// The five mods of docs/mods/grammar.md, as pure functions: the status line (live state and the error light),
-// and the cards drawn in the Avatar pane (before /clear, back after a while away, a recall card while Claude
-// works), or above the prompt where the Avatar pane is not shown. Words and glyphs are fixed; a theme only paints them, with its Flow palette and its steps header and meter.
+// The mods of docs/mods/grammar.md, as pure functions: the status line (live state and the error light),
+// and the cards drawn in the Avatar pane (before /clear, back after a while away), or above the prompt where the Avatar pane is not shown. Words and glyphs are fixed; a theme only paints them, with its Flow palette and its steps header and meter.
 import type { Palette, StepsStyle } from '../../flow/hooks/palette'
-import type { ModsState, RecallCard, RecallDeck } from '../../types'
+import type { ModsState } from '../../types'
 
 export const AWAY_MS = 15 * 60_000 // away this long, the card that says where things stand
-export const RECALL_AFTER_MS = 20_000 // a turn this long, and the prompt empty, the recall card
 export const PROBLEM_AT = 3 // failures in a row that make a PROBLEM
 export const BLINK_MS = 3000 // the alarm glyph alternates this long, every 500 ms, then holds
 export const CARD_MAX = 96
-const DAY = 86_400_000
 
-export const MODS: ModsState = { idleAt: 0, turnAt: 0, endAt: 0, said: '', streak: { n: 0, kind: '', what: '', at: 0 }, files: [], prompt: '', backSeen: 0, recallShown: 0, flip: null }
+export const MODS: ModsState = { idleAt: 0, turnAt: 0, endAt: 0, said: '', streak: { n: 0, kind: '', what: '', at: 0 }, files: [], prompt: '', backSeen: 0 }
 
 /**
  * One run of text in one colour: a line of the status or of a card is a list of them. A run with a `key` is a
- * control: drawn `f: forgot` (a plain Button of that hotkey), pressing it does what the key names.
+ * control: drawn `h: handoff` (a plain Button of that hotkey), pressing it does what the key names.
  */
 export type Seg = { t: string; fg?: string; bg?: string; bold?: boolean; key?: string; dim?: boolean }
 export type Line = Seg[]
@@ -131,7 +128,7 @@ export type Card = {
   title: string
   /** What follows the title, never in capitals: a duration, a rate. */
   meta: string
-  /** At the right end of the title: a count, a key. */
+  /** At the right end of the title: a short hint, such as `then /clear`. */
   right: string
   rows: Line[]
 }
@@ -250,47 +247,6 @@ export function clearCard(context: number | undefined, files: readonly string[],
       [cell('keeps  ', P.text3), cell(`${files.length} file${files.length === 1 ? '' : 's'}`, P.fg), cell(names.length === 0 ? '' : ` · ${names.join(' ')}${files.length > 2 ? ` +${files.length - 2}` : ''}`, P.text2)],
       [cell('prof   ', P.text3), isProf ? cell('● on', P.green) : cell('○ off (read only)', P.text3)],
     ],
-  }
-}
-
-// --- recall: SM-2 on two grades ---
-
-export type Schedule = { ef: number; reps: number; interval: number; due: number }
-export const NEW: Schedule = { ef: 2.5, reps: 0, interval: 0, due: 0 }
-
-/** SM-2 with two grades: forgot (again in 10 minutes, ease down), knew it (1 day, 6 days, then times the ease). */
-export function reviewed(was: Schedule, knew: boolean, now: number): Schedule {
-  if (!knew) return { ef: Math.max(1.3, was.ef - 0.2), reps: 0, interval: 0, due: now + 10 * 60_000 }
-  const reps = was.reps + 1
-  const interval = reps === 1 ? 1 : reps === 2 ? 6 : Math.round(was.interval * was.ef)
-
-  return { ef: Math.min(3, was.ef + 0.05), reps, interval, due: now + interval * DAY }
-}
-
-/** The cards due now: the seen ones first, the most overdue first (a forgotten card is back in 10 minutes), then the new ones. */
-export function dueCards(deck: RecallDeck, cards: readonly RecallCard[], now: number): RecallCard[] {
-  const seen = cards.filter(c => deck.sched[c.id] !== undefined && (deck.sched[c.id]?.due ?? 0) <= now)
-    .sort((a, b) => (deck.sched[a.id]?.due ?? 0) - (deck.sched[b.id]?.due ?? 0))
-
-  return [...seen, ...cards.filter(c => deck.sched[c.id] === undefined)]
-}
-
-/** The share of answers "knew it" over the last 30 days, or undefined before any. */
-export function recallRate(deck: RecallDeck, now: number): number | undefined {
-  const recent = deck.log.filter(l => now - l.at <= 30 * DAY)
-
-  return recent.length === 0 ? undefined : Math.round((100 * recent.filter(l => l.knew).length) / recent.length)
-}
-
-/** The recall card: the question, then on the same place the answer and when it comes back. */
-export function recallCard(card: RecallCard, due: number, rate: number | undefined, flipped: { knew: boolean; next: number } | null, P: Palette, inner: number, rows = 8): Card {
-  return {
-    title: 'recall',
-    meta: rate === undefined ? 'new' : `${rate}%`,
-    right: `${due} due`,
-    rows: flipped === null
-      ? [...wrap(card.q, inner, rows).map(l => [cell(l, P.fg)]), [{ t: 'forgot', key: 'f', fg: P.fg }, cell('   '), { t: 'knew it', key: 'k', fg: P.fg }]]
-      : [...wrap(`→ ${card.a}`, inner, rows).map(l => [cell(l, P.fg)]), [cell(flipped.knew ? '✓ knew it' : '↺ again soon', flipped.knew ? P.green : P.text2), cell(` · next in ${flipped.next < 1 ? '10m' : `${flipped.next} d`}`, P.text3)]],
   }
 }
 
