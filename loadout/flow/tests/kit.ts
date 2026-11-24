@@ -132,7 +132,8 @@ export const engine = (on: Parameters<TestBody>[1], init: { theme?: string; hist
     world.sent.push({ to: e.to, text: e.text })
     return world.isDelivered ? { isDelivered: true as const } : { isDelivered: false as const, reason: 'the recipient is gone' }
   })
-  on('ui.focus', (_, e) => {
+  // The ring's move carries the plugin's own name, not the test's: heard under every name.
+  on('ui.focus', { plugin: '*' }, (_, e) => {
     world.focused.push(e.element ?? '')
     return {}
   })
