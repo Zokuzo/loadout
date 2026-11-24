@@ -54,7 +54,7 @@ const SECTION = {
   id: 'flow-map:steps',
   scope: 'session',
   text:
-    `Step map: at the start of any task with 3 or more steps (a build, a video edit, research), call the ${TOOL} tool with a short title and the full ordered step list, one step "active". ` +
+    `Step map: at the start of any task with 3 or more steps (a build, a video edit, research), call the ${TOOL} tool with a short title and the full ordered step list (each label 5 words at most), one step "active". ` +
     'Call it again with the full list whenever a step changes status. It only updates a side pane the user watches; skip it for shorter tasks and inside subagents. ' +
     'While the wayfinder skill is active the pane already shows the wayfinder map read from its files: do not re-post the map through this tool.',
 } as const
@@ -71,7 +71,7 @@ const STEPS_SCHEMA = {
         type: 'object',
         required: ['label', 'status'],
         properties: {
-          label: { type: 'string' },
+          label: { type: 'string', description: 'What the step does, 5 words at most.' },
           status: { type: 'string', enum: ['pending', 'active', 'done', 'blocked'] },
         },
       },

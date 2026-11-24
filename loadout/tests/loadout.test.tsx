@@ -53,7 +53,7 @@ type Init = {
 function world(on: On, init: Init = {}) {
   const w = {
     file: `{\n  "model": "opus",\n  "theme": "${init.theme ?? 'custom:ghostrunner'}"\n}\n`,
-    sets: [] as unknown[], writes: [] as string[], opened: [] as string[], copied: [] as string[], toasts: [] as string[], commands: [] as string[], tools: [] as string[],
+    sets: [] as unknown[], writes: [] as string[], opened: [] as string[], copied: [] as string[], toasts: [] as string[], commands: [] as string[], tools: [] as string[], schemas: [] as string[],
     kept: new Map(Object.entries(init.store ?? {})),
     panes: [] as UiPane[],
     reads: [] as string[],
@@ -124,6 +124,7 @@ function world(on: On, init: Init = {}) {
   on('tool.register', (_$, e) => {
     if (init.noTool === true) throw new Error('no tools here')
     w.tools.push(e.name)
+    w.schemas.push(JSON.stringify(e.inputSchema))
 
     return { value: { tool: `mcp__loadout__${e.name}` } }
   })
@@ -989,6 +990,8 @@ test('the three parts start together in one plugin: every command, the tool unde
   await $.session.start(START)
   expect([...w.commands].sort()).toEqual(['avatar', 'colors', 'flow', 'kirby', 'loadout'])
   expect(w.tools).toEqual(['steps'])
+  // The tool's own input says how long a step label is.
+  expect(w.schemas[0]).toMatch(/"label":\{[^}]*5 words at most/)
   const composed = await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], outputStyle: null, traits: [], tools: ['mcp__loadout__steps'] })
   expect(composed.sections.map(section => section.id)).toEqual(['flow-map:steps'])
   expect(composed.sections[0]?.text).toContain('call the mcp__loadout__steps tool')

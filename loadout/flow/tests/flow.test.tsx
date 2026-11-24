@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { agentView, brief, busy, gist, kindOf, lingering, newRun, nextPhase, noted, parseMeta, parseSites, RUN_LINGER_MS, runView, seatOf, targetOf, toHistory, toPlan, verbOf } from '../hooks/lib'
+import { agentView, brief, busy, fitTwo, gist, kindOf, lingering, newRun, nextPhase, noted, parseMeta, parseSites, RUN_LINGER_MS, runView, seatOf, targetOf, toHistory, toPlan, verbOf } from '../hooks/lib'
 import { PALETTES } from '../hooks/palette'
 import type { Agent } from '../../types'
 import { answer, engine, HIST, inAgent, lines, notify, paint, pane, ROUNDS, SCRIPT, spawn, step } from './kit'
@@ -30,6 +30,8 @@ test('parseMeta reads the name and the phase titles', () => {
 test('toPlan refuses a malformed plan', () => {
   expect(typeof toPlan({ title: 't', steps: [{ label: 'a', status: 'nope' }] })).toBe('string')
   expect(toPlan({ title: 't', steps: [{ label: 'a', status: 'done' }] })).toEqual({ title: 't', steps: [{ label: 'a', status: 'done' }] })
+  // A label is one line of words: no line break, no doubled space, no space at either end.
+  expect(toPlan({ title: 't', steps: [{ label: '  Write the\n  test ', status: 'done' }] })).toMatchObject({ steps: [{ label: 'Write the test' }] })
 })
 
 test('progress is elapsed over the estimate, capped at 99%; past it the agent is over; with no history there is neither', () => {
@@ -459,6 +461,63 @@ test('the steps tool replaces the plan, drawn on the same rail as a run\'s phase
 
   const bad = await $.tool.call({ tool: 'mcp__loadout__steps', tool_use_id: 's2', title: 'x', steps: 'nope' })
   expect(bad.deny ?? bad.text).toMatch(/steps:/)
+})
+
+test('fitTwo: one line when it holds the text, else two cut at a space, the second ending in an ellipsis', () => {
+  expect(fitTwo('Rough cut', 9, 20)).toEqual(['Rough cut'])
+  expect(fitTwo('Write the failing test', 10, 20)).toEqual(['Write the', 'failing test'])
+  expect(fitTwo('Write the failing test', 9, 7)).toEqual(['Write the', 'failin…'])
+  // A word longer than the line is cut where the line ends.
+  expect(fitTwo('Supercalifragilistic word', 5, 20)).toEqual(['Super', 'califragilistic word'])
+  // A space that opens the text is no place to cut: the first line is never empty.
+  expect(fitTwo(' Supercalifragilistic', 5, 20)).toEqual([' Supe', 'rcalifragilistic'])
+  // A cut at the space would lose the end of a long word, and a cut where the line ends holds it all: that one is taken.
+  expect(fitTwo('Refactor loadout/flow/hooks/register.tsx section', 25, 29)).toEqual(['Refactor loadout/flow/hoo', 'ks/register.tsx section'])
+})
+
+test('the active step\'s label runs onto a second line when one does not hold it; every other step keeps one line', async $ => {
+  await $.tool.call({ tool: 'mcp__loadout__steps', tool_use_id: 's1', title: 'Ship it', steps: [
+    { label: 'Read every caller of the parser before touching it', status: 'done' },
+    { label: 'Write the failing test for the new date format of the importer', status: 'active' },
+    { label: 'Make the parser accept both formats and keep the old one', status: 'pending' },
+  ] })
+  const ui = await $.ui.mount(pane(40, 40))
+  const seen = await text(ui)
+  const at = seen.findIndex(l => l.includes('Write the failing'))
+  // Cut at a space; the second line starts under the first, on the rail that goes on to the next node.
+  expect(seen.slice(at, at + 3)).toEqual([' ◐  Write the failing test for the  2/3', ' ┆  new date format of the importer', ' ┆'])
+  // The second line is the label's own: its colour, bold.
+  expect(await styleOf(ui, 'new date format')).toMatchObject({ c: P.yellow, b: true })
+  // A done and a pending step keep one line, cut with an ellipsis.
+  expect(seen.filter(l => /Read every|Make the parser/.test(l))).toEqual([' ●  Read every caller of the parser b…', ' ○  Make the parser accept both forma…'])
+  await ui.unmount()
+
+  // Too long for two lines: the second ends in an ellipsis.
+  const narrow = await $.ui.mount(pane(34, 40))
+  expect((await text(narrow)).filter(l => /Write the|date format/.test(l))).toEqual([' ◐  Write the failing test    2/3', ' ┆  for the new date format of t…'])
+  await narrow.unmount()
+
+  // One row short of the two lines: the second line is the first thing given back, and the rails stay.
+  const edge = await $.ui.mount(pane(40, 12))
+  expect((await text(edge)).filter(l => /Write the|date format|┆/.test(l))).toEqual([' ◐  Write the failing test for the… 2/3', ' ┆'])
+  await edge.unmount()
+
+  // A pane too short for the plan folds tight: one line still, and no rail.
+  const short = await $.ui.mount(pane(40, 10))
+  expect((await text(short)).filter(l => /Write the|date format|┆/.test(l))).toEqual([' ◐  Write the failing test for the… 2/3'])
+  await short.unmount()
+})
+
+test('the active step last in the plan: its second line stands under the label, with no rail beside it', async $ => {
+  await $.tool.call({ tool: 'mcp__loadout__steps', tool_use_id: 's1', title: 'Ship it', steps: [
+    { label: 'Build', status: 'done' },
+    { label: 'Write the failing test for the new date format of the importer', status: 'active' },
+  ] })
+  const ui = await $.ui.mount(pane(40, 40))
+  const seen = await text(ui)
+  const at = seen.findIndex(l => l.includes('Write the failing'))
+  expect(seen.slice(at, at + 2)).toEqual([' ◐  Write the failing test for the  2/2', '    new date format of the importer'])
+  await ui.unmount()
 })
 
 test('the system prompt gains one session section when the tool is offered', async ($, on) => {

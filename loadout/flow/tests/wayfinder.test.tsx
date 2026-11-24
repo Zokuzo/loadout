@@ -326,4 +326,6 @@ test('the system prompt section tells the model not to re-post the wayfinder map
   const got = await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], outputStyle: null, traits: [], tools: ['mcp__loadout__steps'] })
   expect(got.sections.map(s => s.id)).toEqual(['flow-map:steps'])
   expect(got.sections[0]?.text).toMatch(/wayfinder skill is active .* do not re-post the map/)
+  // A step label is five words at most: the pane gives a step one line, two to the active one.
+  expect(got.sections[0]?.text).toMatch(/each label 5 words at most/)
 })

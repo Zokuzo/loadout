@@ -1,7 +1,7 @@
 // The pane as lines of cells, in the designer's handoff layout: no engine here, so a line's width is
 // known before it is drawn. register.tsx turns each line into Text, Button and Input elements.
 import type { Agent, Plan, Run, Ticket, View, Way, WayMap } from '../../types'
-import { brisk, dur, ENTER_MS, fit, FLASH_MS, inState, isOver, kindOf, LEAVE_MS, LINGER_MS, modelOf, targetOf, tok, TOOL_MS, TOOL_STEP, toolName, verbOf } from './lib'
+import { brisk, dur, ENTER_MS, fit, fitTwo, FLASH_MS, inState, isOver, kindOf, LEAVE_MS, LINGER_MS, modelOf, targetOf, tok, TOOL_MS, TOOL_STEP, toolName, verbOf } from './lib'
 import type { AgentView, PhaseView, RunView } from './lib'
 import { filled, gradient, mix, STEPS } from './palette'
 import type { Palette, StepState, StepStatusName, StepsStyle } from './palette'
@@ -69,18 +69,20 @@ export function clip(line: Line, n: number): Line {
   return out
 }
 
-export type Fold = { phases: boolean; agents: boolean; tight: boolean; way: number; cap: number }
-// How much the body gives up to fit the pane, least first. The wayfinder map folds first (1 done, 2 fog and out
-// of scope, 3 the blockers' names), then the finished phases' rows, then the blank rows, then the finished agents
-// of a running phase. Running agents' cards never fold; what is still too tall scrolls in the pane.
+export type Fold = { phases: boolean; agents: boolean; tight: boolean; oneLine: boolean; way: number; cap: number }
+// How much the body gives up to fit the pane, least first. The active step's second line goes first, so it only ever
+// takes rows nothing else wanted. Then the wayfinder map folds (1 done, 2 fog and out of scope, 3 the blockers'
+// names), then the finished phases' rows, then the blank rows, then the finished agents of a running phase.
+// Running agents' cards never fold; what is still too tall scrolls in the pane.
 const LEVELS: readonly Fold[] = [
-  { phases: false, agents: false, tight: false, way: 0, cap: Infinity },
-  { phases: false, agents: false, tight: false, way: 1, cap: Infinity },
-  { phases: false, agents: false, tight: false, way: 2, cap: Infinity },
-  { phases: false, agents: false, tight: false, way: 3, cap: Infinity },
-  { phases: true, agents: false, tight: false, way: 3, cap: Infinity },
-  { phases: true, agents: false, tight: true, way: 3, cap: Infinity },
-  { phases: true, agents: true, tight: true, way: 3, cap: Infinity },
+  { phases: false, agents: false, tight: false, oneLine: false, way: 0, cap: Infinity },
+  { phases: false, agents: false, tight: false, oneLine: true, way: 0, cap: Infinity },
+  { phases: false, agents: false, tight: false, oneLine: true, way: 1, cap: Infinity },
+  { phases: false, agents: false, tight: false, oneLine: true, way: 2, cap: Infinity },
+  { phases: false, agents: false, tight: false, oneLine: true, way: 3, cap: Infinity },
+  { phases: true, agents: false, tight: false, oneLine: true, way: 3, cap: Infinity },
+  { phases: true, agents: false, tight: true, oneLine: true, way: 3, cap: Infinity },
+  { phases: true, agents: true, tight: true, oneLine: true, way: 3, cap: Infinity },
 ]
 
 export type Scene = {
@@ -491,9 +493,17 @@ export function compose(sc: Scene): Drawn {
         const head: Seg[] = S.layout === 'list'
           ? [s(st.edge, P[st.edgeColor], false, bg), s(` ${nodeOf(x.status)} `, P[st.color], st.bold, bg)]
           : [s(`${nodeOf(x.status)}  `, P[st.color], st.bold, bg)]
-        const label = fit(lead === null ? x.label : x.label.slice(lead[0].length), Math.max(4, W - cells(head) - 1 - tail.t.length - tag.length))
-        const row = spread(W, [...head, { ...s(label, P[st.labelColor], st.bold, bg), ...(st.strike ? { x: true } : {}) }, s(tag, P.text3, false, bg)].filter(seg => seg.t !== ''), [tail], bg)
-        return i === total - 1 || fold.tight || S.layout === 'list' ? [row] : [row, [s(st.rail, P[st.railColor])]]
+        const words = (t: string): Seg => ({ ...s(t, P[st.labelColor], st.bold, bg), ...(st.strike ? { x: true } : {}) })
+        const text = lead === null ? x.label : x.label.slice(lead[0].length)
+        const room = Math.max(4, W - cells(head) - 1 - tail.t.length - tag.length)
+        // The active step alone may run onto a second line; a pane short of rows takes it back first.
+        const [label = '', more] = x.status === 'active' && !fold.oneLine ? fitTwo(text, room, W - cells(head)) : [fit(text, room)]
+        const row = spread(W, [...head, words(label), s(tag, P.text3, false, bg)].filter(seg => seg.t !== ''), [tail], bg)
+        const isBare = i === total - 1 || fold.tight || S.layout === 'list'
+        // The second line starts under the label: beside the list's edge, or on the rail that goes on to the next node.
+        const side = S.layout === 'list' ? s(st.edge, P[st.edgeColor], false, bg) : s(isBare ? ' ' : st.rail, P[st.railColor], false, bg)
+        const rows = more === undefined ? [row] : [row, spread(W, [side, gap(cells(head) - side.t.length, bg), words(more)], [], bg)]
+        return isBare ? rows : [...rows, [s(st.rail, P[st.railColor])]]
       }),
     ]
   }
@@ -673,7 +683,7 @@ export function compose(sc: Scene): Drawn {
   const over = (last?.lines.length ?? 0) - sc.rows
   const queue = sc.way.active && sc.map !== null ? inState(sc.map, 'frontier').length : 0
   // Still too tall with everything folded: the tail of NEXT goes, one row per ticket and one for "+N more".
-  const cut = over > 0 && queue > 1 && last !== undefined ? build({ phases: true, agents: true, tight: true, way: 3, cap: Math.max(1, queue - over - 1) }) : last
+  const cut = over > 0 && queue > 1 && last !== undefined ? build({ phases: true, agents: true, tight: true, oneLine: true, way: 3, cap: Math.max(1, queue - over - 1) }) : last
   return tries.find(d => d.lines.length <= sc.rows) ?? cut ?? { lines: [], order: [], cur: '', target: undefined, steer: '', stoppable: undefined }
 }
 

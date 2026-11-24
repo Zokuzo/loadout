@@ -53,7 +53,8 @@ export function toPlan(input: Record<string, unknown>): Plan | string {
     if (typeof label !== 'string' || known === undefined) {
       return `steps: each step is { label: string, status: ${STATUSES.join(' | ')} }.`
     }
-    out.push({ label: label.slice(0, 120), status: known })
+    // One line of words, whatever was sent: no line break, no space at either end.
+    out.push({ label: label.replace(/\s+/g, ' ').trim().slice(0, 120).trimEnd(), status: known })
   }
   return { title: title.slice(0, 80), steps: out }
 }
@@ -109,6 +110,18 @@ export function modelOf(id: string): { family: 'opus' | 'sonnet' | 'haiku' | 'fa
 }
 
 export const fit = (s: string, n: number): string => (s.length <= n ? s : `${s.slice(0, Math.max(1, n - 1))}…`)
+/**
+ * `s` on two lines at most: `first` cells, then `rest` cells as `fit` cuts them. The cut is at a space, unless there is
+ * none or only a cut where the line ends lets the second line hold what is left.
+ */
+export const fitTwo = (s: string, first: number, rest: number): string[] => {
+  if (s.length <= first) return [s]
+  const space = s.lastIndexOf(' ', first)
+  const holds = (at: number): boolean => s.slice(at).trimStart().length <= rest
+  const at = space > 0 && (holds(space) || !holds(first)) ? space : first
+
+  return [s.slice(0, at), fit(s.slice(at).trimStart(), rest)]
+}
 
 // The kinds of the color-rows mod, so a call is classed the same in both; the pane colours them from its palette.
 export type Kind = 'shell' | 'read' | 'edit' | 'web' | 'agent' | 'skill' | 'ask' | 'mcp' | 'other'
