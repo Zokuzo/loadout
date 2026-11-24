@@ -5,6 +5,7 @@
 import type { ElementTable, RenderElement } from 'claude-code'
 
 import { hex, mix } from './hud'
+import { crewCaption } from './hudpane'
 import type { HudView, Meter } from './hudpane'
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -127,8 +128,7 @@ export function haloTree({ Box, Button, Text }: ElementTable, view: HudView): Re
         <Text color={dim} wrap="truncate-end">{words.link}{address.length < 8 ? '' : ` ${address.slice(0, 4)}.${address.slice(4, 6)}.${address.slice(6, 8)}`}</Text>
         {columns >= 30 && <Text color={dim}>{clock}</Text>}
       </Box>
-      {view.agents !== null && rule(`${words.crew} // ${pad2(view.alive)} ${words.unit}`)}
-      {view.agents}
+      {view.hasCount && rule(crewCaption(words, view.alive, view.waiting, columns - 5))}
       <Text wrap="truncate-end">
         <Text color={tone}>╭─ </Text>
         <Text color={tone} bold>{head}</Text>

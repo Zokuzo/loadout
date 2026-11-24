@@ -403,7 +403,7 @@ test('x asks before it stops: only y, on a question that is showing, stops the r
 test('z folds the pane to one tab above the prompt, and the tab restores it', async ($, on) => {
   on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'Text', props: {}, children: ['the band beneath'] }) as never)
   const { ui, world, land } = await flight($, on)
-  // Not folded: the band is left to whoever else draws there (beneath the Avatar's status line while agents run).
+  // Not folded: the band is left to whoever else draws there.
   const before = await $.ui.mount(BAND)
   expect(lines((await before.drawn()) as Node)).toContain('the band beneath')
   await before.unmount()

@@ -11,12 +11,12 @@ A view of Loadout in the dock beside the conversation. One pane is shown at a ti
 _Avoid_: Panel, page, window, mode
 
 **Avatar pane**:
-The pane of the theme's mascot: the mascot, one status line, the meters and the agent count.
+The pane of the theme's mascot: the mascot and what it says, the agent count and the meters.
 _Avoid_: HUD, Kirby pane
 
-**Card**:
-A one-line notice in the Avatar pane that asks something of the person: before a `/clear`, or on their return after time away.
-_Avoid_: Toast, popup
+**Before /clear line**:
+The one-line notice before a `/clear`, in the Avatar pane or, while that pane is not shown, in the band: it offers a handoff and a lesson.
+_Avoid_: Card, toast, popup
 
 **Flow map**:
 The pane of the work in progress: the step plan, then the bubble map.

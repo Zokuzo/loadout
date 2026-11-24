@@ -53,7 +53,7 @@ type Init = {
 function world(on: On, init: Init = {}) {
   const w = {
     file: `{\n  "model": "opus",\n  "theme": "${init.theme ?? 'custom:ghostrunner'}"\n}\n`,
-    sets: [] as unknown[], writes: [] as string[], opened: [] as string[], raised: [] as string[], copied: [] as string[], toasts: [] as string[], commands: [] as string[], tools: [] as string[], schemas: [] as string[],
+    sets: [] as unknown[], writes: [] as string[], opened: [] as string[], asked: {} as Record<string, number | undefined>, raised: [] as string[], copied: [] as string[], toasts: [] as string[], commands: [] as string[], tools: [] as string[], schemas: [] as string[],
     kept: new Map(Object.entries(init.store ?? {})),
     panes: [] as UiPane[],
     reads: [] as string[],
@@ -133,6 +133,7 @@ function world(on: On, init: Init = {}) {
   on('ui.panes', () => ({ value: w.panes }))
   on('ui.open', (_$, e) => {
     w.opened.push(e.id)
+    w.asked[e.id] = e.columns
     if (e.focus === true) w.raised.push(e.id)
 
     return { value: { isPlaced: true as const } }
@@ -200,20 +201,22 @@ const pane = (bodyRows = 60, bodyColumns = 34) => ({
 
 type Node = string | number | null | boolean | Node[] | { type: string; key?: unknown; props?: Record<string, unknown>; children?: Node[] }
 const kidsOf = (node: Node): Node[] => (typeof node === 'object' && node !== null && !Array.isArray(node) ? node.children ?? [] : [])
+/** What a Button says: its label, or the text of its children (a chip). */
+const saidBy = (button: { props?: Record<string, unknown>; children?: Node[] }): string => String(button.props?.label ?? (button.children ?? []).map(textOf).join(''))
 /** The cells a node takes on a row, as the terminal draws it: a plain Button is its label ("1: " before it with a hotkey), another one `[ label ]`. */
 function wide(node: Node): number {
   if (typeof node === 'string' || typeof node === 'number') return String(node).length
   if (Array.isArray(node)) return node.reduce((sum: number, one) => sum + wide(one), 0)
   if (typeof node !== 'object' || node === null) return 0
   const props = node.props ?? {}
-  if (node.type === 'Button') return String(props.label).length + (props.plain === true ? (props.hotkey === undefined ? 0 : 3) : 4)
+  if (node.type === 'Button') return saidBy(node).length + (props.plain === true ? (props.hotkey === undefined ? 0 : 3) : 4)
   const inner = kidsOf(node).map(wide)
 
   return props.flexDirection === 'column' ? Math.max(0, ...inner) : inner.reduce((sum, one) => sum + one, 0)
 }
 const textOf = (node: Node): string =>
   typeof node === 'string' || typeof node === 'number' ? String(node) : Array.isArray(node) ? node.map(textOf).join('') : typeof node !== 'object' || node === null ? ''
-    : node.type === 'Button' ? `${node.props?.plain === true ? (node.props.hotkey === undefined ? '' : `${String(node.props.hotkey)}: `) : '[ '}${String(node.props?.label)}${node.props?.plain === true ? '' : ' ]'}` : kidsOf(node).map(textOf).join('')
+    : node.type === 'Button' ? `${node.props?.plain === true ? (node.props.hotkey === undefined ? '' : `${String(node.props.hotkey)}: `) : '[ '}${saidBy(node)}${node.props?.plain === true ? '' : ' ]'}` : kidsOf(node).map(textOf).join('')
 const NO_ROOM = 'The Avatar pane is too short to list the themes here: make it taller, or type /loadout <theme>.'
 /** The picker as drawn: the pane's first child, as lines of text and their widths. */
 const pickerOf = (root: unknown) => {
@@ -512,7 +515,7 @@ for (const [live, init, scope] of [
     }
     // The red HUD (the cyber family, its pack), the Ghostrunner palette, one mark, on Ghostrunner; the live file is no row.
     expect(await seen()).toEqual({
-      rows: 12, marked: ['GHOSTRUNNER'], folded: 'LOADOUT // GHOSTRUNNER [ CHANGE ]', ground: PALETTES.ghostrunner.bg,
+      rows: 12, marked: ['GHOSTRUNNER'], folded: 'LOADOUT // l:  GHOSTRUNNER ▾ ', ground: PALETTES.ghostrunner.bg,
       theme: `Theme: custom:ghostrunner (${scope}, live through ${live}.json).`, pack: 'Pack: the built-in table (ghostrunner red, dark, background #120608)',
       list: `Loadout: ghostrunner (${scope}). Pick one in the Avatar pane, or by name. | Themes: cyberpunk-edgerunners, ▸ghostrunner, kirby, kirby-pink, auto, dark, light, light-daltonized, dark-daltonized, light-ansi, dark-ansi.`,
     })
@@ -521,7 +524,7 @@ for (const [live, init, scope] of [
     const reads = w.reads.length
     await clock.advance(4400)
     expect(await seen()).toEqual({
-      rows: 13, marked: ['Kirby Pink'], folded: 'loadout: Kirby Pink [ change ]', ground: PALETTES['kirby-pink'].bg,
+      rows: 13, marked: ['Kirby Pink'], folded: 'loadout l:  Kirby Pink ▾ ', ground: PALETTES['kirby-pink'].bg,
       theme: `Theme: custom:kirby-pink (${scope}, live through ${live}.json).`, pack: 'Pack: the built-in table (kirby, dark, background #2b1724)',
       list: `Loadout: kirby-pink (${scope}). Pick one in the Avatar pane, or by name. | Themes: cyberpunk-edgerunners, ghostrunner, kirby, ▸kirby-pink, auto, dark, light, light-daltonized, dark-daltonized, light-ansi, dark-ansi.`,
     })
@@ -533,7 +536,7 @@ for (const [live, init, scope] of [
     // A built-in source: Clawd and the default look.
     w.disk.set(`${live}.json`, { text: liveFile('dark'), mtimeMs: 51 })
     await clock.advance(4400)
-    expect(await seen()).toMatchObject({ marked: ['dark'], folded: 'loadout: dark [ change ]', ground: PALETTES.handoff.bg, theme: `Theme: dark (${scope}, live through ${live}.json).` })
+    expect(await seen()).toMatchObject({ marked: ['dark'], folded: 'loadout l:  dark ▾ ', ground: PALETTES.handoff.bg, theme: `Theme: dark (${scope}, live through ${live}.json).` })
     // A live file that is no longer Loadout's (or gone) is no theme known here: nothing is made up.
     w.disk.set(`${live}.json`, { text: '{ broken', mtimeMs: 52 })
     await clock.advance(4400)
@@ -788,11 +791,11 @@ for (const [theme, skin] of [['custom:kirby', 'rounded'], ['dark', 'rounded'], [
     const name = { 'custom:kirby': 'Kirby', dark: 'dark', 'custom:ghostrunner': 'Ghostrunner', 'custom:cyberpunk-edgerunners': 'Cyberpunk Edgerunners' }[theme]
     const said = (text: string) => (skin === 'hud' ? text.toUpperCase() : text)
 
-    // Folded: "loadout: <name> [ change ]" (the caption gives way where the name is long), never wider than the pane's 33 columns.
+    // Folded: "loadout l:  <name> ▾ ", the key and the chip being one button (the caption gives way where the name is long), never wider than the pane's 33 columns.
     const folded = pickerOf(await ui.drawn())
     expect(folded.lines.length).toBe(1)
-    expect(folded.lines[0]).toMatch(new RegExp(`^(${said(skin === 'hud' ? 'loadout // ' : 'loadout: ')}|// )?${said(name)} \\[ ${said('change')} \\]$`))
-    if (name.length <= 9) expect(folded.lines[0]?.startsWith(said('loadout'))).toBe(true)
+    expect(folded.lines[0]).toMatch(new RegExp(`^(${skin === 'hud' ? 'LOADOUT // ' : 'loadout '})?l:  ${said(name)} ▾ $`))
+    if (name.length <= 15) expect(folded.lines[0]?.startsWith(said('loadout'))).toBe(true)
     expect(folded.widths[0]).toBeLessThan(34)
     const mascotRows = (await ui.find({ key: 'kirby' }))?.props.rows
 
@@ -827,7 +830,7 @@ for (const [theme, skin] of [['custom:kirby', 'rounded'], ['dark', 'rounded'], [
     expect([user(), source()]).toEqual(['custom:loadout', target])
     expect(w.toasts).toEqual([`Loadout ${target.slice(7)}: every terminal.`])
     // At once, with no tick: the line names it, and the mark has moved to its row.
-    expect(pickerOf(await ui.drawn()).lines).toEqual(['loadout: Kirby Pink [ change ]'])
+    expect(pickerOf(await ui.drawn()).lines).toEqual(['loadout l:  Kirby Pink ▾ '])
     await ui.press({ key: 'loadout' })
     expect(pickerOf(await ui.drawn()).lines.filter(line => /[●◆]/.test(line)).map(line => line.includes('Kirby Pink'))).toEqual([true])
     await clock.advance(4400)
@@ -852,11 +855,44 @@ test('a press in the picker on a terminal that runs another theme sets the live 
   await ui.press({ key: 'loadout:custom:ghostrunner' })
   expect([user(), source()]).toEqual(['custom:loadout', 'custom:ghostrunner'])
   expect(w.toasts).toEqual([`${BEHIND('ghostrunner', 'kirby')} "/loadout ghostrunner" gives the line that starts it again.`])
-  expect(pickerOf(await ui.drawn()).lines).toEqual(['loadout: Kirby [ change ]'])
+  expect(pickerOf(await ui.drawn()).lines).toEqual(['loadout l:  Kirby ▾ '])
   await clock.advance(9000)
   await ui.press({ key: 'loadout' })
   expect(pickerOf(await ui.drawn()).lines.filter(line => /[●◆]/.test(line)).map(line => line.includes('Kirby '))).toEqual([true])
   await ui.unmount()
+})
+
+test('folded, the picker is one line that reads as a button: a dim caption, then one Button on the key l whose filled chip names the theme and ends with ▾; the caption gives way first, then the name\'s end, never the ▾', async ($, on) => {
+  world(on, { theme: 'custom:loadout', live: { loadout: 'kirby' } })
+  await $.session.start(START)
+  // The line at a dock's narrowest pane, at the old width and at the one the pane asks for (the body less the dock's last column).
+  for (const [slug, lines] of [
+    ['kirby', ['loadout l:  Kirby ▾ ', 'loadout l:  Kirby ▾ ', 'loadout l:  Kirby ▾ ']],
+    ['ghostrunner', ['l:  GHOSTRUNNER ▾ ', 'LOADOUT // l:  GHOSTRUNNER ▾ ', 'LOADOUT // l:  GHOSTRUNNER ▾ ']],
+    ['cyberpunk-edgerunners', ['l:  CYBERPUNK EDGER… ▾ ', 'l:  CYBERPUNK EDGERUNNERS ▾ ', 'LOADOUT // l:  CYBERPUNK EDGERUNNERS ▾ ']],
+  ] as const) {
+    await $.command.run(typed('loadout', slug))
+    const seen: string[] = []
+    for (const columns of [24, 34, 41]) {
+      const ui = await $.ui.mount(pane(60, columns))
+      const head = pickerOf(await ui.drawn())
+      seen.push(...head.lines)
+      expect(head.widths.every(width => width <= columns - 1)).toBe(true)
+      // One button, and it is the whole control: plain, on the key l, a chip in the theme's accent for its text.
+      const buttons = (await ui.findAll({ type: 'Button' })).filter(button => button.props.hotkey === 'l')
+      expect(buttons.map(button => [button.key, button.props.plain])).toEqual([['loadout', true]])
+      expect(saidBy(buttons[0] as never)).toMatch(/^ .+ ▾ $/)
+      const chip = (await ui.findAll({ type: 'Text' })).filter(text => String(text.text).endsWith(' ▾ ') && text.props.bold === true)
+      expect(chip.map(text => (slug === 'kirby' ? [text.props.color, text.props.inverse] : [/^#/.test(String(text.props.color)), /^#/.test(String(text.props.backgroundColor))]))).toEqual([slug === 'kirby' ? ['claude', true] : [true, true]])
+      // A press on it unfolds the picker.
+      await ui.press({ key: 'loadout' })
+      expect(pickerOf(await ui.drawn()).lines.length).toBeGreaterThan(11)
+      await ui.press({ key: 'loadout' })
+      await ui.unmount()
+    }
+    expect(seen).toEqual([...lines])
+    expect(seen.join('').toLowerCase()).not.toContain('change')
+  }
 })
 
 for (const theme of ['custom:kirby', 'custom:ghostrunner'] as const) {
@@ -874,7 +910,7 @@ for (const theme of ['custom:kirby', 'custom:ghostrunner'] as const) {
     // Shorter and shorter: the picker folds to its line before the avatar loses a row it needs, whatever was asked;
     // the pane is never taller than its rows.
     const heads: number[] = []
-    for (const rows of [44, 34, 30, 26, 20]) {
+    for (const rows of [44, 34, 30, 26, 19]) {
       const short = await $.ui.mount(pane(rows))
       const head = pickerOf(await short.drawn()).lines.length
       heads.push(head)
@@ -926,7 +962,7 @@ for (const theme of ['custom:kirby', 'custom:ghostrunner'] as const) {
     }
     // (Kirby's mascot is drawn at every height: its line is never given up. The mask's first height is the one row that gives it up.)
     expect(given).toBe(theme === 'custom:ghostrunner' ? 1 : 0)
-    if (theme === 'custom:ghostrunner') expect(trace.slice(8, 11)).toEqual(['20:0', '21:6', '22:6'])
+    if (theme === 'custom:ghostrunner') expect(trace.slice(7, 10)).toEqual(['19:0', '20:6', '21:6'])
     // Narrow and wide: every line of the picker, open and folded, fits the pane (its body less the dock's last column).
     for (const columns of [22, 28, 34, 46]) {
       const ui = await $.ui.mount(pane(60, columns))
@@ -1013,16 +1049,19 @@ test('the three parts start together in one plugin: every command, the tool unde
 
     return all
   }
-  expect(await texts('kirby')).toContain('scout')
+  // (The Avatar pane counts it, the Flow map names it.)
+  expect(await texts('kirby')).toContain('● 1 agent')
   expect(await texts('flow-map')).toContain('scout')
   await $.turn.complete({ reason: 'answer', answer: 'done', durationMs: 1, isAborted: false, turnId: 'a1', agentId: 'a1' } as never)
-  expect(await texts('kirby')).toContain('done ✔')
+  expect(await texts('kirby')).not.toMatch(/\d agent/)
   expect(await texts('flow-map')).toMatch(/scout[^\n]*|done/)
   // A session with a person at it: the Tickets tab is asked for first, then the Flow map, then the Avatar pane. The pane
   // met last is the one shown, so the tab stays behind; none is raised.
   w.opened.length = 0
   await $.session.start({ ...START, isInteractive: true })
   expect([w.opened, w.raised]).toEqual([['tickets', 'flow-map', 'kirby'], []])
+  // The Avatar pane asks for 41 columns: its /clear line whole, title and both keys.
+  expect(w.asked.kirby).toBe(41)
 })
 
 test('a part that fails at the start does not cost the others their own', async ($, on) => {

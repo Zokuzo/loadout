@@ -18,7 +18,7 @@
       "minItems": 1,
       "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" }
     },
-    "isLight": { "description": "A light theme: the Avatar's stage is by day and its light-on-dark sprites are drawn darker.", "type": "boolean" },
+    "isLight": { "description": "A light theme: the Avatar's light-on-dark sprites are drawn darker.", "type": "boolean" },
     "terminal": {
       "type": "object",
       "additionalProperties": false,

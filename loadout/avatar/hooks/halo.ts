@@ -17,11 +17,10 @@ export const isHalo = (skin: Skin): boolean => skin.variant === 'cortana' || ski
 export const HALO_ROWS = 28
 
 /** What a figure acts out: the kind of the call that runs, else the turn's mood. */
-export type Cue = Mood | 'scan' | 'edit' | 'exec' | 'net' | 'call' | 'load' | 'ask' | 'tool'
+export type Cue = Mood | State
 
-/** A mood and a running call's state as a cue: a call that failed is a worry, one that ended a rest. */
-export const cueOf = (mood: Mood, doing?: State): Cue =>
-  doing === undefined || doing === 'halt' || doing === 'done' ? mood : doing === 'think' ? 'working' : doing === 'fail' ? 'worried' : doing
+/** A mood and a running call's state as a cue: the call's while one runs. */
+export const cueOf = (mood: Mood, doing?: State): Cue => doing ?? mood
 
 const TAU = 2 * Math.PI
 const EASE_MS = 420 // from one pose into the next

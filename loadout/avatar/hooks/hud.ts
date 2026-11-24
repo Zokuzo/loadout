@@ -1,12 +1,10 @@
-// The cyber family (the Ghostrunner and Cyberpunk Edgerunners themes), in text: Raijin, a cyber-oni mask drawn in characters, and the agents as
-// HUD blocks. Both are grids of [glyph, foreground, background] cells for a Raster, swapped in
-// place a frame at a time. Pure: a grid is derived from (skin, mood or agents, now) alone, so
+// The cyber family (the Ghostrunner and Cyberpunk Edgerunners themes), in text: Raijin, a cyber-oni mask drawn in characters.
+// It is a grid of [glyph, foreground, background] cells for a Raster, swapped in
+// place a frame at a time. Pure: a grid is derived from (skin, mood, now) alone, so
 // previews and tests draw what the pane draws.
-import { FORMS } from './look'
+import type { Kind } from '../../flow/hooks/lib'
 import type { Form } from './look'
 import type { Mood } from './mascot'
-import { LEAVE_MS, actOf } from './stage'
-import type { Act, Agent } from './stage'
 
 /** The terminal's default colour, in a cell. */
 export const NONE = 0x01000000
@@ -62,8 +60,6 @@ function put(grid: Grid, x: number, y: number, glyph: string, fg: number, bg?: n
   grid.words[at + 1] = fg
   if (bg !== undefined) grid.words[at + 2] = bg
 }
-
-const write = (grid: Grid, x: number, y: number, text: string, fg: number, bg?: number) => [...text].forEach((ch, i) => put(grid, x + i, y, ch, fg, bg))
 
 /** A grid's rows as text: what it says, colours aside. */
 export const textOf = ({ columns, rows, words }: Grid): string[] =>
@@ -456,132 +452,11 @@ export function maskFrame(skin: Skin, form: Form, mood: Mood, now: number, colum
   return grid
 }
 
-// --- the agents --------------------------------------------------------------
+// --- the call that runs --------------------------------------------------------
 
-/** What a block says its agent is at: between calls, one per kind of tool, then a failed call, and its end, stopped or finished. */
-export type State = 'think' | 'scan' | 'edit' | 'exec' | 'net' | 'call' | 'load' | 'ask' | 'tool' | 'fail' | 'halt' | 'done'
+/** What the running call is, as a HUD tells it: one state per kind of tool. A camera feed and the Halo figures act it out. */
+export type State = 'scan' | 'edit' | 'exec' | 'net' | 'call' | 'load' | 'ask' | 'tool'
 
-export const STATES: Readonly<Record<Exclude<Act, 'exit'>, State>> = {
-  idle: 'think', inhale: 'scan', sword: 'edit', dash: 'exec', ride: 'net', call: 'call', sparkle: 'load', ask: 'ask', hop: 'tool',
-  hurt: 'fail', dazed: 'fail', dance: 'done', faint: 'halt',
-}
-
-/** The state of an agent at `now`, from what it really does: the stage's acts, told as a HUD tells them. */
-export function stateOf(agent: Agent, now: number): State {
-  const act = actOf(agent, now)
-
-  return act === 'exit' ? (agent.isLost === true ? 'halt' : 'done') : STATES[act]
-}
-
-export const TAGS: Readonly<Record<State, string>> = {
-  think: 'THNK', scan: 'SCAN', edit: 'EDIT', exec: 'EXEC', net: 'NET', call: 'CALL', load: 'LOAD', ask: 'ASK', tool: 'TOOL', fail: 'FAIL', halt: 'HALT', done: 'DONE',
-}
-
-// A state's little figure, three cells, a frame every two of the clock's: each state its own motion.
-// None fills its cell top to bottom: on a block of one row, a figure never runs into the one under it.
-// Every frame has a glyph lit, and what a figure is anchored on (a prompt, a dot, a "?") keeps its cell.
-const ICONS: Readonly<Record<State, readonly string[]>> = {
-  think: ['•··', '·•·', '··•', '·•·'], // a thought going to and fro
-  scan: ['■□□', '□■□', '□□■', '□■□'], // a head sweeping a track
-  edit: ['╺  ', '━╸ ', '━━╸', '━━━', '━━╸', '━╸ '], // a line written and taken back
-  exec: ['>_ ', '>  ', '>_ ', '>>_', '>>>', '>>·', '>··'], // a prompt, then it runs
-  net: ['·  ', '·) ', '·))', '•))', '• )', '•  '], // a signal going out
-  call: ['>--', '->-', '-->', '--<', '-<-', '<--'], // a message there and back
-  load: ['[|]', '[/]', '[-]', '[\\]'], // a chip spinning up
-  ask: [' ? ', '·?·', '•?•', '·?·'], // a question waiting
-  tool: ['▖··', '▘▖·', '·▘▖', '··▘', '···'], // a pulse stepping through
-  fail: ['×!×', '!×!', '×!×', '! !'], // broken up
-  halt: ['■■■', '■■□', '■□□', '□□□', '□□□', '□□□'], // going dark
-  done: ['▁  ', '▁▃ ', '▁▃▆', ' ✓ ', ' ✓ ', '·✓·', ' ✓ ', ' ✓ '], // bars rising to a tick
-}
-
-/** What the blocks need of a subagent besides its times: its task, and what each running call is about. */
-export type Runner = Omit<Agent, 'calls'> & { label: string; calls: readonly { tool: string; summary: string }[] }
-
-/** A model as a block tags it, three letters at the right end of the agent's line. */
-export const MODEL_TAGS: Readonly<Record<Form, string>> = { opus: 'OPS', sonnet: 'SNT', haiku: 'HKU', fable: 'FBL' }
-
-/** The tag of the model an agent runs on; none while nobody told, or for a model of no known family. */
-export const modelTag = (model: string | undefined): string => {
-  const form = FORMS.find(one => (model ?? '').toLowerCase().includes(one))
-
-  return form === undefined ? '' : MODEL_TAGS[form]
-}
-
-/** As many agents as get a block of their own; more are counted on a last line. */
-export const BLOCKS_MAX = 5
-
-/** How many rows the blocks of `alive` agents take of `room`: two a block where all fit so, else one, the last one counting those left out. */
-export const blockRowsOf = (alive: number, room: number): number =>
-  alive <= BLOCKS_MAX && room >= 2 * alive ? 2 * alive : Math.max(0, Math.min(Math.min(alive, BLOCKS_MAX) + (alive > BLOCKS_MAX ? 1 : 0), room))
-
-/** Text a cell can hold: a width-1 character each, anything else a "?". */
-const plain = (text: string): string =>
-  [...text.replace(/\s+/g, ' ')].map(ch => {
-    const code = ch.codePointAt(0)!
-
-    return (code >= 0x20 && code < 0x7f) || (code >= 0xa1 && code < 0x250 && code !== 0xad) ? ch : '?'
-  }).join('')
-
-const cut = (text: string, width: number): string => (text.length <= width ? text : width < 1 ? '' : `${text.slice(0, width - 1)}…`)
-
-/**
- * The agents' blocks, `columns` by `rows` cells, as the game lays out what one may answer: down the
- * left edge a bar, a three-cell figure acting out its state, the state as a bracketed tag, its task;
- * all three in the state's colour (live, failed, stopped, finished), never one of the agent's own that
- * could be taken for a state. Under it, where the rows allow two a block, the agent's number, the
- * running tool and what it is about; on one row, the number first, and the tool at the right end,
- * the task taking all the row leaves it. The model it runs on, where that is known, is a short tag at the right
- * end of its first row (on a block of one row, where no tool is named there). An agent that ended fades out; agents past the rows are a "+N MORE"
- * (on a single row, the first agent alone).
- */
-export function agentRows(skin: Skin, crew: readonly Runner[], now: number, columns: number, rows: number): Grid {
-  const grid = blank(columns, rows)
-  const per = crew.length <= BLOCKS_MAX && rows >= 2 * crew.length ? 2 : 1
-  // More agents than rows: the last row counts those left out; a single row names the first instead (the rule over the blocks has the count).
-  const fit = per === 2 ? crew.length : crew.length > BLOCKS_MAX || crew.length > rows ? Math.max(Math.min(1, rows), Math.min(BLOCKS_MAX, rows - 1)) : crew.length
-  const shown = crew.slice(0, fit)
-  const toolOf = (agent: Runner) => plain((agent.calls[agent.calls.length - 1]?.tool ?? '').replace(/^mcp__/, ''))
-  shown.forEach((agent, n) => {
-    const y = n * per
-    const state = stateOf(agent, now)
-    // An ended agent goes out over its stay.
-    const gone = agent.doneAt === undefined ? 0 : 0.75 * ease(unit((now - agent.doneAt - LEAVE_MS / 2) / (LEAVE_MS / 2)))
-    const faded = (color: number) => mix(color, skin.tint, gone)
-    const frames = ICONS[state]
-    const since = state === 'done' && agent.doneAt !== undefined ? Math.min(frames.length - 1, Math.floor((now - agent.doneAt) / (2 * FRAME_MS))) : Math.floor((now + agent.slot * 370) / (2 * FRAME_MS)) % frames.length
-    const tone = state === 'fail' ? skin.alert : state === 'halt' ? skin.dim : state === 'done' ? skin.value : skin.cyan
-    const call = agent.calls[agent.calls.length - 1]
-    const tool = toolOf(agent)
-    for (let j = 0; j < per; j++) put(grid, 0, y + j, '▌', faded(tone))
-    // The agent's number: under its figure, or before it on a block of one row.
-    const number = String(agent.slot + 1).padStart(2, '0')
-    const at = per === 2 ? 2 : 5
-    write(grid, at, y, frames[since]!, faded(tone))
-    // A failed call's tag is filled, and blinks: it is the one to see.
-    const isFilled = state === 'fail' && Math.floor(now / (4 * FRAME_MS)) % 2 === 0
-    write(grid, at + 4, y, `[${TAGS[state]}]`, isFilled ? skin.ink : faded(tone), isFilled ? skin.alert : undefined)
-    const from = at + 6 + TAGS[state].length + 1
-    const label = plain(agent.label)
-    write(grid, 2, y + per - 1, number, faded(mix(skin.tint, skin.dim, 0.7)))
-    const model = modelTag(agent.model)
-    if (per === 2) {
-      write(grid, from, y, cut(label === '' ? 'agent' : label, columns - from - (model === '' ? 0 : model.length + 1)), faded(skin.bright))
-      write(grid, columns - model.length, y, model, faded(skin.dim))
-      const about = call === undefined ? (state === 'fail' ? 'a call failed' : state === 'done' ? 'finished' : state === 'halt' ? 'stopped' : 'thinking') : plain(call.summary)
-      write(grid, 6, y + 1, cut(tool, columns - 6), faded(skin.primary))
-      write(grid, 6 + (tool === '' ? 0 : tool.length + 1), y + 1, cut(about, columns - 6 - (tool === '' ? 0 : tool.length + 1)), faded(skin.dim))
-    } else {
-      // The tool at the right end, a third of the row at the most; the task has the rest, all of it where no tool runs.
-      const named = tool === '' ? model : cut(tool, Math.floor(columns / 3))
-      write(grid, from, y, cut(label === '' ? 'agent' : label, columns - from - (named === '' ? 0 : named.length + 1)), faded(skin.bright))
-      write(grid, columns - named.length, y, named, faded(tool === '' ? skin.dim : skin.primary))
-    }
-  })
-  if (fit < crew.length && fit * per < rows) {
-    put(grid, 0, fit * per, '▌', skin.dim)
-    write(grid, 2, fit * per, cut(`+${crew.length - fit} MORE`, columns - 2), skin.dim)
-  }
-
-  return grid
+export const STATES: Readonly<Record<Kind, State>> = {
+  read: 'scan', edit: 'edit', shell: 'exec', web: 'net', agent: 'call', skill: 'load', ask: 'ask', mcp: 'tool', other: 'tool',
 }

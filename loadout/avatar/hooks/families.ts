@@ -1,6 +1,6 @@
 // The mascot families: which one a theme calls for, and what each brings. A family is one entry of
 // FAMILIES; the pane draws whatever the entry holds, so a new family is a new entry and its art,
-// nothing else. A family is drawn in pixels (sprites, and a stage of minis) or, with a `skin`, in text.
+// nothing else. A family is drawn in pixels (sprites) or, with a `skin`, in text.
 import type { Canvas } from './canvas'
 import { CLAWD, clawdFrame, isClawdAtRest } from './clawd'
 import type { ClawdMoment } from './clawd'
@@ -8,12 +8,10 @@ import { HERO_NAMES } from './cyber'
 import type { Who } from './cyber'
 import { FORM_SPRITES } from './forms'
 import type { FormSprite } from './forms'
-import { clawdMini, kirbyMini } from './hires'
-import type { MiniSet } from './hires'
 import { NAMES, SKINS, hex } from './hud'
 import type { Skin } from './hud'
 import type { Captions } from './hudpane'
-import type { Family, Form, Pixels } from './look'
+import type { Form, Pixels } from './look'
 import { faceAt } from './mascot'
 import type { Mood } from './mascot'
 import { norm, resolve } from './packs'
@@ -35,8 +33,6 @@ type Speech = Readonly<Record<Mood, readonly [text: string, color: string]>>
  * A family drawn in pixels:
  * - `forms`: the main mascot per model, its name and three frames (eyes open, half shut, shut);
  * - `painted`: optionally, a form's pixels drawn for the mood instead of picked from its frames;
- * - `mini`: the stage's sprites for an agent's colour slot and its model's form (hires.ts says which poses);
- * - `blocks`: which of the cell-block stage's two mini sets stands in where the terminal draws no pictures;
  * - `acted`: optionally, the mascot in true pixels drawn anew for each moment (from its parts, not a frame pushed
  *   about): a `frame` of `width` by `height` art pixels in the box its sprite has, and whether a moment is one of rest.
  */
@@ -44,8 +40,6 @@ export type SpriteFamily = {
   key: FamilyName
   forms: Readonly<Record<Form, FormSprite>>
   painted?: (form: Form, mood: Mood, isMouthShut: boolean, isBlink: boolean) => Pixels | undefined
-  mini: (slot: number, form?: Form) => MiniSet
-  blocks: Family
   speech: Speech
   acted?: { frame: (form: Form, moment: Acting, width: number, height: number, scale: number, isLight?: boolean) => Canvas; isAtRest: (moment: Acting) => boolean }
 }
@@ -55,7 +49,7 @@ export type Acting = ClawdMoment
 
 /**
  * A family drawn in text (hud.ts): its `skin` is the palette the whole pane takes, as a HUD, with
- * the mask and the agents' blocks in characters; `names` is the mask's name per model, `worry` how it puts what worries it.
+ * the mask in characters; `names` is the mask's name per model, `worry` how it puts what worries it.
  * `world` is where its characters come from: with a model's form it names the slot whose footage the camera feed plays (reel.ts).
  * A world with `cars` has no mask and no `hero`: its HUD frames the camera feed alone, in its own `captions`, and wherever
  * the feed does not play (no footage, no pictures, a style of text) the pane is the cars', as a sprite family draws it.
@@ -111,27 +105,21 @@ const KIRBY_FAMILY: SpriteFamily = {
   key: 'kirby',
   forms: { ...FORM_SPRITES, opus: { name: 'Kirby', frames: [KIRBY.map(row => [...row])] } },
   painted: (form, mood, isMouthShut, isBlink) => (form === 'opus' ? paintedKirby(mood, isMouthShut, isBlink) : undefined),
-  mini: kirbyMini,
-  blocks: 'kirby',
   speech: { idle: ['poyo!', 'claude'], working: ['thinking…', 'suggestion'], worried: ['', 'error'], happy: ['poyo~ ♥', 'success'] },
 }
 
 const CLAWD_FAMILY: SpriteFamily = {
   key: 'clawd',
   forms: CLAWD,
-  mini: clawdMini,
-  blocks: 'clawd',
   acted: { frame: clawdFrame, isAtRest: isClawdAtRest },
   speech: { idle: ['hi!', 'claude'], working: ['thinking…', 'suggestion'], worried: ['', 'error'], happy: ['clack clack ♥', 'success'] },
 }
 
-// The cars of a night mountain pass, one per model, seen from the front: their headlights are their eyes. The helpers on stage are Clawd's minis.
+// The cars of a night mountain pass, one per model, seen from the front: their headlights are their eyes.
 // (What the Initial D theme draws wherever its camera feed does not play: `touge`, below.)
 const TOUGE_FAMILY: SpriteFamily = {
   key: 'initial-d',
   forms: TOUGE,
-  mini: clawdMini,
-  blocks: 'clawd',
   speech: { idle: ['tofu loaded. engine warm.', 'claude'], working: ['drifting…', 'suggestion'], worried: ['', 'error'], happy: ['not a drop spilled ♥', 'success'] },
 }
 
@@ -306,7 +294,7 @@ export const groundOf = (theme: string): Ground | undefined => {
   return Object.hasOwn(GROUNDS, name) ? GROUNDS[name] : undefined
 }
 
-/** Whether a theme is a light one: ours that says so, or a built-in one named so. On it the stage is by day, and what is drawn in light colours for a dark ground is drawn darker. */
+/** Whether a theme is a light one: ours that says so, or a built-in one named so. On it what is drawn in light colours for a dark ground is drawn darker. */
 export const isLightOf = (theme: string): boolean => groundOf(theme)?.isLight === true || /^light/i.test(theme.trim())
 
 // --- a theme's pack ------------------------------------------------------------

@@ -1,6 +1,6 @@
-// The Loadouts picker at the top of the Avatar pane: one row per theme, or, folded, one line naming
-// the theme with a button that opens it. Drawn in the family's skin: HUD captions on a text family,
-// a rounded frame on Kirby and Clawd. Pure: what a press does is handed in.
+// The Loadouts picker at the top of the Avatar pane: one row per theme, or, folded, the theme line:
+// one button, a filled chip that names the theme and opens the picker. Drawn in the family's skin: HUD
+// captions on a text family, a rounded frame on Kirby and Clawd. Pure: what a press does is handed in.
 import type { ElementTable, RenderElement } from 'claude-code'
 
 import { hex } from './hud'
@@ -34,18 +34,18 @@ export function pickerTree({ Box, Button, Text }: ElementTable, view: PickerView
   const name = current?.name ?? (view.active.replace(/^custom:/, '') || '?')
 
   if (!view.isOpen) {
-    // "loadout: <name> [ change ]": the caption is cut down where the line is short, then the name's end.
-    const button = said('change')
-    const caption = [said(isHud ? 'loadout // ' : 'loadout: '), isHud ? '// ' : '', ''].find(one => one.length + name.length + 5 + button.length <= columns) ?? ''
+    // "loadout l:  <name> ▾ ": the key and the chip are the one button (seven cells besides the name).
+    // Where the line is short the caption goes first, then the name's end; the ▾ stays.
+    const full = isHud ? 'LOADOUT // ' : 'loadout '
+    const caption = full.length + 7 + name.length <= columns ? full : ''
+    const chip = ` ${said(cut(name, Math.max(1, columns - caption.length - 7)))} ▾ `
 
     return (
       <Box width={columns}>
-        <Text wrap="truncate-end">
-          <Text color={edge}>{caption}</Text>
-          <Text color={title} bold>{said(cut(name, Math.max(1, columns - caption.length - 5 - button.length)))}</Text>
-          <Text> </Text>
-        </Text>
-        <Button key="loadout" label={button} hotkey="l" onPress={view.onToggle} />
+        <Text color={edge}>{caption}</Text>
+        <Button key="loadout" plain hotkey="l" onPress={view.onToggle}>
+          {isHud ? <Text color={hex(skin.ink)} backgroundColor={hex(skin.primary)} bold>{chip}</Text> : <Text color="claude" bold inverse>{chip}</Text>}
+        </Button>
       </Box>
     )
   }
