@@ -87,6 +87,7 @@ const REFUSED_MAX = 44
 const PRESCALE = 1
 const HAPPY_MS = 4000
 const CONTEXT_FULL = 70
+const CONTEXT_CAP = 300_000 // past this a context rots, whatever the model's window: the meter is full here
 const HELPERS_KEPT = 32
 const HELPER_IDLE_MS = 5 * 60_000 // a helper no list names, silent this long, has ended unseen
 const LIMIT_NEAR = 85
@@ -105,8 +106,9 @@ const toUsage = (u: Pick<SessionMeasureInput, 'context' | 'rateLimits' | 'cost'>
   // (No 5-hour window: the plan it is drawn for has none, so it is neither shown nor worried about.)
   limits: u.rateLimits.filter(l => l.kind !== 'five_hour').map(l => ({ kind: l.kind, percentUsed: l.percentUsed, resetsAt: l.resetsAt })),
   tokens: u.context.tokens,
-  window: u.context.window,
-  percent: u.context.percent,
+  window: Math.min(u.context.window, CONTEXT_CAP),
+  // (A window within the cap keeps the engine's own figure; a wider one is metered against the cap.)
+  percent: u.context.window <= CONTEXT_CAP || u.context.tokens === undefined ? u.context.percent : Math.min(100, Math.round((u.context.tokens / CONTEXT_CAP) * 100)),
 })
 
 const LIMIT_NAMES: Record<string, string> = { seven_day: 'weekly' }

@@ -98,7 +98,7 @@ In the pane, a calm `RUNNING` and `IDLE` with no card are left unsaid (the avata
 
 Under that line, one card at a time, in the theme's own frame (Halo's `MISSION ▸`, Ghostrunner's hexagon, Kirby's plate):
 
-- **before /clear**: the context is past 70 %, or `/clear` is typed. `h` asks Claude for a handoff, `e` for a Professeur lesson where it is on (`LOADOUT_PROF` names its folder; its switch is read, never written).
+- **before /clear**: the context meter is past 70 % (of the model's window, or of 300k tokens where the window is wider: a 1M model raises it at 210k), or `/clear` is typed. `h` asks Claude for a handoff, `e` for a Professeur lesson where it is on (`LOADOUT_PROF` names its folder; its switch is read, never written).
 - **back**: after 15 minutes away, what Claude's last answer asks of you, and where the Flow plan stands.
 
 Then the recall card, when a turn has run 20 s and the prompt is empty: a card from your own work, gone when Claude answers. `f` forgot, `k` knew it (or a click). Spaced by SM-2; `/loadout status` gives the rate known over 30 days. In the pane a key works with the pane focused (ctrl+x tab); the pane's own keys stay theirs (`p` pets, `l` and `0` to `9` the theme picker).

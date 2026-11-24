@@ -223,6 +223,20 @@ test('the pane draws Kirby, cost, limits and context; a pet persists', async ($,
   await clock.advance(4400)
   expect(await text()).not.toContain('time to /clear')
 
+  // Past 300k a context rots: a wider window is metered against 300k, so 240k of 1M is full, not a quarter.
+  live = { ...USAGE, context: { tokens: 240_000, window: 1_000_000, percent: 24 } }
+  await clock.advance(4400)
+  expect(await text()).toContain('240k / 300k')
+  expect(await text()).toContain('time to /clear')
+  live = { ...USAGE, context: { tokens: 450_000, window: 1_000_000, percent: 45 } }
+  await clock.advance(4400)
+  expect(await text()).toContain('100%')
+  // A wide window nobody has measured yet is no reading, not a full one.
+  live = { ...USAGE, context: { window: 1_000_000 } }
+  await clock.advance(4400)
+  expect(await text()).not.toContain('time to /clear')
+  expect(await text()).not.toContain('/ 300k')
+
   // The model picks the copy ability where the pane holds it. Too narrow for Sword Kirby, he is never squeezed
   // into it: plain Kirby is drawn, whole, under his own name.
   sessionModel = 'claude-sonnet-5-5'
