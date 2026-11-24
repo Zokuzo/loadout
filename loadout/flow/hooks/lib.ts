@@ -536,6 +536,9 @@ function splitTop(s: string): string[] {
 
 const TYPES = ['research', 'grilling', 'prototype', 'task'] as const
 
+/** A ticket's number as the pane writes it, on its row and where it blocks another: #03. */
+export const numOf = (n: number): string => `#${String(n).padStart(2, '0')}`
+
 export type RawTicket = { n: number; title: string; type: TicketType; status: 'open' | 'claimed' | 'resolved'; blockedBy: string[] }
 
 /**
@@ -627,14 +630,17 @@ function parseGitlab(text: string | null): { carte: number | null; iid: Map<numb
 /**
  * The effort as it stands in its files. A ticket is resolved or claimed as its
  * Status says; an open one is blocked while a numbered blocker is unresolved
- * (one with no file reads "#NN ?") or an outside, free-text blocker is named,
+ * (cited as "#NN", "#NN ?" with no file) or an outside, free-text blocker is named,
  * and on the frontier otherwise. Tickets come out in number order: the first
  * frontier one is what the skill takes next.
  */
-export function chart(effort: string, mapText: string, issues: readonly { name: string; text: string | null }[], gitlab: string | null): Chart {
+export function chart(effort: string, mapText: string, issues: readonly { name: string; text: string | null; mtimeMs?: number }[], gitlab: string | null): Chart {
   const doc = parseMapDoc(mapText)
   const { carte, iid } = parseGitlab(gitlab)
-  const raw = issues.map(f => (f.text === null ? null : parseTicket(f.name, f.text)))
+  const raw = issues.map(f => {
+    const t = f.text === null ? null : parseTicket(f.name, f.text)
+    return t === null ? null : { ...t, at: f.mtimeMs ?? 0 }
+  })
   const read = raw.filter(t => t !== null).sort((a, b) => a.n - b.n)
   const byN = new Map(read.map(t => [t.n, t]))
   const tickets = read.map((t): Ticket => {
@@ -642,10 +648,10 @@ export function chart(effort: string, mapText: string, issues: readonly { name: 
       const nn = entry.match(/^#?(\d{1,4})\s*(\(.*\))?$/)?.[1]
       if (nn === undefined) return [entry.slice(0, 100)]
       const other = byN.get(Number(nn))
-      return other === undefined ? [`#${nn.padStart(2, '0')} ?`] : other.status === 'resolved' ? [] : [other.title]
+      return other === undefined ? [`#${nn.padStart(2, '0')} ?`] : other.status === 'resolved' ? [] : [numOf(other.n)]
     })
     const state: TicketState = t.status !== 'open' ? t.status : blockers.length > 0 ? 'blocked' : 'frontier'
-    return { n: t.n, title: t.title, type: t.type, state, iid: iid.get(t.n) ?? null, blockers: t.status === 'open' ? blockers : [] }
+    return { n: t.n, title: t.title, type: t.type, state, iid: iid.get(t.n) ?? null, blockers: t.status === 'open' ? blockers : [], at: t.at }
   })
   return {
     effort,
@@ -668,6 +674,13 @@ export function pickEffort(efforts: readonly { name: string; mtimeMs: number }[]
 }
 
 export const inState = (c: Chart, state: TicketState): Ticket[] => c.tickets.filter(t => t.state === state)
+/**
+ * The resolved tickets, the one resolved last first.
+ * ponytail: a ticket file carries no date the pane can trust, so "resolved last" is "file changed last". A note added
+ * to an old ticket lifts it, and a checkout writes every file at one time (then the higher number is first). Read the
+ * date out of the Status line if that order ever matters more.
+ */
+export const resolvedLast = (c: Chart): Ticket[] => inState(c, 'resolved').sort((a, b) => b.at - a.at || b.n - a.n)
 
 // ── Plain subagents: agents started outside a workflow (the Agent tool, a fork, a background agent) ──
 

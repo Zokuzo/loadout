@@ -195,7 +195,7 @@ test('selection, the last tool calls and steering work on a plain subagent as on
 test('the animation is a function of the clock alone: the same clock draws the same cells, and nothing is drawn when nothing moves', async ($, on) => {
   const agent = (more: Partial<Agent>): Agent => soloAgent({ key: 'k', id: 'a', label: 'scan', kind: 'Explore', startedAt: 10_000, ...more })
   const VIEW: View = { folded: [], sel: '', open: [], mode: '', target: '', at: 0, hidden: false, cols: 0, colsFrom: 0, colsAt: 0 }
-  const draw = (solo: Agent[], now: number) => compose({ w: 56, rows: 30, P, now, runs: [], view: VIEW, plan: null, way: { active: false, root: '', touched: '', chosen: '', hint: '', open: [] }, map: null, solo }).lines
+  const draw = (solo: Agent[], now: number) => compose({ w: 56, rows: 30, P, now, runs: [], view: VIEW, plan: null, solo }).lines
   const busy = agent({ calls: [{ id: 'c', tool: 'Read', what: 'a.png', at: 12_000 }], tools: 1 })
   // Pure: twice the same clock is twice the same lines; the highlight has moved 150 ms later.
   expect(draw([busy], 13_000)).toEqual(draw([busy], 13_000))
@@ -379,7 +379,7 @@ test('the agents group fits every width from 34 to 96, alone and with every agen
   const VIEW: View = { folded: [], sel: '', open: solo.map(soloKey), mode: '', target: '', at: 0, hidden: false, cols: 0, colsFrom: 0, colsAt: 0 }
   for (const view of [VIEW, { ...VIEW, open: [] }, { ...VIEW, mode: 'steer' as const, target: soloKey(solo[0] as Agent) }]) {
     for (let w = 34; w <= 96; w++) {
-      const drawn = compose({ w, rows: 600, P, now: 4_000_500, runs: [], view, plan: null, way: { active: false, root: '', touched: '', chosen: '', hint: '', open: [] }, map: null, solo })
+      const drawn = compose({ w, rows: 600, P, now: 4_000_500, runs: [], view, plan: null, solo })
       expect([w, drawn.lines.filter(l => cells(l) > w).length]).toEqual([w, 0])
       // Every card and the summary box keep their right border under their corner.
       const texts = drawn.lines.map(l => l.map(p => ('t' in p ? p.t : 'btn' in p ? ' '.repeat(Math.max(p.btn.pad ?? 0, p.btn.label.length)) : ' '.repeat(p.inp.width))).join(''))

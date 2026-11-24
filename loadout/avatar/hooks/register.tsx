@@ -34,7 +34,7 @@ import type { Part } from '../../hooks/part'
 import { SWAPS, colorOf } from './minis'
 import { stageFrame, stagedOf as stagedArt } from './scene'
 import { LEAVE_MS, NARROWEST as STAGE_NARROWEST, TICK_MS, sceneOf, stagedOf, toolAct } from './stage'
-import { FLOW_PANE, VIEW as FLOW_VIEW } from '../../flow/hooks/register'
+import { FLOW_PANE, TICKETS_PANE, VIEW as FLOW_VIEW } from '../../flow/hooks/register'
 import type { KirbyHudCall, KirbyHudHelper, KirbyHudLimit, KirbyHudUsage } from '../../types'
 import { lookOf } from '../../flow/hooks/palette'
 import { AWAY_MS, BLINK_MS, CARD_MAX, MODS, width as width_, backCard, clearCard, drawCard, statusLine, streakAfter } from './mods'
@@ -1362,13 +1362,18 @@ async function loadoutStatus($: EngineInterface): Promise<string> {
   const now = await avatarStatus($)
   const facts = await themeFacts($)
   const up = await $.ui.panes().catch(() => [])
-  const paneOf = (id: string) => (up.some(pane => pane.id === id && pane.isShown) ? 'open' : 'closed')
+  // A pane is one of the dock's tabs: the one shown is open, another is open behind it.
+  const paneOf = (id: string) => {
+    const pane = up.find(one => one.id === id)
+
+    return pane === undefined ? 'closed' : pane.isShown ? 'open' : 'open, behind'
+  }
 
   return [
     `Theme: ${now.theme || 'not read yet'} (${scopeOf(facts)}${facts.isLiveHere ? `, live through ${liveOf(facts.runs)}.json` : ''}).`,
     `Pack: ${now.by} (${now.told}). Packs: ${now.packs}.`,
     `Pictures: ${now.pictures}. Footage: ${now.footage}.`,
-    `Avatar pane: ${paneOf(PANE)}, style ${now.style}, background ${now.isTinting ? 'on' : 'off'}. Flow map: ${paneOf(FLOW_PANE.id)}. Frames: ${(await read($, framesOn)) ? 'on' : 'off'}.`,
+    `Avatar pane: ${paneOf(PANE)}, style ${now.style}, background ${now.isTinting ? 'on' : 'off'}. Flow map: ${paneOf(FLOW_PANE.id)}. Tickets: ${paneOf(TICKETS_PANE.id)}. Frames: ${(await read($, framesOn)) ? 'on' : 'off'}.`,
   ].join('\n')
 }
 
@@ -1382,6 +1387,12 @@ async function loadoutCommand($: EngineInterface, ask: LoadoutAsk): Promise<stri
     const opened = await $.ui.open({ ...FLOW_PANE, columns: seen.cols || FLOW_PANE.columns })
 
     return opened.isPlaced ? 'Flow map opened.' : `Flow map is open but not drawn yet: ${opened.reason}`
+  }
+  if (ask.kind === 'pane' && ask.pane === 'tickets') {
+    // As /tickets does: the person asked, so it is raised over the pane shown.
+    const opened = await $.ui.open({ ...TICKETS_PANE, focus: true })
+
+    return opened.isPlaced ? 'Tickets pane opened.' : `Tickets pane is open but not drawn yet: ${opened.reason}`
   }
   if (ask.kind === 'pane') return (await avatarCommand($, '')).text
   if (ask.kind === 'background' || ask.kind === 'style') return (await avatarCommand($, `${ask.kind} ${ask.value}`, '/loadout')).text
@@ -1521,7 +1532,7 @@ const started: Part<'session.start'> = async ($, e, next) => {
   startTicking($)
   await $.command.register({ name: 'avatar', description: 'Open the Avatar pane (mascot, agents, usage meters)', argumentHint: '[status | theme … | background on|off | style pixel|text|auto]' })
   await $.command.register({ name: 'kirby', description: 'Same as /avatar' })
-  await $.command.register({ name: 'loadout', description: 'Pick the theme (terminal, avatar, Flow map, frames); "/loadout help" lists the rest', argumentHint: '[<theme> [here] | follow | avatar | flow | frames on|off | background on|off | style pixel|text|auto | status | help]' })
+  await $.command.register({ name: 'loadout', description: 'Pick the theme (terminal, avatar, Flow map, frames); "/loadout help" lists the rest', argumentHint: '[<theme> [here] | follow | avatar | flow | tickets | frames on|off | background on|off | style pixel|text|auto | status | help]' })
   await quiet(findAssets($))
   await quiet(installColours($))
   await quiet(loadOffers($))

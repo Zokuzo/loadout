@@ -99,8 +99,8 @@ What each of the ten packs draws, and from what:
 
 - A family's art, names, speech and worry lines; for `cyber`, the drawn character, the mask and their lines come from `variant`; for `initial-d`, the cars, the HUD's captions around its camera feed and its lines; for `y2k`, the objects (`chrome.ts`), the HUD's captions, its lines and the polished bars; for `halo`, the two figures and what each cue makes them do (`halo.ts`), their names per model, the HUD's captions and lines. (A slot's footage, name and speech are data: its `manifest.json`.)
 - Built-in light themes: `default.json` has `isLight: false` and serves `light` too. The avatar keeps one name test: `isLight = pack.isLight || (pack.slug === 'default' && /^light/i.test(theme))`. A `light.json` pack with `"match": ["light"]` would remove it.
-- Flow map colours tied to meaning rather than to a theme (tool kinds, wayfinder ticket types, the progress gradient cyan to green) are fixed uses of palette tokens.
-- The Flow map's run view (summary box, phases, agent cards) and its group of plain subagents keep the default design on every theme: a pack changes their colours, not their shape. The wayfinder map's group names (here, next, blocked), ticket-type glyphs and fold arrows are code too.
+- Flow map and Tickets pane colours tied to meaning rather than to a theme (tool kinds, wayfinder ticket types, the progress gradient cyan to green) are fixed uses of palette tokens.
+- The Flow map's run view (summary box, phases, agent cards) and its group of plain subagents keep the default design on every theme: a pack changes their colours, not their shape. The wayfinder map (the Tickets pane, drawn in the pack's steps style) keeps its group names (here, next, blocked, done), ticket-type glyphs and fold arrows in code too.
 
 ## How the parts find and reload packs
 

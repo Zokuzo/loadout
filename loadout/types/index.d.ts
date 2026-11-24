@@ -158,8 +158,10 @@ export type Ticket = {
   state: TicketState
   /** Its GitLab issue number from gitlab.json, null without one. */
   iid: number | null
-  /** What still blocks it, by name: a ticket's title, "#NN ?" for a number with no file, or the outside blocker's text. */
+  /** What still blocks it: a ticket by its number ("#NN", "#NN ?" for one with no file), or the outside blocker's text. */
   blockers: string[]
+  /** When its file last changed, in ms, 0 when the listing gave no time: the resolved are listed last changed first. */
+  at: number
 }
 /** One wayfinder effort as its files read: .scratch/<effort>/map.md, issues/ and gitlab.json. */
 export type Chart = {
@@ -183,7 +185,7 @@ export type WayMap = Chart & { scratch: string; efforts: string[]; sig: string }
 /**
  * Wayfinder in this session: on once the skill was used; the .scratch directory and effort its file
  * calls last touched; the effort the person picked in the pane; a /wayfinder argument not yet matched
- * to an effort; the sections open in the pane (done, fog, out).
+ * to an effort; the sections open in the Tickets pane (fog, out).
  */
 export type Way = { active: boolean; root: string; touched: string; chosen: string; hint: string; open: string[] }
 

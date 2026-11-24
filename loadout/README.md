@@ -7,7 +7,7 @@ It is three parts in one plugin (they were the mods `kirby-hud`, `flow-map` and 
 | Part | Folder | What it draws |
 |---|---|---|
 | Avatar | `avatar/` | The "Avatar" side pane: the theme picker, a mascot or character per theme, the agents on a stage, the usage meters. It also tints the terminal background per theme (and, on a light theme, sets the terminal's text colours to dark inks, so code stays readable). |
-| Flow map | `flow/` | The "Flow map" pane: workflow runs, plain subagents (each with its model: `◆ haiku 4.5` on a running card, the family on a finished row, opus orange, sonnet cyan, haiku green, fable violet), the step plan, the wayfinder map. Registers the tool `mcp__loadout__steps`. |
+| Flow map | `flow/` | The "Flow map" pane: workflow runs, plain subagents (each with its model: `◆ haiku 4.5` on a running card, the family on a finished row, opus orange, sonnet cyan, haiku green, fable violet) and the step plan. Beside it the "Tickets" pane: the wayfinder map alone, every row of it (each ticket under its number, what blocks it cited by number, the resolved listed with the last one on top). It is a tab from the session's start and never comes to the front by itself: `/tickets` or a click on its tab shows it. Registers the tool `mcp__loadout__steps`. |
 | Frames | `frames/` | A coloured frame around each conversation row, one hue per kind of action; and the working line in the theme's own words behind its own turning icon (a pack's `spinner`, `THEMES.md`). |
 
 ## The command
@@ -18,7 +18,7 @@ It is three parts in one plugin (they were the mods `kirby-hud`, `flow-map` and 
 | `/loadout <theme>` | That theme for every terminal, with no restart (see "Live theme files" for the first time). |
 | `/loadout <theme> here` | This terminal only. With no restart in a terminal the shell launcher started. In any other, nothing changes: it copies and prints the line that starts the conversation again through the launcher (press Ctrl+D, paste, Enter). |
 | `/loadout follow` | The line that makes a terminal with its own theme follow the global one again. |
-| `/loadout avatar` \| `flow` | Opens that pane. |
+| `/loadout avatar` \| `flow` \| `tickets` | Opens that pane. |
 | `/loadout frames on\|off` | The frames around conversation rows. |
 | `/loadout background on\|off` | Whether the theme tints the terminal background. |
 | `/loadout style pixel\|text\|auto` | How a Ghostrunner or Edgerunners character is drawn: `text` shows no footage. |
@@ -35,7 +35,7 @@ Two themes were renamed, and their old names still work, here and in the shell l
 
 In the picker, each theme is a row: four of its own colours, a digit (1 to 9), its name, a mark on the one this terminal shows. Press the digit or click the row: it does what `/loadout <theme>` does, says so in a toast, and the picker folds to one line, `loadout: <name> [ change ]`. On a pane too short for the picker and the avatar, it stays folded, and `[ change ]` or `/loadout` says so in a toast: make the pane taller or type `/loadout <theme>`. At the one height where even the folded line would cost the pane its mascot, the line is not drawn.
 
-`/avatar`, `/kirby`, `/flow` and `/colors` still work with their old arguments.
+`/avatar`, `/kirby`, `/flow` and `/colors` still work with their old arguments. `/tickets` is `/loadout tickets`.
 
 ## Live theme files
 

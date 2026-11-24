@@ -6,6 +6,7 @@ import { agentKey, compose, isSeg, runKey, soloKey, tab, widthOf } from './draw'
 import type { Act, Btn, Line, Seg } from './draw'
 import { brief, chart, declared, enlist, frameOf, heal, healRun, histKey, isOver, isWayfinder, keepRuns, kindOf, lingering, MAX_CALLS, newRun, noted, parseMeta, parseSites, phaseKey, pickEffort, QUEUE_MS, runView, scratchOf, settled, soloAgent, sweep, toHistory, toPlan, withSolo } from './lib'
 import { lookOf, toPack } from './palette'
+import { tickets } from './tickets'
 import type { Pack } from './palette'
 import { alone } from '../../hooks/part'
 import type { Part } from '../../hooks/part'
@@ -21,6 +22,8 @@ const [NARROWEST, WIDEST] = [34, 96]
 const FAST_MS = 150
 const SLOW_MS = 1000
 const MAP_MS = 5000
+// The shape of a map as read: 2 since a ticket keeps its file's time and cites its blockers by number.
+const MAP_SHAPE = '2'
 // The themes folder is listed again this often: an edited pack shows within a few seconds. With no folder found, far less often.
 const PACKS_MS = 4000
 const NO_PACKS_MS = 60_000
@@ -33,6 +36,12 @@ const CONFIRM_MS = 15_000
 /** The pane as `$.ui.open` takes it, and the view nobody touched yet: `/loadout flow` opens it from the avatar's file. */
 export const FLOW_PANE = { id: PANE, title: TITLE, columns: COLUMNS } as const
 export const VIEW: View = { folded: [], sel: '', open: [], mode: '', target: '', at: 0, hidden: false, cols: 0, colsFrom: 0, colsAt: 0 }
+/**
+ * The Tickets pane: the wayfinder map's own tab, at the width its rows are written for. A pane the surface meets for
+ * the first time is the one it shows, so this one is asked for at the session's start, first of Loadout's panes, and
+ * never when wayfinder wakes: Loadout does not change the pane shown. Only the person's own command raises it.
+ */
+export const TICKETS_PANE = { id: 'tickets', title: 'Tickets', columns: 56 } as const
 const runs = atom({ plugin: 'loadout', key: 'runs' } as const, [])
 const plan = atom({ plugin: 'loadout', key: 'plan' } as const, null)
 const now = atom({ plugin: 'loadout', key: 'now' } as const, 0)
@@ -56,7 +65,7 @@ const SECTION = {
   text:
     `Step map: at the start of any task with 3 or more steps (a build, a video edit, research), call the ${TOOL} tool with a short title and the full ordered step list (each label 5 words at most), one step "active". ` +
     'Call it again with the full list whenever a step changes status. It only updates a side pane the user watches; skip it for shorter tasks and inside subagents. ' +
-    'While the wayfinder skill is active the pane already shows the wayfinder map read from its files: do not re-post the map through this tool.',
+    'While the wayfinder skill is active the Tickets pane already shows the wayfinder map read from its files: do not re-post the map through this tool.',
 } as const
 
 const STEPS_SCHEMA = {
@@ -94,7 +103,7 @@ const quiet = (work: Promise<unknown>) => work.catch(() => undefined)
 const isAbsolute = (path: string) => /^(\/|[A-Za-z]:[\\/])/.test(path)
 
 /**
- * Reads the wayfinder map from disk into the pane's state, when wayfinder is on.
+ * Reads the wayfinder map from disk into the Tickets pane's state, when wayfinder is on.
  * Lists first: the files are read again only when a name, size or time changed,
  * so the slow tick costs a few listings. Every miss (no directory, a file gone
  * or too big) is an empty answer, never a throw.
@@ -141,11 +150,12 @@ async function refresh($: EngineInterface) {
     return
   }
   const names = efforts.map(e => e.name)
-  const sig = [scratch, name, names.join(','), ...[...mine.files, ...mine.issues].map(f => `${f.name}:${f.size}:${f.mtimeMs}`)].join('|')
+  // (MAP_SHAPE first: a map an earlier load of the mod kept in the session's state is read again, in this one's shape.)
+  const sig = [MAP_SHAPE, scratch, name, names.join(','), ...[...mine.files, ...mine.issues].map(f => `${f.name}:${f.size}:${f.mtimeMs}`)].join('|')
   if (old?.sig === sig) return
   const dir = `${scratch}/${name}`
-  const issues: { name: string; text: string | null }[] = []
-  for (const f of mine.issues) issues.push({ name: f.name, text: await cat(`${dir}/issues/${f.name}`) })
+  const issues: { name: string; text: string | null; mtimeMs: number }[] = []
+  for (const f of mine.issues) issues.push({ name: f.name, text: await cat(`${dir}/issues/${f.name}`), mtimeMs: f.mtimeMs })
   const read1 = chart(name, (await cat(`${dir}/map.md`)) ?? '', issues, mine.files.some(f => f.name === 'gitlab.json') ? await cat(`${dir}/gitlab.json`) : null)
   await update($, wayMap, () => ({ ...read1, scratch, efforts: names, sig }))
 }
@@ -302,7 +312,7 @@ function tick($: EngineInterface) {
     // A finished plain subagent leaves a while after its end.
     if (sweep(mine, t) !== mine) mine = await update($, solo, list => sweep(list, t))
     // The active step's node turns at the pack's rate, while the model works on it.
-    const stepMs = isWorking && ((await read($, plan))?.steps.some(x => x.status === 'active') === true || (await read($, wayMap))?.tickets.some(x => x.state === 'claimed') === true)
+    const stepMs = isWorking && (await read($, plan))?.steps.some(x => x.status === 'active') === true
       ? lookOf(await read($, theme), (await read($, packs)).list).S.cycle?.ms ?? 0 : 0
     const next = frameOf({ isLive, solo: mine, stepMs, t, isKept: lingering(all, t, begunAt) !== undefined })
     // Drawn again when the frame changed, and once more when the last thing that moved stopped: what was mid-way
@@ -348,7 +358,7 @@ async function touch($: EngineInterface, hit: { root: string; effort: string } |
   await update($, way, v => ({ ...v, root: hit.root, touched: hit.effort, ...(isPick ? { chosen: '' } : {}) }))
 }
 
-/** Wayfinder was used: the map shows from now on. Its argument may name a map path or an effort. */
+/** Wayfinder was used: the map shows from now on, in the Tickets pane. Its argument may name a map path or an effort. */
 async function wake($: EngineInterface, args: string) {
   await update($, way, v => ({ ...v, active: true, hint: args.slice(0, 300) || v.hint }))
   await touch($, args.split(/\s+/).map(scratchOf).find(h => h !== null) ?? null, true)
@@ -499,10 +509,18 @@ export async function openFlow($: EngineInterface): Promise<string> {
   return opened.isPlaced ? 'Flow map opened.' : `Flow map is open but not drawn yet: ${opened.reason}`
 }
 
+/** The person asked for the Tickets pane: it is raised over the pane shown, and says what became of it. `/tickets`, and `/loadout tickets`. */
+async function openTickets($: EngineInterface): Promise<string> {
+  const opened = await $.ui.open({ ...TICKETS_PANE, focus: true })
+
+  return opened.isPlaced ? 'Tickets pane opened.' : `Tickets pane is open but not drawn yet: ${opened.reason}`
+}
+
 // --- the events Loadout's parts share (hooks/part.ts): this part's work on each, kept from costing the others ---
 
 const started: Part<'session.start'> = async ($, e, next) => {
   await $.command.register({ name: 'flow', description: 'Open the Flow map pane (runs, agents, steps)' })
+  await $.command.register({ name: 'tickets', description: 'Open the Tickets pane (the wayfinder map)' })
   await $.tool.register({
     name: 'steps',
     description:
@@ -521,6 +539,9 @@ const started: Part<'session.start'> = async ($, e, next) => {
     await quiet(update($, solo, list => (list.some(a => a.id === row.id) ? list : withSolo(list, soloAgent({ key: `a:${row.id}`, id: row.id, label: row.description || row.type, kind: row.type, startedAt: at })))))
   }
   const seen = healView(await read($, view))
+  // The Tickets tab first, so behind: the pane met last is the one shown, and that stays the Flow map or, opened after
+  // it by its own part, the Avatar pane.
+  if (e.isInteractive) void $.ui.open(TICKETS_PANE).catch(() => undefined)
   if (e.isInteractive && !seen.hidden) void $.ui.open({ id: PANE, title: TITLE, columns: seen.cols || COLUMNS }).catch(() => undefined)
   tick($)
 
@@ -690,6 +711,7 @@ export const register: Register = on => {
   on('session.start', {}, ($, e, next) => alone(e, under => next(under), under => started($, e, under)))
 
   on('command.run', { command: 'flow' }, async $ => ({ text: `${await openFlow($)}\nAlso: /loadout flow.` }))
+  on('command.run', { command: 'tickets' }, async $ => ({ text: await openTickets($) }))
 
   // The theme changed in the config menu: the palette follows at once.
   on('config.set', async ($, e, next) => {
@@ -890,13 +912,28 @@ export const register: Register = on => {
     const isInline = e.props.placement === 'inline'
     const drawn = compose({
       w, rows, inline: isInline, P, now: clock, runs: shown, view: isAsking ? seen : { ...seen, mode: '' },
-      plan: await read($, plan), way: await read($, way), map: await read($, wayMap), S, solo: (await read($, solo)).map(heal),
+      plan: await read($, plan), S, solo: (await read($, solo)).map(heal),
     })
     const ctx: Ctx = { order: drawn.order, target: drawn.steer, stop: drawn.stoppable === undefined ? '' : runKey(drawn.stoppable), cols: w }
 
     return (
       <Box flexDirection="column" width={w} {...(isInline ? {} : { minHeight: rows })} backgroundColor={P.bg}>
         {paint($, els, drawn.lines, w, P.bg, P.fg, ctx)}
+      </Box>
+    )
+  })
+
+  // The Tickets pane: the wayfinder map alone, every row of it. What passes the pane's rows scrolls.
+  on('ui.render', { component: 'Pane', requestId: TICKETS_PANE.id }, async ($, e) => {
+    const els = $.ui.resolve(e)
+    const { Box } = els
+    const { P, S } = lookOf(await read($, theme), (await read($, packs)).list)
+    const w = Math.max(24, e.props.bodyColumns)
+    const lines = tickets({ w, P, S, way: await read($, way), map: await read($, wayMap) })
+
+    return (
+      <Box flexDirection="column" width={w} {...(e.props.placement === 'inline' ? {} : { minHeight: e.props.scroll.bodyRows })} backgroundColor={P.bg}>
+        {paint($, els, lines, w, P.bg, P.fg, { order: [], target: '', stop: '', cols: w })}
       </Box>
     )
   })

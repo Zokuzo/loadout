@@ -62,6 +62,12 @@ export const pane = (bodyColumns = 56, bodyRows = 60, isFocused = true) => ({
   props: { title: 'Flow map', isFocused, bodyColumns, placement: 'dock', scroll: { offset: 0, bodyRows }, view: {} },
 }) as const
 
+/** The Tickets pane, the wayfinder map's own: docked, as the Flow map above. */
+export const tickets = (bodyColumns = 56, bodyRows = 60) => ({
+  plugin: 'loadout', surface: 'terminal', component: 'Pane', requestId: 'tickets',
+  props: { title: 'Tickets', isFocused: true, bodyColumns, placement: 'dock', scroll: { offset: 0, bodyRows }, view: {} },
+}) as const
+
 export const spawn = (agentIndex: number, description: string, prompt = 'p', runId = 'wf_1') => ({
   tool_use_id: 'call-1', prompt, description, subagentType: 'general-purpose',
   provider: { plugin: 'engine', tier: 'core' }, parentModel: 'opus', background: true, fork: false,

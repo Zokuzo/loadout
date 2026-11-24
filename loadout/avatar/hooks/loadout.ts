@@ -6,11 +6,11 @@ import type { Offer } from './themes'
 /** What `/loadout ...` asks for. A theme's name is every word but a closing `here` (or `all`). */
 export type LoadoutAsk =
   | { kind: 'pick' } | { kind: 'help' } | { kind: 'status' } | { kind: 'follow' }
-  | { kind: 'pane'; pane: 'avatar' | 'flow' }
+  | { kind: 'pane'; pane: 'avatar' | 'flow' | 'tickets' }
   | { kind: 'frames'; value: string } | { kind: 'background'; value: string } | { kind: 'style'; value: string }
   | { kind: 'theme'; name: string; scope: 'all' | 'here' }
 
-const PANES = ['avatar', 'flow'] as const
+const PANES = ['avatar', 'flow', 'tickets'] as const
 const SWITCHES = ['frames', 'background', 'style'] as const
 
 export function loadoutAsk(args: string): LoadoutAsk {
@@ -37,7 +37,7 @@ export const HELP = [
   '/loadout <theme>                that theme for every terminal, with no restart',
   '/loadout <theme> here           this terminal only: live where bin/loadout started it',
   '/loadout follow                 the line that makes this terminal follow the global theme again',
-  '/loadout avatar | flow          open that pane',
+  '/loadout avatar|flow|tickets    open that pane',
   '/loadout frames on|off          the frames around conversation rows',
   '/loadout background on|off      let the theme tint the terminal background',
   '/loadout style pixel|text|auto  how a Ghostrunner or Edgerunners character is drawn',
@@ -54,7 +54,7 @@ export type Suggestion = { text: string; description?: string }
 
 const WORDS: readonly (readonly [string, string])[] = [
   ['here', 'this terminal only'], ['all', 'every terminal'], ['status', 'what is loaded'], ['help', 'every word it takes'], ['follow', 'follow the global theme again'],
-  ['avatar', 'open the Avatar pane'], ['flow', 'open the Flow map'], ['frames', 'frames around rows: on|off'], ['background', 'tint the background: on|off'], ['style', 'pixel|text|auto'],
+  ['avatar', 'open the Avatar pane'], ['flow', 'open the Flow map'], ['tickets', 'open the Tickets pane'], ['frames', 'frames around rows: on|off'], ['background', 'tint the background: on|off'], ['style', 'pixel|text|auto'],
 ]
 const VALUES: Readonly<Record<string, readonly string[]>> = { frames: ['on', 'off'], background: ['on', 'off'], style: ['pixel', 'text', 'auto'] }
 

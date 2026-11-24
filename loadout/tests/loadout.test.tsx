@@ -53,7 +53,7 @@ type Init = {
 function world(on: On, init: Init = {}) {
   const w = {
     file: `{\n  "model": "opus",\n  "theme": "${init.theme ?? 'custom:ghostrunner'}"\n}\n`,
-    sets: [] as unknown[], writes: [] as string[], opened: [] as string[], copied: [] as string[], toasts: [] as string[], commands: [] as string[], tools: [] as string[], schemas: [] as string[],
+    sets: [] as unknown[], writes: [] as string[], opened: [] as string[], raised: [] as string[], copied: [] as string[], toasts: [] as string[], commands: [] as string[], tools: [] as string[], schemas: [] as string[],
     kept: new Map(Object.entries(init.store ?? {})),
     panes: [] as UiPane[],
     reads: [] as string[],
@@ -133,6 +133,7 @@ function world(on: On, init: Init = {}) {
   on('ui.panes', () => ({ value: w.panes }))
   on('ui.open', (_$, e) => {
     w.opened.push(e.id)
+    if (e.focus === true) w.raised.push(e.id)
 
     return { value: { isPlaced: true as const } }
   })
@@ -253,8 +254,8 @@ test('a theme name is forgiving: exact, any case, spaces or dashes, a unique pre
 })
 
 test('the words of /loadout: nothing, a switch, a pane, or a theme of one or several words with "here" last', () => {
-  expect(['', 'help', 'status', 'follow', 'avatar', 'flow', 'frames off', 'frames', 'background on', 'style text'].map(loadoutAsk)).toEqual([
-    { kind: 'pick' }, { kind: 'help' }, { kind: 'status' }, { kind: 'follow' }, { kind: 'pane', pane: 'avatar' }, { kind: 'pane', pane: 'flow' },
+  expect(['', 'help', 'status', 'follow', 'avatar', 'flow', 'tickets', 'frames off', 'frames', 'background on', 'style text'].map(loadoutAsk)).toEqual([
+    { kind: 'pick' }, { kind: 'help' }, { kind: 'status' }, { kind: 'follow' }, { kind: 'pane', pane: 'avatar' }, { kind: 'pane', pane: 'flow' }, { kind: 'pane', pane: 'tickets' },
     { kind: 'frames', value: 'off' }, { kind: 'frames', value: '' }, { kind: 'background', value: 'on' }, { kind: 'style', value: 'text' },
   ])
   expect(['kirby', 'Cyberpunk Edgerunners', 'cyberpunk edgerunners here', 'kirby here', 'dark all', 'here'].map(loadoutAsk)).toEqual([
@@ -698,7 +699,7 @@ test('under a managed theme /loadout changes nothing and says who sets it', asyn
   expect([w.sets, w.writes, w.copied]).toEqual([[], [], []])
 })
 
-test('/loadout avatar and flow open that pane; frames, background and style are switched and kept; status and help say it all', async ($, on) => {
+test('/loadout avatar, flow and tickets open that pane; frames, background and style are switched and kept; status and help say it all', async ($, on) => {
   const { w } = world(on)
   on('ui.render', ($e, e) => {
     const { Text } = $e.ui.resolve(e)
@@ -710,7 +711,10 @@ test('/loadout avatar and flow open that pane; frames, background and style are 
   w.opened.length = 0
   expect(await run('avatar')).toBe('Avatar pane opened.')
   expect(await run('flow')).toBe('Flow map opened.')
-  expect(w.opened).toEqual(['kirby', 'flow-map'])
+  expect(await run('tickets')).toBe('Tickets pane opened.')
+  expect(w.opened).toEqual(['kirby', 'flow-map', 'tickets'])
+  // Only the Tickets pane is raised: it is a tab behind from the start, so opening it again would show nothing.
+  expect(w.raised).toEqual(['tickets'])
 
   // Frames: a conversation row is framed, then drawn as the engine draws it.
   const row = { plugin: 'loadout', surface: 'terminal', component: 'ToolUse', viewport: { columns: 100, rows: 40 }, props: { tool_use_id: 't1', tool: 'Bash', input: { command: 'ls' }, isRunning: false, isErrored: false, isInterrupted: false } } as const
@@ -733,16 +737,16 @@ test('/loadout avatar and flow open that pane; frames, background and style are 
   expect(await run('style')).toBe('Usage: /loadout style pixel|text|auto (now text).')
 
   // Status: the three parts in four lines, and nothing else.
-  w.panes = [{ id: 'kirby', title: 'Avatar', isShown: true, isFocused: false, isPlaced: true }]
+  w.panes = [{ id: 'kirby', title: 'Avatar', isShown: true, isFocused: false, isPlaced: true }, { id: 'tickets', title: 'Tickets', isShown: false, isFocused: false, isPlaced: true }]
   const status = (await run('status')).split('\n')
   expect(status.length).toBe(4)
   expect(status[0]).toBe('Theme: custom:ghostrunner (the global theme).')
   expect(status[1]).toMatch(/^Pack: the built-in table \(\w+ red, dark, background #[0-9a-f]{6}\)\. Packs: none found/)
   expect(status[2]).toBe(`Pictures: not found. Footage: ${['ghostrunner', 'edgerunners', 'initiald', 'y2k', 'y2kdark', 'halo', 'halodark'].flatMap(world => ['opus', 'sonnet', 'haiku', 'fable'].map(form => `${world}-${form} missing`)).join(', ')}.`)
-  expect(status[3]).toBe('Avatar pane: open, style text, background on. Flow map: closed. Frames: on.')
+  expect(status[3]).toBe('Avatar pane: open, style text, background on. Flow map: closed. Tickets: open, behind. Frames: on.')
 
   expect(await run('help')).toBe(HELP)
-  for (const form of ['/loadout <theme> ', '/loadout <theme> here', '/loadout follow', '/loadout avatar | flow', '/loadout frames on|off', '/loadout background on|off', '/loadout style pixel|text|auto', '/loadout status']) expect(HELP).toContain(form)
+  for (const form of ['/loadout <theme> ', '/loadout <theme> here', '/loadout follow', '/loadout avatar|flow|tickets', '/loadout frames on|off', '/loadout background on|off', '/loadout style pixel|text|auto', '/loadout status']) expect(HELP).toContain(form)
   expect(HELP.split('\n').every(line => line.length <= 100)).toBe(true)
 })
 
@@ -962,7 +966,7 @@ test('what the three old mods kept is copied into this plugin\'s store, once: th
   const ui = await $.ui.mount(pane())
   expect((await ui.findAll({ type: 'Text' })).map(text => text.text)).toContain('♥ 7')
   await ui.unmount()
-  expect((await $.command.run(typed('loadout', 'status'))).text).toContain('style pixel, background off. Flow map: closed. Frames: off.')
+  expect((await $.command.run(typed('loadout', 'status'))).text).toContain('style pixel, background off. Flow map: closed. Tickets: closed. Frames: off.')
   // Once: a later start reads no old store again, and what changed since is not overwritten.
   w.kept.set('pets', 8)
   await $.session.start(START)
@@ -988,7 +992,7 @@ test('the three parts start together in one plugin: every command, the tool unde
   const { w } = world(on, { theme: 'custom:kirby' })
   on('prompt.compose', () => ({ sections: [] }))
   await $.session.start(START)
-  expect([...w.commands].sort()).toEqual(['avatar', 'colors', 'flow', 'kirby', 'loadout'])
+  expect([...w.commands].sort()).toEqual(['avatar', 'colors', 'flow', 'kirby', 'loadout', 'tickets'])
   expect(w.tools).toEqual(['steps'])
   // The tool's own input says how long a step label is.
   expect(w.schemas[0]).toMatch(/"label":\{[^}]*5 words at most/)
@@ -1014,6 +1018,11 @@ test('the three parts start together in one plugin: every command, the tool unde
   await $.turn.complete({ reason: 'answer', answer: 'done', durationMs: 1, isAborted: false, turnId: 'a1', agentId: 'a1' } as never)
   expect(await texts('kirby')).toContain('done ✔')
   expect(await texts('flow-map')).toMatch(/scout[^\n]*|done/)
+  // A session with a person at it: the Tickets tab is asked for first, then the Flow map, then the Avatar pane. The pane
+  // met last is the one shown, so the tab stays behind; none is raised.
+  w.opened.length = 0
+  await $.session.start({ ...START, isInteractive: true })
+  expect([w.opened, w.raised]).toEqual([['tickets', 'flow-map', 'kirby'], []])
 })
 
 test('a part that fails at the start does not cost the others their own', async ($, on) => {
