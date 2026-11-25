@@ -62,6 +62,12 @@ export const pane = (bodyColumns = 56, bodyRows = 60, isFocused = true) => ({
   props: { title: 'Flow map', isFocused, bodyColumns, placement: 'dock', scroll: { offset: 0, bodyRows }, view: {} },
 }) as const
 
+/** The Tickets pane, the wayfinder map's own: docked, as the Flow map above. */
+export const tickets = (bodyColumns = 56, bodyRows = 60) => ({
+  plugin: 'loadout', surface: 'terminal', component: 'Pane', requestId: 'tickets',
+  props: { title: 'Tickets', isFocused: true, bodyColumns, placement: 'dock', scroll: { offset: 0, bodyRows }, view: {} },
+}) as const
+
 export const spawn = (agentIndex: number, description: string, prompt = 'p', runId = 'wf_1') => ({
   tool_use_id: 'call-1', prompt, description, subagentType: 'general-purpose',
   provider: { plugin: 'engine', tier: 'core' }, parentModel: 'opus', background: true, fork: false,
@@ -79,7 +85,7 @@ export const engine = (on: Parameters<TestBody>[1], init: { theme?: string; hist
   // absolute path, under the working directory /repo; `agents` is what $.agent.list() names; a plain subagent that starts is
   // "solo-1", "solo-2"... `deny` refuses the next one, `noId` starts it with no id,
   // and a promise under -1 in `held` keeps it from starting.
-  const world = { files: init.files, disk: init.disk ?? {}, stamp: 1, agents: [] as AgentInfo[], solos: 0, deny: '', noId: false, isRefused: false, sent: [] as { to: string; text: string }[], stopped: [] as string[], focused: [] as string[], closed: 0, opened: [] as (number | undefined)[], store: { hist: init.hist ?? {} } as Record<string, unknown>, toasts: [] as string[], stepOut: 0, isUp: false, theme: init.theme ?? 'dark', isDelivered: true, held: new Map<number, Promise<void>>() }
+  const world = { files: init.files, disk: init.disk ?? {}, stamp: 1, agents: [] as AgentInfo[], solos: 0, deny: '', noId: false, isRefused: false, sent: [] as { to: string; text: string }[], stopped: [] as string[], focused: [] as string[], closed: 0, opened: [] as (number | undefined)[], store: { hist: init.hist ?? {} } as Record<string, unknown>, toasts: [] as string[], stepOut: 0, usage: {} as Record<string, unknown>, isUp: false, theme: init.theme ?? 'dark', isDelivered: true, held: new Map<number, Promise<void>>() }
   // Every tool beneath the mod, in one hook: Workflow launches, TaskStop stops, an Edit of float.ts fails after 2s,
   // Bash takes 5s, Read 1s, and any other tool 30s: long enough to be seen running.
   on('tool.call', async (_, e) => {
@@ -132,7 +138,8 @@ export const engine = (on: Parameters<TestBody>[1], init: { theme?: string; hist
     world.sent.push({ to: e.to, text: e.text })
     return world.isDelivered ? { isDelivered: true as const } : { isDelivered: false as const, reason: 'the recipient is gone' }
   })
-  on('ui.focus', (_, e) => {
+  // The ring's move carries the plugin's own name, not the test's: heard under every name.
+  on('ui.focus', { plugin: '*' }, (_, e) => {
     world.focused.push(e.element ?? '')
     return {}
   })
@@ -155,7 +162,7 @@ export const engine = (on: Parameters<TestBody>[1], init: { theme?: string; hist
   on('tool.register', (_, e) => ({ value: { tool: `mcp__loadout__${e.name}` } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('turn.step', async function* (_, e) {
-    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'tool_use' as const, usage: { ...USAGE, output_tokens: world.stepOut } }
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'tool_use' as const, usage: { ...USAGE, output_tokens: world.stepOut, ...world.usage } }
   })
   on('store.get', (_, e) => ({ value: world.store[e.key] }))
   on('store.set', (_, e) => {

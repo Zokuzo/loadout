@@ -1,4 +1,4 @@
-import type { Agent, Chart, History, Plan, Run, Site, Step, Ticket, TicketState, TicketType } from '../../types'
+import type { Agent, Ask, Chart, History, Plan, Run, Site, Step, Ticket, TicketState, TicketType } from '../../types'
 
 export const MAX_CALLS = 20
 
@@ -53,7 +53,8 @@ export function toPlan(input: Record<string, unknown>): Plan | string {
     if (typeof label !== 'string' || known === undefined) {
       return `steps: each step is { label: string, status: ${STATUSES.join(' | ')} }.`
     }
-    out.push({ label: label.slice(0, 120), status: known })
+    // One line of words, whatever was sent: no line break, no space at either end.
+    out.push({ label: label.replace(/\s+/g, ' ').trim().slice(0, 120).trimEnd(), status: known })
   }
   return { title: title.slice(0, 80), steps: out }
 }
@@ -109,6 +110,18 @@ export function modelOf(id: string): { family: 'opus' | 'sonnet' | 'haiku' | 'fa
 }
 
 export const fit = (s: string, n: number): string => (s.length <= n ? s : `${s.slice(0, Math.max(1, n - 1))}…`)
+/**
+ * `s` on two lines at most: `first` cells, then `rest` cells as `fit` cuts them. The cut is at a space, unless there is
+ * none or only a cut where the line ends lets the second line hold what is left.
+ */
+export const fitTwo = (s: string, first: number, rest: number): string[] => {
+  if (s.length <= first) return [s]
+  const space = s.lastIndexOf(' ', first)
+  const holds = (at: number): boolean => s.slice(at).trimStart().length <= rest
+  const at = space > 0 && (holds(space) || !holds(first)) ? space : first
+
+  return [s.slice(0, at), fit(s.slice(at).trimStart(), rest)]
+}
 
 // The kinds of the color-rows mod, so a call is classed the same in both; the pane colours them from its palette.
 export type Kind = 'shell' | 'read' | 'edit' | 'web' | 'agent' | 'skill' | 'ask' | 'mcp' | 'other'
@@ -523,6 +536,9 @@ function splitTop(s: string): string[] {
 
 const TYPES = ['research', 'grilling', 'prototype', 'task'] as const
 
+/** A ticket's number as the pane writes it, on its row and where it blocks another: #03. */
+export const numOf = (n: number): string => `#${String(n).padStart(2, '0')}`
+
 export type RawTicket = { n: number; title: string; type: TicketType; status: 'open' | 'claimed' | 'resolved'; blockedBy: string[] }
 
 /**
@@ -614,14 +630,17 @@ function parseGitlab(text: string | null): { carte: number | null; iid: Map<numb
 /**
  * The effort as it stands in its files. A ticket is resolved or claimed as its
  * Status says; an open one is blocked while a numbered blocker is unresolved
- * (one with no file reads "#NN ?") or an outside, free-text blocker is named,
+ * (cited as "#NN", "#NN ?" with no file) or an outside, free-text blocker is named,
  * and on the frontier otherwise. Tickets come out in number order: the first
  * frontier one is what the skill takes next.
  */
-export function chart(effort: string, mapText: string, issues: readonly { name: string; text: string | null }[], gitlab: string | null): Chart {
+export function chart(effort: string, mapText: string, issues: readonly { name: string; text: string | null; mtimeMs?: number }[], gitlab: string | null): Chart {
   const doc = parseMapDoc(mapText)
   const { carte, iid } = parseGitlab(gitlab)
-  const raw = issues.map(f => (f.text === null ? null : parseTicket(f.name, f.text)))
+  const raw = issues.map(f => {
+    const t = f.text === null ? null : parseTicket(f.name, f.text)
+    return t === null ? null : { ...t, at: f.mtimeMs ?? 0 }
+  })
   const read = raw.filter(t => t !== null).sort((a, b) => a.n - b.n)
   const byN = new Map(read.map(t => [t.n, t]))
   const tickets = read.map((t): Ticket => {
@@ -629,10 +648,10 @@ export function chart(effort: string, mapText: string, issues: readonly { name: 
       const nn = entry.match(/^#?(\d{1,4})\s*(\(.*\))?$/)?.[1]
       if (nn === undefined) return [entry.slice(0, 100)]
       const other = byN.get(Number(nn))
-      return other === undefined ? [`#${nn.padStart(2, '0')} ?`] : other.status === 'resolved' ? [] : [other.title]
+      return other === undefined ? [`#${nn.padStart(2, '0')} ?`] : other.status === 'resolved' ? [] : [numOf(other.n)]
     })
     const state: TicketState = t.status !== 'open' ? t.status : blockers.length > 0 ? 'blocked' : 'frontier'
-    return { n: t.n, title: t.title, type: t.type, state, iid: iid.get(t.n) ?? null, blockers: t.status === 'open' ? blockers : [] }
+    return { n: t.n, title: t.title, type: t.type, state, iid: iid.get(t.n) ?? null, blockers: t.status === 'open' ? blockers : [], at: t.at }
   })
   return {
     effort,
@@ -655,6 +674,13 @@ export function pickEffort(efforts: readonly { name: string; mtimeMs: number }[]
 }
 
 export const inState = (c: Chart, state: TicketState): Ticket[] => c.tickets.filter(t => t.state === state)
+/**
+ * The resolved tickets, the one resolved last first.
+ * ponytail: a ticket file carries no date the pane can trust, so "resolved last" is "file changed last". A note added
+ * to an old ticket lifts it, and a checkout writes every file at one time (then the higher number is first). Read the
+ * date out of the Status line if that order ever matters more.
+ */
+export const resolvedLast = (c: Chart): Ticket[] => inState(c, 'resolved').sort((a, b) => b.at - a.at || b.n - a.n)
 
 // ── Plain subagents: agents started outside a workflow (the Agent tool, a fork, a background agent) ──
 
@@ -672,6 +698,21 @@ export const QUEUE_MS = 120_000
 
 export const soloAgent = (seed: Pick<Agent, 'key' | 'label' | 'startedAt'> & Partial<Agent>): Agent => ({
   n: 0, id: '', model: '', status: 'running', endedAt: 0, tools: 0, calls: [], phase: 0, tokIn: 0, tokOut: 0, log: [], steer: '', stepIn: 0, stepOut: 0, ...seed,
+})
+
+/** The main session before anything is known of it: followed as an agent is, its start set when the session's is seen. */
+export const MAIN: Agent = soloAgent({ key: 'main', label: 'main session', startedAt: 0 })
+
+const [FIVE_MIN, HOUR] = [300_000, 3_600_000]
+/** What a model request reports of its input, as `turn.step` gives it. */
+export type Asked = { input_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number; ephemeral_5m_input_tokens?: number; ephemeral_1h_input_tokens?: number }
+/**
+ * A request sent at `at`, as the bubble map keeps it. The cache holds what it wrote for five minutes or an hour, the
+ * shorter when it wrote both; a request that wrote nothing, or named no lifetime, keeps the lifetime of the one `before` it.
+ */
+export const askOf = (before: Ask | undefined, u: Asked, at: number): Ask => ({
+  at, fresh: u.input_tokens, read: u.cache_read_input_tokens, wrote: u.cache_creation_input_tokens,
+  ttlMs: (u.ephemeral_5m_input_tokens ?? 0) > 0 ? FIVE_MIN : (u.ephemeral_1h_input_tokens ?? 0) > 0 ? HOUR : before?.ttlMs ?? FIVE_MIN,
 })
 
 /** The list with one more, the oldest finished dropped first past MAX_SOLO. */
@@ -693,11 +734,15 @@ export const isMoving = (a: Agent, t: number): boolean =>
  * a plain subagent's tool runs (its bar's highlight travels), 150 ms during a transition, the steps' own cycle while
  * the model works on an active step (`stepMs`, 0 when it does not). A finished run still on screen (`isKept`) is a
  * frame that stands: the pane is drawn once more when it leaves. '' when nothing moves: nothing is drawn.
+ * While the bubble map shows, the main session's time and cache expiry move with nothing running: `mapLeft` is what
+ * its cache has left (0 or less once gone), and the pane is drawn each minute, each ten seconds under ten minutes left.
  */
-export function frameOf(o: { isLive: boolean; solo: readonly Agent[]; stepMs: number; t: number; isKept?: boolean }): string {
+export function frameOf(o: { isLive: boolean; solo: readonly Agent[]; stepMs: number; t: number; isKept?: boolean; mapLeft?: number }): string {
   const running = o.solo.filter(a => !isOver(a))
+  const isAtWork = o.isLive || running.length > 0
   return [
-    ...(o.isLive || running.length > 0 ? [Math.floor(o.t / 450), Math.floor(o.t / 1000)] : []),
+    ...(isAtWork ? [Math.floor(o.t / 450), Math.floor(o.t / 1000)] : []),
+    ...(o.mapLeft === undefined || isAtWork ? [] : [`x${Math.floor(o.t / (o.mapLeft > 0 && o.mapLeft < 600_000 ? 10_000 : 60_000))}`]),
     ...(running.some(a => a.calls.length > 0) ? [`t${Math.floor(o.t / TOOL_MS)}`] : []),
     ...(o.solo.some(a => isMoving(a, o.t)) ? [`m${Math.floor(o.t / 150)}`] : []),
     ...(o.stepMs > 0 ? [`s${Math.floor(o.t / o.stepMs)}`] : []),

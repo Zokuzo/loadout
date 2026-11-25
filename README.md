@@ -3,7 +3,7 @@
 A theme plugin for [Claude Code](https://claude.com/claude-code). One theme picks the whole kit, as a loadout does in a game:
 
 - Claude Code's colours and the terminal background;
-- an **Avatar** side pane: a mascot per theme and model, your subagents on a stage, the usage meters;
+- an **Avatar** side pane: a mascot per theme and model, a count of your subagents, the usage meters;
 - a **Flow map** pane: workflow runs, subagents and the step plan, drawn in the theme's style;
 - coloured **frames** around conversation rows, one hue per kind of action;
 - the **working line**: the theme's own words and a turning icon while Claude works (`★ Inhaling…`).

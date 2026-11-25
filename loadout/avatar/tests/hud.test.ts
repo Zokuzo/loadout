@@ -2,39 +2,32 @@ import { expect, mock, test as timed } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
 import type { AgentInfo, On, SessionUsage, UiPane } from 'claude-code'
 
-import { ASSUMED, CLEAR, blank, coloursOf, mirrored, paint, pixelsOf as pixelsIn, scaled, sourceOf } from '../hooks/canvas'
+import { ASSUMED, CLEAR, blank, coloursOf, paint, sourceOf } from '../hooks/canvas'
 import type { Canvas } from '../hooks/canvas'
 import { BLEND_MS, CALM_MS, CYCLE_MS, FLOURISH_NAMES, HERO_ROWS, beatAfter, flourishAt, flourishOf, heroCanvas, heroGrid, heroPose, isAtRest } from '../hooks/cyber'
 import type { Beat, Moment, Who } from '../hooks/cyber'
 import { FAMILIES, GROUNDS, familyOf, frameOf, framesOf, groundOf, isLightOf, nameOf, pixelsOf, themed, wantedOf } from '../hooks/families'
 import type { Look, SpriteFamily, TextFamily } from '../hooks/families'
-import { INKS } from '../hooks/gamesprites'
-import { HI, clawdMini, kirbyMini } from '../hooks/hires'
 import { CAST, FEED_SHAPE, SLOTS, frameAt, playedOf, reelOf, slotOf } from '../hooks/reel'
 import type { Slot } from '../hooks/reel'
-import { MASK_COLUMNS, MASK_LEAST, MASK_ROWS, NONE, SKINS, TAGS, agentRows, blockRowsOf, hex, maskFrame, modelTag, stateOf, textOf } from '../hooks/hud'
-import type { Grid, Runner, Skin, State } from '../hooks/hud'
+import { MASK_COLUMNS, MASK_LEAST, MASK_ROWS, NONE, SKINS, STATES, hex, maskFrame, textOf } from '../hooks/hud'
+import type { Grid, Skin, State } from '../hooks/hud'
+import { kindOf } from '../../flow/hooks/lib'
 import { HUD_ROWS, sheen } from '../hooks/hudpane'
 import { OBJECT_ROWS, chromeFrame, isChrome } from '../hooks/chrome'
 import { HALO_ROWS, cueOf, drawnFrame, drawnOf, haloFrame, haloLive, isHalo } from '../hooks/halo'
 import { TRACKER_COLUMNS, trackerRows } from '../hooks/halopane'
-import type { Pose as HiPose } from '../hooks/hires'
-import { CHROME_ROWS, laidOut, laidOutArt, laidOutText, mascotBlocks } from '../hooks/layout'
+import { CHROME_ROWS, hasCountRow, laidOut, laidOutArt, laidOutText, mascotBlocks } from '../hooks/layout'
 import { FORMS, formOf } from '../hooks/look'
-import type { Form } from '../hooks/look'
+import type { Form, Pixels } from '../hooks/look'
 import { CLAWD, CLAWD_BLEND_MS, CLAWD_LOOP_MS, clawdFrame, isClawdAtRest } from '../hooks/clawd'
 import { norm, packFiles, packOf, packsOf, resolve } from '../hooks/packs'
 import type { Pack } from '../hooks/packs'
 import { BUILT_IN, askOf, liveSource, liveText, pinLines, settingOf, withTheme } from '../hooks/themes'
-import type { Family } from '../hooks/look'
+import { agentCount } from '../hooks/mods'
 import { HEADROOM, mascotFrame, shakeAt } from '../hooks/mascot'
 import type { Mood } from '../hooks/mascot'
-import { GROUND_PX, NARROWEST_PX, REACH_PX, STAGE_PX, capOf as capArt, stageFrame, stagedOf as stagedArt } from '../hooks/scene'
-import { CYAN, GOLD, HAT_INKS, IMPACT, MARKER, MINI_WIDTH, STREAK, SWAPS, colorOf, miniOf } from '../hooks/minis'
 import { KIRBY } from '../hooks/sprite'
-import type { Pose } from '../hooks/minis'
-import { LEAVE_MS, NARROWEST, SKY, STAGE_ROWS, TICK_MS, actOf, capOf, sceneOf, stagedOf } from '../hooks/stage'
-import type { Agent } from '../hooks/stage'
 import { lookOf, toPack } from '../../flow/hooks/palette'
 import { PACK_TEXT } from '../../flow/tests/packs'
 
@@ -112,6 +105,8 @@ function pendingCalls(on: On) {
 
 // What `$.agent.list()` answers, for a test to change.
 let agents: AgentInfo[] = []
+// Whether `$.agent.list()` cannot be read just now.
+let isListDown = false
 // What `$.ui.panes()` answers: the pane shown, until a test hides it.
 const SHOWN: UiPane[] = [{ id: 'kirby', title: 'Kirby', isShown: true, isFocused: false, isPlaced: true }]
 let panes: UiPane[] = SHOWN
@@ -127,9 +122,14 @@ function store(on: On, entries: Record<string, unknown> = {}, theme = 'custom:ki
     value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: sessionTheme, provider: { plugin: 'engine', tier: 'core' }, isLocked: false }],
   }))
   agents = []
+  isListDown = false
   panes = SHOWN
   sessionModel = model
-  on('agent.list', () => ({ value: agents }))
+  on('agent.list', () => {
+    if (isListDown) throw new Error('the list cannot be read')
+
+    return { value: agents }
+  })
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('session.measure', (_$, e) => ({ changed: e.changed }))
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
@@ -223,6 +223,20 @@ test('the pane draws Kirby, cost, limits and context; a pet persists', async ($,
   await clock.advance(4400)
   expect(await text()).not.toContain('time to /clear')
 
+  // Past 300k a context rots: a wider window is metered against 300k, so 240k of 1M is full, not a quarter.
+  live = { ...USAGE, context: { tokens: 240_000, window: 1_000_000, percent: 24 } }
+  await clock.advance(4400)
+  expect(await text()).toContain('240k / 300k')
+  expect(await text()).toContain('time to /clear')
+  live = { ...USAGE, context: { tokens: 450_000, window: 1_000_000, percent: 45 } }
+  await clock.advance(4400)
+  expect(await text()).toContain('100%')
+  // A wide window nobody has measured yet is no reading, not a full one.
+  live = { ...USAGE, context: { window: 1_000_000 } }
+  await clock.advance(4400)
+  expect(await text()).not.toContain('time to /clear')
+  expect(await text()).not.toContain('/ 300k')
+
   // The model picks the copy ability where the pane holds it. Too narrow for Sword Kirby, he is never squeezed
   // into it: plain Kirby is drawn, whole, under his own name.
   sessionModel = 'claude-sonnet-5-5'
@@ -254,140 +268,142 @@ function colours(cells: unknown): Set<number> {
 }
 
 const TALL = { ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns: 34, scroll: { offset: 0, bodyRows: 60 } } }
-const LEFT_MS = LEAVE_MS + 100
 
-// An agent's legend line is its dot, in its mini's colour, then what it does, in the theme's text colours.
-const isDot = (t: { text: unknown }) => /^[●○] $/.test(String(t.text))
-const isLine = (t: { text: unknown }) => /^[●○] ./.test(String(t.text))
+// --- the agents: one count line -------------------------------------------------
 
-test('subagents play on a stage above the mascot while they live, each in its own colour', async ($, on) => {
+const STOP = { agent_type: 'general-purpose', agent_transcript_path: '', stop_hook_active: false } as const
+const ended = (agentId: string, reason: 'answer' | 'aborted' | 'error' = 'answer') => ({ agentId, reason, answer: '', durationMs: 1, isAborted: reason === 'aborted', turnId: agentId })
+const listed = (id: string, status: AgentInfo['status']): AgentInfo => ({ id, description: id, type: 'general-purpose', status })
+/** The pane's count lines: there is one, or none. */
+const countsIn = (lines: readonly string[]) => lines.filter(line => /\d agents?\b/.test(line))
+/** Lines with what moves by itself left out (a countdown, the Halo tracker's blips): what is left moves only if the layout does. */
+const steady = (lines: readonly string[]) => lines.map(line => (/^[⠀-⣿]+$/.test(line) ? '<tracker>' : line.replace(/resets in .*/i, 'resets')))
+
+test('the count of agents is said whole or not at all: how many live, and how many of them wait', () => {
+  expect([agentCount(1, 0), agentCount(3, 0), agentCount(3, 1), agentCount(2, 2)].map(parts => parts.join(''))).toEqual(['1 agent', '3 agents', '3 agents · 1 waiting', '2 agents · 2 waiting'])
+  // Nobody: nothing to say. Nobody waiting: that part is absent, so it can be drawn dim on its own.
+  expect([agentCount(0, 0), agentCount(3, 0), agentCount(3, 1)]).toEqual([['', ''], ['3 agents', ''], ['3 agents', ' · 1 waiting']])
+})
+
+test('agents at work are one count line above the bubble: none is drawn or named, and the line goes with the last of them', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
   store(on)
   on('session.usage', () => ({ value: USAGE }))
-  const blits: { key: string; cells: string }[] = []
+  const blits: string[] = []
   on('ui.blit', (_$, e) => {
-    blits.push({ key: e.key, cells: 'cells' in e ? e.cells : '' })
+    blits.push(e.key)
 
     return { value: {} }
   })
   on('agent.spawn', () => ({ model: 'claude-haiku-4-5', agentId: 'a1' }))
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('classic.SubagentStop', () => ({}))
-  const finish = pendingCalls(on)
+  on('tool.call', () => ({ result: 'ok' }))
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount(TALL)
-  const text = async () => (await ui.findAll({ type: 'Text' })).map(t => t.text).join('\n')
-  const legend = async () => (await ui.findAll({ type: 'Text' })).filter(isLine).filter(t => String(t.text).startsWith('●'))
-  const stage = () => ui.find({ key: 'stage' })
-  expect(await stage()).toBeUndefined()
-  expect((await ui.findAll({ type: 'Raster' })).length).toBe(1)
+  const order = async () => steady(flow(under(await ui.drawn())))
+  const alone = await order()
+  expect(countsIn(alone)).toEqual([])
+  expect(alone[0]).toMatch(/^╭/)
 
-  // A spawned agent gets a legend line with its task and, under it, the stage, above the bubble and the mascot.
+  // Two agents, one spawned and one known only by its calls: one line, right over the bubble, and nothing under it has moved.
   await $.agent.spawn({ ...SPAWN, description: 'scout the repo' })
-  expect((await ui.findAll({ type: 'Raster' })).map(r => r.key)).toEqual(['stage', 'kirby'])
-  expect(flow(under(await ui.drawn())).slice(0, 3).map(line => line.slice(0, 2))).toEqual(['● ', '<R', '╭─'])
-  const first = await stage()
-  expect([first?.props.columns, first?.props.rows]).toEqual([33, STAGE_ROWS])
-  expect(atob(String(first?.props.cells)).length).toBe(33 * STAGE_ROWS * 12)
-  expect(await text()).toContain('scout the repo')
-  expect((await legend()).length).toBe(1)
-
-  // The animation repaints it frame by frame, always at that size.
+  await $.tool.call(inAgent('a2', { tool: 'Read', file_path: '/tmp/todo.md' }))
+  await clock.advance(1)
+  const busy = await order()
+  expect(busy[0]).toBe('● 2 agents')
+  expect(busy.slice(1)).toEqual(alone)
+  expect(countsIn(flow(await ui.drawn()))).toEqual(['● 2 agents'])
+  // Its dot is the theme's suggestion colour, the count its text colour.
+  expect((await ui.findAll({ type: 'Text' })).filter(t => ['● ', '2 agents'].includes(String(t.text))).map(t => [t.text, t.props.color])).toEqual([['● ', 'suggestion'], ['2 agents', 'text']])
+  // No agent is told one by one: not its task, not its call, and no picture but the mascot's is mounted or repainted.
+  expect(busy.join('\n')).not.toMatch(/scout the repo|todo\.md/)
+  expect(await ui.find({ key: 'stage' })).toBeUndefined()
+  expect((await ui.findAll({ type: 'Raster' })).map(raster => raster.key)).toEqual(['kirby'])
   await clock.advance(4000)
-  const frames = blits.filter(b => b.key === 'stage').map(b => b.cells)
-  expect([...new Set(blits.map(b => b.key))].sort()).toEqual(['kirby', 'stage'])
-  expect(new Set(frames).size).toBeGreaterThan(3)
-  for (const cells of frames) expect(atob(cells).length).toBe(33 * STAGE_ROWS * 12)
+  expect([...new Set(blits)]).toEqual(['kirby'])
 
-  // Its running call is named on its legend line, never in the main loop's bubble.
-  const call = $.tool.call(inAgent('a1', { tool: 'Bash', command: 'ls -la' }))
-  await clock.advance(1)
-  expect(await text()).toContain('ls -la')
-  expect((await ui.findAll({ type: 'Text' })).filter(t => /│/.test(String(t.text)) && /ls -la/.test(String(t.text)))).toEqual([])
+  // An agent that ends is gone at once, whatever its end: by its turn, or by the classic stop event.
+  await $.turn.complete(ended('a1'))
+  expect(await order()).toEqual(['● 1 agent', ...alone])
+  await $.classic.SubagentStop({ agent_id: 'a2', ...STOP })
+  expect(await order()).toEqual(alone)
 
-  // A second agent, known only by its calls, gets another colour, on stage and in the legend.
-  const other = $.tool.call(inAgent('a2', { tool: 'Read', file_path: '/tmp/todo.md' }))
-  await clock.advance(1)
-  const lines = await legend()
-  expect(lines.length).toBe(2)
-  expect((await ui.findAll({ type: 'Text' })).filter(isDot).map(t => t.props.color)).toEqual([colorOf(0), colorOf(1)])
-  expect(lines[1]?.text).toContain('/tmp/todo.md')
-  // It drops in with a twinkle: a moment later its mini stands beside the first.
-  expect(colours((await stage())?.props.cells).has(SWAPS[1]![0])).toBe(false)
-  await clock.advance(4400) // past the next redraw: between two, the frames are blits
-  const painted = colours((await stage())?.props.cells)
-  expect(painted.has(SWAPS[0]![0])).toBe(true)
-  expect(painted.has(SWAPS[1]![0])).toBe(true)
-
-  // A finished agent stays for its dance, then leaves and its legend line goes: by its turn, or by the classic stop event.
-  finish('ls -la')
-  await call
-  await $.turn.complete({ agentId: 'a1', reason: 'answer', answer: 'done', durationMs: 1, isAborted: false, turnId: 't1' })
-  expect((await legend())[0]?.text).toContain('done')
-  expect((await legend()).length).toBe(2)
-  await clock.advance(LEFT_MS)
-  expect(await text()).not.toContain('scout the repo')
-  expect((await legend()).length).toBe(1)
-  expect(colours((await stage())?.props.cells).has(SWAPS[0]![0])).toBe(false)
-  finish('/tmp/todo.md')
-  await other
-  await $.classic.SubagentStop({ agent_id: 'a2', agent_type: 'general-purpose', agent_transcript_path: '', stop_hook_active: false })
-  expect(await stage()).toBeDefined()
-  await clock.advance(LEFT_MS)
-  expect(await stage()).toBeUndefined()
-  expect((await legend()).length).toBe(0)
+  // Called on again after its end, it is counted again; an end no event told is read in the engine's list.
+  await $.tool.call(inAgent('a1', { tool: 'Bash', command: 'ls' }))
+  await $.tool.call(inAgent('a3', { tool: 'Bash', command: 'ls' }))
+  expect(countsIn(await order())).toEqual(['● 2 agents'])
+  await $.turn.complete(ended('a3', 'aborted'))
+  expect(countsIn(await order())).toEqual(['● 1 agent'])
+  agents = [listed('a1', 'completed')]
+  await clock.advance(4400)
+  expect(await order()).toEqual(alone)
   await ui.unmount()
 })
 
-test('a failed call hurts its mini; more agents than the stage holds are counted', async ($, on) => {
+test('the count says how many agents wait, as the engine\'s list has them: pending or waiting, and no longer once they run', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
   store(on)
   on('session.usage', () => ({ value: USAGE }))
   on('ui.blit', () => ({ value: {} }))
-  on('tool.call', (_$, e) => ((e as { command?: string }).command === 'false' ? { deny: 'no' } : { result: 'ok' }))
-  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('tool.call', () => ({ result: 'ok' }))
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount(TALL)
-  const painted = async () => colours((await ui.find({ key: 'stage' }))?.props.cells)
-  const texts = async () => (await ui.findAll({ type: 'Text' })).map(t => String(t.text))
+  const counts = async () => countsIn(flow(await ui.drawn()))
+  for (const id of ['a1', 'a2', 'a3']) await $.tool.call(inAgent(id, { tool: 'Read', file_path: `/tmp/${id}` }))
+  expect(await counts()).toEqual(['● 3 agents'])
 
-  await $.tool.call(inAgent('a1', { tool: 'Bash', command: 'true' }))
-  await clock.advance(2000) // its mini has dropped in
-  expect((await painted()).has(IMPACT)).toBe(false)
-  await $.tool.call(inAgent('a1', { tool: 'Bash', command: 'false' }))
-  expect((await painted()).has(IMPACT)).toBe(true)
-  expect((await painted()).has(MARKER)).toBe(false)
-  // Between calls, its line says why its mini sits dazed.
-  expect((await texts()).some(t => t.startsWith('●') && t.includes('a call failed'))).toBe(true)
-
-  // Five agents: three have a mini on 33 columns, the stage queues the others; the legend names all five.
-  const dots = async (dot: string) => (await texts()).filter(t => t === `${dot} `).length
-  for (const id of ['a2', 'a3', 'a4', 'a5']) await $.tool.call(inAgent(id, { tool: 'Read', file_path: `/tmp/${id}` }))
-  await clock.advance(1)
-  expect((await painted()).has(MARKER)).toBe(true)
-  expect([await dots('●'), await dots('○')]).toEqual([3, 2])
-  expect((await texts()).some(t => t.includes('more'))).toBe(false)
-
-  // Six: still five lines of agents, never a sixth; the last line counts the other.
-  await $.tool.call(inAgent('a6', { tool: 'Read', file_path: '/tmp/a6' }))
-  await clock.advance(1)
-  expect((await dots('●')) + (await dots('○'))).toBe(5)
-  expect(await texts()).toContain('+1 more')
-
-  // An agent interrupted, or ended by an error, gets no victory dance: its line says it was stopped, and it leaves.
-  await $.turn.complete({ agentId: 'a2', reason: 'aborted', answer: '', durationMs: 1, isAborted: true, turnId: 't2' })
-  await $.turn.complete({ agentId: 'a3', reason: 'error', answer: '', durationMs: 1, isAborted: false, turnId: 't3' })
-  expect((await texts()).filter(t => /^[●○] ./.test(t) && t.includes('stopped')).length).toBe(2)
-  expect((await texts()).some(t => t.includes('done'))).toBe(false)
-  await clock.advance(LEFT_MS)
-  expect((await texts()).some(t => t.includes('stopped'))).toBe(false)
-  expect(await texts()).not.toContain('+1 more')
+  // One waits. An agent the list does not name (a3) is not waiting.
+  agents = [listed('a1', 'waiting'), listed('a2', 'running')]
+  await clock.advance(4400)
+  expect(await counts()).toEqual(['● 3 agents · 1 waiting'])
+  // That part is dim: the count is what is read first.
+  expect((await ui.findAll({ type: 'Text' })).filter(t => String(t.text) === ' · 1 waiting').map(t => t.props.color)).toEqual(['inactive'])
+  agents = [listed('a1', 'pending'), listed('a2', 'waiting'), listed('a3', 'running')]
+  await clock.advance(4400)
+  expect(await counts()).toEqual(['● 3 agents · 2 waiting'])
+  agents = [listed('a1', 'running'), listed('a2', 'running'), listed('a3', 'running')]
+  await clock.advance(4400)
+  expect(await counts()).toEqual(['● 3 agents'])
   await ui.unmount()
 })
 
-test('agents alive together wear different colours, up to as many as there are', async ($, on) => {
+test('an agent the engine holds is still counted when its turn ends, waiting; one no event told is read in the engine\'s list', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  store(on)
+  on('session.usage', () => ({ value: USAGE }))
+  on('ui.blit', () => ({ value: {} }))
+  on('tool.call', () => ({ result: 'ok' }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('classic.SubagentStop', () => ({}))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(TALL)
+  const counts = async () => countsIn(flow(await ui.drawn()))
+  // Its turn ends while it waits on background work of its own (seen in a real session): it has not ended.
+  await $.tool.call(inAgent('a1', { tool: 'Bash', command: 'ls' }))
+  agents = [listed('a1', 'waiting')]
+  await $.turn.complete(ended('a1'))
+  expect(await counts()).toEqual(['● 1 agent · 1 waiting'])
+  await $.classic.SubagentStop({ agent_id: 'a1', ...STOP })
+  expect(await counts()).toEqual(['● 1 agent · 1 waiting'])
+  // An agent the list has at work that no event told (the mod loaded after it started) is counted at the next reading.
+  agents = [listed('a1', 'waiting'), listed('a7', 'running'), listed('a8', 'pending'), listed('a9', 'completed'), listed('t1', 'idle')]
+  await clock.advance(4400)
+  expect(await counts()).toEqual(['● 3 agents · 2 waiting'])
+  // Its work done, the held agent runs again, then ends for good.
+  agents = [listed('a1', 'running'), listed('a7', 'completed'), listed('a8', 'completed')]
+  await clock.advance(4400)
+  expect(await counts()).toEqual(['● 1 agent'])
+  agents = [listed('a1', 'completed')]
+  await $.turn.complete(ended('a1'))
+  expect(await counts()).toEqual([])
+  await ui.unmount()
+})
+
+test('a list that cannot be read changes nothing; an agent the list named and names no more has ended; many agents are all counted', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
   store(on)
   on('session.usage', () => ({ value: USAGE }))
@@ -396,266 +412,180 @@ test('agents alive together wear different colours, up to as many as there are',
   on('turn.complete', (_$, e) => ({ text: e.answer }))
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  // a1 is held, waiting, for longer than an agent no list names may stay silent; a2 is one of those.
+  // (The long wait comes before any pane is mounted: no frame is drawn through it.)
+  await $.tool.call(inAgent('a1', { tool: 'Bash', command: 'ls' }))
+  agents = [listed('a1', 'waiting')]
+  await $.turn.complete(ended('a1'))
+  await clock.advance(6 * 60_000)
   const ui = await $.ui.mount(TALL)
-  const lines = async () => (await ui.findAll({ type: 'Text' })).filter(isDot).map(t => t.props.color)
-
-  // As many agents as colours; all but the first and the last finish: the two left side by side differ.
-  const ids = SWAPS.map((_swap, i) => `a${i + 1}`)
-  for (const id of ids) await $.tool.call(inAgent(id, { tool: 'Read', file_path: `/tmp/${id}` }))
-  for (const id of ids.slice(1, -1)) await $.turn.complete({ agentId: id, reason: 'answer', answer: 'ok', durationMs: 1, isAborted: false, turnId: id })
-  await clock.advance(LEFT_MS)
-  expect(await lines()).toEqual([colorOf(0), colorOf(SWAPS.length - 1)])
-  expect(new Set(SWAPS.map((_swap, slot) => colorOf(slot))).size).toBe(SWAPS.length)
-
-  // The next takes a colour nobody wears, not the one after the last.
-  await $.tool.call(inAgent('late', { tool: 'Read', file_path: '/tmp/late' }))
-  await clock.advance(1)
-  expect(await lines()).toEqual([colorOf(0), colorOf(SWAPS.length - 1), colorOf(1)])
+  const counts = async () => countsIn(flow(await ui.drawn()))
+  await $.tool.call(inAgent('a2', { tool: 'Bash', command: 'ls' }))
+  expect(await counts()).toEqual(['● 2 agents · 1 waiting'])
+  // One reading fails: nobody is dropped, nobody stops waiting.
+  isListDown = true
+  await clock.advance(4400)
+  expect(await counts()).toEqual(['● 2 agents · 1 waiting'])
+  // The list is read again and names a1 no more, with no event to tell its end: it has ended. a2, never named, stays.
+  isListDown = false
+  agents = []
+  await clock.advance(4400)
+  expect(await counts()).toEqual(['● 1 agent'])
+  // Forty agents at once are forty: none is left out to make room.
+  for (let i = 10; i < 49; i++) await $.tool.call(inAgent(`b${i}`, { tool: 'Bash', command: 'ls' }))
+  expect(await counts()).toEqual(['● 40 agents'])
   await ui.unmount()
 })
 
-test('the mascot holds still as the stage comes and goes; a short pane keeps the legend alone', async ($, on) => {
-  const clock = mock.clock(on, { now: NOW })
+test('the mascot is the same size at the same place with no agent and with three, at every pane height; the count has the row the layout leaves over the bubble', async ($, on) => {
+  mock.clock(on, { now: NOW })
   store(on)
-  on('session.usage', () => ({ value: USAGE }))
+  on('session.usage', () => ({ value: { ...USAGE, rateLimits: [] } }))
   on('ui.blit', () => ({ value: {} }))
-  on('agent.spawn', () => ({ model: 'claude-haiku-4-5', agentId: 'a1' }))
+  on('tool.call', () => ({ result: 'ok' }))
   on('turn.complete', (_$, e) => ({ text: e.answer }))
-  const pane = (bodyRows: number) => ({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns: 34, scroll: { offset: 0, bodyRows } } })
-  const CHROME = 14
+  // (A pane of `rows` rows for the avatar, and the one above them the Loadouts line takes.)
+  const pane = (rows: number) => ({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns: 34, scroll: { offset: 0, bodyRows: rows + 1 } } })
+  const heights = Array.from({ length: 41 }, (_row, i) => 20 + i)
+  const seen = async (rows: number) => {
+    const ui = await $.ui.mount(pane(rows))
+    const lines = flow(under(await ui.drawn()))
+    const raster = await ui.find({ key: 'kirby' })
+    await ui.unmount()
+
+    return { count: countsIn(lines), column: steady(lines.slice(lines.findIndex(line => line.startsWith('╭')))), box: [raster?.props.columns, raster?.props.rows], rows: Number(raster?.props.rows) }
+  }
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount(pane(60))
-  const mascot = async () => {
-    const raster = await ui.find({ key: 'kirby' })
-
-    return [raster?.props.columns, raster?.props.rows, raster?.props.cells]
+  const bare = new Map<number, Awaited<ReturnType<typeof seen>>>()
+  for (const rows of heights) bare.set(rows, await seen(rows))
+  for (const id of ['a1', 'a2', 'a3']) await $.tool.call(inAgent(id, { tool: 'Read', file_path: `/tmp/${id}` }))
+  const forms = new Set<number>()
+  for (const rows of heights) {
+    const [before, after] = [bare.get(rows)!, await seen(rows)]
+    expect(before.count).toEqual([])
+    // The same picture box, and the same lines from the bubble down: the pane is filled from its foot, so nothing has moved.
+    expect([rows, after.box, after.column]).toEqual([rows, before.box, before.column])
+    // The count is drawn wherever a row is left over the bubble, and the column then fits the pane to the row.
+    const room = rows - CHROME_ROWS - after.rows
+    expect([rows, after.count]).toEqual([rows, room >= 1 ? ['● 3 agents'] : []])
+    // A model's form (taller than plain Kirby's ten rows) never takes that row.
+    if (after.rows > 10) expect([rows, room >= 1]).toEqual([rows, true])
+    forms.add(after.rows)
   }
-  const names = async () => (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  // Sword Kirby is drawn from the first height that holds him and that one row: 25 rows of him, the chrome's twelve, the count's.
+  expect([bare.get(37)!.rows, bare.get(38)!.rows, [...forms].sort((a, b) => a - b)]).toEqual([10, 25, [10, 25]])
+})
 
-  // 60 rows: Sword Kirby, whole, is the same raster before, with and after the stage, which has the rows he leaves.
-  const alone = await mascot()
-  expect(alone.slice(0, 2)).toEqual([33, 25])
-  expect((await ui.findAll({ type: 'Raster' })).length).toBe(1)
-  expect(await names()).toContain('Sword Kirby')
-  await $.agent.spawn({ ...SPAWN, description: 'scout the repo' })
-  const stage = await ui.find({ key: 'stage' })
-  expect(stage?.props.rows).toBe(STAGE_ROWS)
-  expect(await mascot()).toEqual(alone)
-  expect(await names()).toContain('Sword Kirby')
-  expect(CHROME + Number(alone[1]) + Number(stage?.props.rows) + 1).toBeLessThan(61)
-  await $.turn.complete({ agentId: 'a1', reason: 'answer', answer: 'done', durationMs: 1, isAborted: false, turnId: 't1' })
-  expect(await mascot()).toEqual(alone)
-  await clock.advance(LEFT_MS)
-  expect(await ui.find({ key: 'stage' })).toBeUndefined()
-  expect((await mascot()).slice(0, 2)).toEqual(alone.slice(0, 2))
+test('the HUD counts its agents on its own rule, nothing under it: SUBNET // 02 PROC, and those that wait', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  store(on, {}, 'custom:ghostrunner', 'claude-sonnet-5-5')
+  on('session.usage', () => ({ value: USAGE }))
+  on('session.id', () => ({ value: 'a1b2c3d4-0000-4000-8000-000000000001' }))
+  const blits: string[] = []
+  on('ui.blit', (_$, e) => {
+    blits.push(e.key)
+
+    return { value: {} }
+  })
+  on('tool.call', () => ({ result: 'ok' }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  const pane = (bodyColumns: number) => ({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns, scroll: { offset: 0, bodyRows: 60 } } })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(pane(41))
+  const order = async () => steady(flow(under(await ui.drawn())))
+  const alone = await order()
+  const bannerAt = alone.findIndex(line => line.startsWith('┌─┐'))
+  expect(alone.join('\n')).not.toContain('SUBNET')
+
+  // Two agents: the rule that counts them comes in right over the banner, and nothing else: no block, no picture but the mask.
+  for (const id of ['a1', 'a2']) await $.tool.call(inAgent(id, { tool: 'Read', file_path: `/tmp/${id}` }))
+  const busy = await order()
+  expect(busy[bannerAt]).toMatch(/^╱─ SUBNET \/\/ 02 PROC ─+┐$/)
+  expect([busy[bannerAt]!.length, widest(await ui.drawn())]).toEqual([40, 40])
+  expect(busy.filter((_line, i) => i !== bannerAt)).toEqual(alone)
+  expect(busy.filter(line => line.startsWith('<'))).toEqual(['<Raster kirby>'])
+  expect(busy.join('\n')).not.toMatch(/\[[A-Z]{3,4}\]|\/tmp\/a1/)
+  await clock.advance(2000)
+  expect([...new Set(blits)]).toEqual(['kirby'])
+
+  // One waits: said inside the caption, the rule still the pane's width.
+  agents = [listed('a1', 'waiting'), listed('a2', 'running')]
+  await clock.advance(4400)
+  const waiting = await order()
+  expect(waiting[bannerAt]).toMatch(/^╱─ SUBNET \/\/ 02 PROC · 01 WAITING ─+┐$/)
+  expect([waiting[bannerAt]!.length, widest(await ui.drawn())]).toEqual([40, 40])
   await ui.unmount()
+  // On a pane too narrow for those words the caption is never cut mid-word: a shorter word, then the count alone.
+  for (const [columns, caption] of [[34, 'SUBNET // 02 PROC · 01 WAIT'], [30, 'SUBNET // 02 PROC']] as const) {
+    const narrow = await $.ui.mount(pane(columns))
+    const rule = flow(under(await narrow.drawn())).find(line => line.includes('SUBNET'))
+    expect([columns, rule?.replace(/^╱─ | ─*┐$/g, ''), rule?.length]).toEqual([columns, caption, columns - 1])
+    await narrow.unmount()
+  }
 
-  // 45 rows hold Sword Kirby whole and no stage beside him: he is not shrunk to make it room, the stage gives up its
-  // rows, and the agent is a line of legend.
-  await $.agent.spawn({ ...SPAWN, description: 'scout the repo' })
-  const middle = await $.ui.mount(pane(45))
-  const whole = await middle.findAll({ type: 'Raster' })
-  expect(whole.map(r => [r.key, r.props.columns, r.props.rows])).toEqual([['kirby', 33, 25]])
-  expect((await middle.findAll({ type: 'Text' })).map(t => t.text).join('\n')).toContain('scout the repo')
-  await middle.unmount()
-
-  // 30 rows hold neither: plain Kirby is drawn, whole, under his own name; the column stays inside the pane.
-  const short = await $.ui.mount(pane(30))
-  const rasters = await short.findAll({ type: 'Raster' })
-  expect(rasters.map(r => [r.key, r.props.rows])).toEqual([['kirby', 10]])
-  expect(CHROME + Number(rasters[0]?.props.rows) + 1).toBeLessThan(31)
-  const said = (await short.findAll({ type: 'Text' })).map(t => t.text)
-  expect(said.join('\n')).toContain('scout the repo')
-  expect([said.includes('Kirby'), said.includes('Sword Kirby')]).toEqual([true, false])
-  await short.unmount()
+  // An agent that ends leaves the count at once; the last one takes the rule with it.
+  const again = await $.ui.mount(pane(41))
+  agents = [listed('a1', 'killed'), listed('a2', 'running')]
+  await $.turn.complete(ended('a1', 'aborted'))
+  expect(flow(under(await again.drawn()))[bannerAt]).toMatch(/^╱─ SUBNET \/\/ 01 PROC ─+┐$/)
+  await $.turn.complete(ended('a2'))
+  expect(steady(flow(under(await again.drawn())))).toEqual(alone)
+  await again.unmount()
 })
 
-test('a mini acts out what its agent does: a tool kind, a failure, the end', () => {
-  const agent = (tool?: string): Agent => ({ slot: 0, calls: tool === undefined ? [] : [{ tool }] })
-  const acts = { Read: 'inhale', Grep: 'inhale', Edit: 'sword', Bash: 'dash', WebFetch: 'ride', mcp__chrome__click: 'ride', Agent: 'call', Skill: 'sparkle', AskUserQuestion: 'ask', mcp__db__query: 'hop' }
-  for (const [tool, act] of Object.entries(acts)) expect(actOf(agent(tool), NOW)).toBe(act)
-  expect(actOf(agent(), NOW)).toBe('idle')
-  // The newest running call is the one acted out.
-  expect(actOf({ slot: 0, calls: [{ tool: 'Read' }, { tool: 'Edit' }] }, NOW)).toBe('sword')
+test('the Halo pane counts its agents on its rule, FIRETEAM // NN SPARTANS, and its tracker keeps a blip for each; the figure does not move', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  store(on, {}, 'custom:halo-dark', 'claude-opus-5-5')
+  on('session.usage', () => ({ value: { ...USAGE, rateLimits: [] } }))
+  on('ui.blit', () => ({ value: {} }))
+  on('tool.call', () => ({ result: 'ok' }))
+  themesFolder(on, { ...PACK_TEXTS, 'halo-dark.json': packText('halo-dark', { family: 'halo', variant: 'mjolnir' }, '#0b100d') })
+  const pane = (bodyColumns: number, bodyRows: number) => ({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns, scroll: { offset: 0, bodyRows } } })
+  const seen = async (columns: number, rows: number) => {
+    const ui = await $.ui.mount(pane(columns, rows))
+    const lines = flow(under(await ui.drawn()))
+    const figure = await ui.find({ key: 'kirby' })
+    const blips = (await ui.findAll({ type: 'Text' })).filter(t => /^[⠀-⣿]$/.test(String(t.text)) && t.props.bold === true).length
+    const wide = widest(await ui.drawn())
+    await ui.unmount()
 
-  // A failed call: the hurt tumble for a moment, whatever runs, then back to work.
-  const hurt = { ...agent('Read'), hurtAt: NOW }
-  expect(actOf(hurt, NOW)).toBe('hurt')
-  expect(actOf(hurt, NOW + 3 * TICK_MS)).toBe('hurt')
-  expect(actOf(hurt, NOW + 4 * TICK_MS)).toBe('inhale')
-  // Between calls it stays dazed, so the failure still shows, until a call ends well.
-  const shaken = { ...agent(), hurtAt: NOW }
-  expect(actOf(shaken, NOW + 60_000)).toBe('dazed')
-  expect(actOf({ ...shaken, hitAt: NOW + 30_000 }, NOW + 60_000)).toBe('idle')
-  expect(actOf({ ...shaken, hitAt: NOW - 1 }, NOW + 60_000)).toBe('dazed')
-
-  // The end: about three seconds of dance, then off stage until LEAVE_MS; an agent stopped short faints instead.
-  const done = { ...agent(), hurtAt: NOW, doneAt: NOW }
-  expect(actOf(done, NOW)).toBe('dance')
-  expect(actOf(done, NOW + 3000)).toBe('dance')
-  expect(actOf(done, NOW + 3600)).toBe('exit')
-  expect(LEAVE_MS).toBeGreaterThan(3600)
-  const lost = { ...agent(), doneAt: NOW, isLost: true }
-  expect(actOf(lost, NOW)).toBe('faint')
-  expect(actOf(lost, NOW + 3000)).toBe('faint')
-  expect(actOf(lost, NOW + 3600)).toBe('exit')
-
-  // Each act is its own picture, in both families and in a zone with no room ahead, and the scene is a function of its inputs.
-  for (const family of ['kirby', 'clawd'] as Family[]) {
-    for (const crowd of [0, 2]) {
-      const others: Agent[] = Array.from({ length: crowd }, (_a, i) => ({ slot: i + 1, calls: [] }))
-      // Two frames of each: one frame of a hop is one of a thinking mini's hops.
-      const drawn = (a: Agent, frame = 1, now = NOW) => JSON.stringify([frame, frame + 1].map(at => sceneOf(family, [a, ...others], at, now, 33)))
-      const pictures = ['Read', 'Edit', 'Bash', 'WebFetch', 'Agent', 'Skill', 'AskUserQuestion', 'mcp__db__query'].map(tool => drawn(agent(tool)))
-      const more = [drawn(agent()), drawn(hurt), drawn(done), drawn(lost), drawn(shaken, 1, NOW + 60_000)]
-      expect(new Set([...pictures, ...more]).size).toBe(pictures.length + more.length)
-      expect(drawn(agent('Edit'), 7)).toBe(drawn(agent('Edit'), 7))
-    }
+    return { lines, rule: lines.find(line => line.includes('FIRETEAM')), column: steady(lines.slice(lines.findIndex(line => line.includes('COMM ▸')))), box: [figure?.props.columns, figure?.props.rows], blips, wide }
   }
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  // (Few heights, and short ones: a figure is costly to draw.)
+  const heights = [24, 32]
+  const bare = new Map<number, Awaited<ReturnType<typeof seen>>>()
+  for (const rows of heights) bare.set(rows, await seen(41, rows))
+  expect(heights.map(rows => [bare.get(rows)!.rule, bare.get(rows)!.blips, Number(bare.get(rows)!.box[1]) > 0])).toEqual([[undefined, 0, true], [undefined, 0, true]])
+
+  for (const id of ['a1', 'a2', 'a3']) await $.tool.call(inAgent(id, { tool: 'Read', file_path: `/tmp/${id}` }))
+  for (const rows of heights) {
+    const [before, after] = [bare.get(rows)!, await seen(41, rows)]
+    // The rule is the pane's width, right over the comm box, and no picture comes with it; the tracker has their blips.
+    expect(after.rule).toMatch(/^╭─ FIRETEAM \/\/ 03 SPARTANS ─+╮$/)
+    expect([after.rule?.length, after.wide, after.lines.indexOf(after.rule ?? '') + 1]).toEqual([40, 40, after.lines.findIndex(line => line.includes('COMM ▸'))])
+    expect(after.lines.filter(line => line.startsWith('<'))).toEqual(['<Raster kirby>'])
+    expect(after.blips).toBeGreaterThan(2)
+    // The figure is the same box, and the lines from the comm box down the same, with the rule and without.
+    expect([rows, after.box, after.column]).toEqual([rows, before.box, before.column])
+  }
+
+  // Those that wait are said in the caption where it fits the rule: his words are long, so in a shorter one at 41 columns.
+  // (On panes too short for the figure, which is costly to draw: none is, while the clock runs.)
+  const low = await $.ui.mount(pane(46, 18))
+  agents = [listed('a1', 'pending'), listed('a2', 'running'), listed('a3', 'running')]
+  await clock.advance(4400)
+  expect(flow(under(await low.drawn())).find(line => line.includes('FIRETEAM'))).toMatch(/^╭─ FIRETEAM \/\/ 03 SPARTANS · 01 WAITING ─+╮$/)
+  await low.unmount()
+  expect((await seen(41, 18)).rule).toMatch(/^╭─ FIRETEAM \/\/ 03 SPARTANS · 01 WAIT ─+╮$/)
+  const narrow = await seen(34, 18)
+  expect([narrow.rule?.replace(/^╭─ | ─*╮$/g, ''), narrow.rule?.length, narrow.wide]).toEqual(['FIRETEAM // 03 SPARTANS', 33, 33])
 })
 
-type Span4 = { left: number; right: number; top: number; bottom: number }
-const SLOT_OF = new Map<number, number>(SWAPS.flatMap((swap, slot) => swap.map(color => [color, slot] as const)))
-
-/** Every mini's box on a cell-block scene, by its colours, from the sky down: one pass over the scene. */
-function boxesOf(scene: ReturnType<typeof sceneOf>): Map<number, Span4> {
-  const boxes = new Map<number, Span4>()
-  for (let y = SKY; y < scene.length; y++) {
-    scene[y]!.forEach((color, x) => {
-      const slot = color === null ? undefined : SLOT_OF.get(color)
-      if (slot === undefined) return
-      const box = boxes.get(slot)
-      boxes.set(slot, box === undefined ? { left: x, right: x, top: y, bottom: y } : { left: Math.min(box.left, x), right: Math.max(box.right, x), top: box.top, bottom: y })
-    })
-  }
-
-  return boxes
-}
-
-test('the stage is always columns by rows, minis never overlap, and the queue is in the sky', () => {
-  const tools = [undefined, 'Read', 'Edit', 'Bash', 'WebFetch', 'Agent', 'Skill', 'AskUserQuestion', 'Other']
-  const lights = new Set(SWAPS.map(swap => swap[0]))
-  // The pixels of a queued agent's head in its colour: all of it, or all but its crown where its model's hat is.
-  const headLights = (a: Agent) => (formOf(a.model ?? '') === 'opus' ? 14 : 11)
-  const models = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5', 'claude-fable-5']
-  // What is wrong with any scene, said once: nothing.
-  const wrong: string[] = []
-  for (const family of ['kirby', 'clawd'] as Family[]) {
-    for (const columns of [NARROWEST, 21, 33, 56]) {
-      for (const count of [0, 1, 2, 4, 6]) {
-        for (let frame = 0; frame < 48; frame += 1) {
-          const now = NOW + frame * TICK_MS
-          const where = `${family} ${columns} columns, ${count} agents, frame ${frame}`
-          // One fails, one joins late, one finishes, one is stopped short; both are forgotten once they have left. Each wears its model's hat.
-          const crew: Agent[] = Array.from({ length: count }, (_a, i): Agent => ({
-            slot: i,
-            model: models[i % models.length]!,
-            calls: [tools[(i * 2 + (frame >> 3)) % tools.length]].flatMap(tool => (tool === undefined ? [] : [{ tool }])),
-            ...(i === 1 ? { hurtAt: NOW } : {}),
-            ...(i === 2 ? { joinedAt: NOW + 6 * TICK_MS } : {}),
-            ...(i === 0 && count > 1 ? { doneAt: NOW + 4 * TICK_MS } : {}),
-            ...(i === 3 ? { doneAt: NOW + 9 * TICK_MS, isLost: true, hitAt: NOW + 2 * TICK_MS } : {}),
-          })).filter(a => (a.joinedAt ?? 0) <= now && (a.doneAt === undefined || a.doneAt > now || now - a.doneAt < LEAVE_MS))
-            .map(a => (a.doneAt !== undefined && a.doneAt > now ? { ...a, doneAt: undefined, isLost: undefined } : a))
-          const scene = sceneOf(family, crew, frame, now, columns)
-          if (scene.length !== STAGE_ROWS * 2 || scene.some(row => row.length !== columns)) wrong.push(`${where}: not columns by rows`)
-
-          // Each mini's body in a box of its own, inside the stage's margins: no two boxes ever meet.
-          const boxes = [...boxesOf(scene).values()]
-          if (boxes.some(box => box.left < 1 || box.right > columns - 2 || box.bottom >= STAGE_ROWS * 2 - 2)) wrong.push(`${where}: a mini outside the margins`)
-          if (boxes.some((a, i) => boxes.slice(i + 1).some(b => !(a.right < b.left || b.right < a.left || a.bottom < b.top || b.bottom < a.top)))) wrong.push(`${where}: two minis meet`)
-
-          // The sky holds the queue: its count, and as many heads as fit before the enemy's corner. No mini reaches into it.
-          const staged = stagedOf(crew, now, columns)
-          const waiting = crew.filter(a => actOf(a, now) !== 'exit' && !staged.includes(a))
-          const queued = waiting.length
-          const sky = scene.slice(0, SKY).flat()
-          const room = (staged.length > 1 ? columns - 13 : columns) - 4 - 4 * String(queued).length
-          if (sky.includes(MARKER) !== queued > 0) wrong.push(`${where}: the queue's count`)
-          const heads = waiting.slice(0, Math.max(0, Math.floor(room / 6))).reduce((sum, a) => sum + headLights(a), 0)
-          if (sky.filter(color => color !== null && lights.has(color)).length !== heads) wrong.push(`${where}: the queue's heads`)
-          if (scene.slice(SKY).some(row => row.includes(MARKER))) wrong.push(`${where}: a count out of the sky`)
-        }
-      }
-    }
-  }
-  expect(wrong).toEqual([])
-})
-
-test('a freed place on the stage is taken at once, nobody jumps a zone, the enemy comes for two, and a colour swaps body and feet alone', () => {
-  const boxOf = (scene: ReturnType<typeof sceneOf>, slot: number) => boxesOf(scene).get(slot)
-  // As many minis as have ten columns each, four at most: three on the default pane.
-  expect(capOf(33, 6)).toBe(3)
-  expect(capOf(56, 6)).toBe(4)
-  expect(capOf(21, 6)).toBe(1)
-  expect(capOf(33, 2)).toBe(2)
-
-  // A freed place is taken at once: the first in the queue drops in while the one that finished flies off.
-  const five: Agent[] = [0, 1, 2, 3, 4].map(slot => ({ slot, calls: [], ...(slot === 0 ? { doneAt: NOW } : {}) }))
-  const has = (scene: ReturnType<typeof sceneOf>, slot: number) => boxOf(scene, slot) !== undefined
-  const dancing = sceneOf('kirby', five, 3, NOW + 3 * TICK_MS, 33)
-  expect([0, 1, 2, 3].map(slot => has(dancing, slot))).toEqual([true, true, true, false])
-  expect(stagedOf(five, NOW + 9 * TICK_MS, 33).map(a => a.slot)).toEqual([1, 2, 3])
-  const landed = sceneOf('kirby', five, 13, NOW + 13 * TICK_MS, 33)
-  expect([0, 1, 2, 3, 4].map(slot => has(landed, slot))).toEqual([false, true, true, true, false])
-  const forgotten = LEAVE_MS / TICK_MS
-  expect(JSON.stringify(sceneOf('kirby', five.slice(1), forgotten, NOW + LEAVE_MS, 33))).toBe(JSON.stringify(sceneOf('kirby', five, forgotten, NOW + LEAVE_MS, 33)))
-
-  // Comings and goings that overlap: two finish a few ticks apart, one joins meanwhile. Nobody jumps a zone: a mini at work walks over, less than a body's width a tick.
-  for (const family of ['kirby', 'clawd'] as Family[]) {
-    for (let gap = 1; gap <= 8; gap++) {
-      const crew = (now: number): Agent[] => [
-        { slot: 0, calls: [], doneAt: NOW },
-        { slot: 1, calls: [], doneAt: NOW + gap * TICK_MS },
-        { slot: 2, calls: [{ tool: 'Read' }] },
-        { slot: 3, calls: [{ tool: 'Read' }], joinedAt: NOW + 12 * TICK_MS },
-      ].filter(a => (a.joinedAt ?? 0) <= now && (a.doneAt === undefined || now - a.doneAt < LEAVE_MS))
-      let before: number | undefined
-      for (let tick = 0; tick < 40; tick++) {
-        const left = boxOf(sceneOf(family, crew(NOW + tick * TICK_MS), tick, NOW + tick * TICK_MS, 33), 2)?.left
-        expect(left).toBeDefined()
-        if (before !== undefined && left !== undefined) expect(Math.abs(left - before)).toBeLessThan(6)
-        before = left
-      }
-    }
-  }
-
-  // With two or more at it there is an enemy in the sky, and none for one alone; it flinches when a call lands and pops when an agent finishes.
-  const FLYER = 0xff6fa8
-  const skyOf = (crew: Agent[], tick: number, family: Family = 'kirby') => new Set(sceneOf(family, crew, tick, NOW + tick * TICK_MS, 33).slice(0, SKY).flat())
-  const trio: Agent[] = [0, 1, 2].map(slot => ({ slot, calls: [{ tool: 'Edit' }] }))
-  expect(skyOf(trio, 5).has(FLYER)).toBe(true)
-  expect(skyOf(trio, 5, 'clawd').has(FLYER)).toBe(true)
-  expect(skyOf(trio.slice(0, 1), 5).has(FLYER)).toBe(false)
-  const hit = trio.map(a => (a.slot === 1 ? { ...a, hitAt: NOW } : a))
-  expect(skyOf(hit, 1).has(IMPACT)).toBe(false)
-  expect(skyOf(hit, 2).has(IMPACT)).toBe(true)
-  expect(skyOf(hit, 2).has(FLYER)).toBe(false)
-  const won = trio.map(a => (a.slot === 1 ? { ...a, calls: [], doneAt: NOW } : a))
-  expect(skyOf(won, 2).has(FLYER)).toBe(false)
-  expect(skyOf(won, 20).has(FLYER)).toBe(true)
-  const stopped = won.map(a => ({ ...a, isLost: a.doneAt !== undefined }))
-  expect(skyOf(stopped, 2).has(FLYER)).toBe(true)
-
-  // Players two to four are yellow, blue and green: the swap turns body, shine and feet, all of them, and nothing else.
-  for (const family of ['kirby', 'clawd'] as Family[]) {
-    const [one, two] = [miniOf(family, 0), miniOf(family, 1)]
-    for (const pose of Object.keys(one) as Pose[]) {
-      const [a, b] = [one[pose].flat(), two[pose].flat()]
-      expect(a.length).toBe(b.length)
-      expect(one[pose].every(row => row.length === MINI_WIDTH[family])).toBe(true)
-      a.forEach((color, i) => {
-        const at = color === null ? -1 : SWAPS[0]!.indexOf(color)
-        expect(b[i]).toBe(at < 0 ? color : SWAPS[1]![at]!)
-      })
-      expect(a.filter(color => color === SWAPS[0]![0]).length).toBeGreaterThan(5)
-    }
-  }
-  expect(colorOf(1)).toBe('#7cc4ff')
-})
-
-test('a built-in theme draws Clawd, hat by model, and his minis', async ($, on) => {
+test('a built-in theme draws Clawd, hat by model, and counts his agents as Kirby does', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
   store(on, {}, 'dark')
   on('session.usage', () => ({ value: USAGE }))
@@ -671,18 +601,16 @@ test('a built-in theme draws Clawd, hat by model, and his minis', async ($, on) 
   expect([clawd?.props.columns, clawd?.props.rows]).toEqual([22, 10])
   expect(atob(String(clawd?.props.cells)).length).toBe(22 * 10 * 12)
 
+  // Clawd's pane is laid out as Kirby's: the count line, the bubble, the mascot, and no other picture.
   await $.agent.spawn(SPAWN)
-  expect((await ui.findAll({ type: 'Raster' })).length).toBe(2)
-  // Clawd's pane is laid out as Kirby's: the legend, the stage under it, the bubble, the mascot.
-  expect(flow(under(await ui.drawn())).slice(0, 3).map(line => line.slice(0, 2))).toEqual(['● ', '<R', '╭─'])
-  // A task too long for its line is cut with an ellipsis, never mid-word without one.
-  await $.agent.spawn({ ...SPAWN, description: 'map the hud module again' })
-  expect(flow(under(await ui.drawn()))[0]).toBe('● map the hud mod… thinking…')
+  expect((await ui.findAll({ type: 'Raster' })).length).toBe(1)
+  expect(flow(under(await ui.drawn())).slice(0, 3).map(line => line.slice(0, 2))).toEqual(['● ', '╭─', '│ '])
+  expect(flow(under(await ui.drawn()))[0]).toBe('● 1 agent')
 
   // An agent whose end no event told leaves once the engine lists it as ended.
-  agents = [{ id: 'a1', description: 'scout', type: 'general-purpose', status: 'completed' }]
+  agents = [listed('a1', 'completed')]
   await clock.advance(4400)
-  expect((await ui.findAll({ type: 'Raster' })).length).toBe(1)
+  expect(flow(under(await ui.drawn()))[0]).toMatch(/^╭/)
   await ui.unmount()
 })
 
@@ -706,39 +634,205 @@ test('the band is one line of meters while no pane shows, and never a fake 0%', 
   await pane.unmount()
 })
 
-test('the mods live in the Avatar pane, above the avatar: YOUR TURN there and the band empty while the pane shows, the band again while it does not', async ($, on) => {
+// The context three quarters full: past the 70 % where a /clear is due.
+const FULL: SessionUsage = { ...USAGE, context: { tokens: 150_000, window: 200_000, percent: 75 } }
+// The Avatar pane at the 41 columns it asks for: its lines are 40 cells.
+const ASKED = { ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns: 41, scroll: { offset: 0, bodyRows: 60 } } } as const
+const kidsOf = (node: unknown): unknown[] => [(node as { children?: unknown }).children ?? []].flat(Infinity).filter(kid => kid !== null && kid !== undefined && kid !== false)
+/** A row as the terminal draws it: its texts, a plain button as its hotkey then its label (`h: handoff`), any other as `[ label ]`. */
+const rowOf = (row: unknown): string => kidsOf(row).map(kid => {
+  const { type, props } = kid as { type?: unknown; props?: Record<string, unknown> }
+  if (type !== 'Button') return flow(kid).join('')
+
+  return props?.plain === true ? `${String(props.hotkey)}: ${String(props.label)}` : `[ ${String(props?.label)} ]`
+}).join('')
+
+test('before a /clear the Avatar pane says so on one line under the theme line: the title and two keys, h sending the handoff prompt; the band is left alone', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
   store(on)
+  on('session.usage', () => ({ value: FULL }))
+  on('ui.blit', () => ({ value: {} }))
+  on('turn.start', () => ({ turnId: 'main' }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('tool.call', () => ({ result: 'ok' }))
+  on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'Text', props: {}, children: ['the band beneath'] }) as never)
+  const sent: string[] = []
+  on('prompt.submit', (_$, e) => {
+    sent.push(e.text)
+
+    return { text: e.text }
+  })
+  const ran: string[] = []
+  on('command.run', (_$, e) => {
+    ran.push(`${e.command} ${e.args}`)
+
+    return { text: '' }
+  })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(ASKED)
+  const keys = async () => (await ui.findAll({ type: 'Button' })).map(button => button.props.hotkey).filter(key => key === 'h' || key === 'e')
+  // (The pane's row groups, top to bottom; the avatar's own height in rows.)
+  const groups = async () => kidsOf(await ui.drawn())
+  const avatarRows = async () => (under(await ui.drawn()) as { props: { height: number } }).props.height
+  // No turn has ended yet, then one runs: the context is full, and still nothing is asked.
+  expect([await keys(), (await groups()).length, await avatarRows()]).toEqual([[], 2, 59])
+  await clock.advance(1000)
+  await $.turn.start({ text: 'go', turnId: 'main' })
+  expect(await keys()).toEqual([])
+
+  // The turn ends: one line, between the theme line and the avatar, which gives it one row and no more.
+  await $.turn.complete({ reason: 'answer', answer: 'Done. Shall I push?', durationMs: 1, isAborted: false, turnId: 'main' })
+  expect(await keys()).toEqual(['h', 'e'])
+  expect(kidsOf((await groups())[1]).map(rowOf)).toEqual(['before /clear  h: handoff  e: lesson'])
+  expect([(await groups()).length, await avatarRows()]).toEqual([3, 58])
+  // (The title is bold, in a colour of the theme's pack.)
+  expect((await ui.findAll({ text: 'before /clear' })).some(title => title.props.bold === true && String(title.props.color).startsWith('#'))).toBe(true)
+  // Professeur is not on here: its key is drawn dim, the handoff's is not.
+  expect((await ui.findAll({ type: 'Button' })).filter(button => button.props.hotkey === 'h' || button.props.hotkey === 'e').map(button => button.props.dimColor)).toEqual([false, true])
+  // The avatar is whole under it: the bubble, the mascot, the meters and the foot that says the context is full.
+  const avatar = flow(under(await ui.drawn()))
+  expect(avatar[0]).toMatch(/^╭/)
+  expect(avatar).toContain('<Raster kirby>')
+  expect(avatar.at(-1)).toBe(' time to /clear ')
+
+  await ui.press({ key: 'mods-h' })
+  expect(sent.length).toBe(1)
+  expect(sent[0]).toMatch(/^Write a handoff to HANDOFF\.md before I \/clear/)
+  // Professeur off, its key asks nothing: no command is run, no prompt sent.
+  await ui.press({ key: 'mods-e' })
+  expect([sent.length, ran]).toEqual([1, []])
+
+  // While the pane shows, the band is whoever else draws there.
+  const band = await $.ui.mount(BAND)
+  expect(flow(await band.drawn())).toEqual(['the band beneath'])
+  await band.unmount()
+
+  // An agent at work holds the line back; its end brings it again. A new turn takes it away.
+  await $.tool.call(inAgent('a1', { tool: 'Read', file_path: '/tmp/todo.md' }))
+  expect(await keys()).toEqual([])
+  await $.turn.complete({ agentId: 'a1', reason: 'answer', answer: 'ok', durationMs: 1, isAborted: false, turnId: 't-a1' })
+  expect(await keys()).toEqual(['h', 'e'])
+  await $.turn.start({ text: 'more', turnId: 'main' })
+  expect(await keys()).toEqual([])
+  await ui.unmount()
+})
+
+test('where Professeur is on, the lesson key of the /clear line is lit and runs its lesson', async ($, on) => {
+  mock.clock(on, { now: NOW })
+  store(on)
+  mock.env(on, { LOADOUT_PROF: '~/prof', HOME: '/home/u' })
+  on('fs.read', (_$, e) => {
+    if (e.path === '/home/u/prof/state.json') return { value: '{"actif":true}' }
+    throw new Error(`ENOENT: ${e.path}`)
+  })
+  on('session.usage', () => ({ value: FULL }))
+  on('ui.blit', () => ({ value: {} }))
+  on('turn.start', () => ({ turnId: 'main' }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  const ran: string[] = []
+  on('command.run', (_$, e) => {
+    ran.push(`${e.command} ${e.args}`)
+
+    return { text: '' }
+  })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(ASKED)
+  await $.turn.start({ text: 'go', turnId: 'main' })
+  await $.turn.complete({ reason: 'answer', answer: 'Done.', durationMs: 1, isAborted: false, turnId: 'main' })
+  expect((await ui.findAll({ type: 'Button' })).filter(button => button.props.hotkey === 'h' || button.props.hotkey === 'e').map(button => button.props.dimColor)).toEqual([false, false])
+  await ui.press({ key: 'mods-e' })
+  expect(ran).toEqual(['prof leçon'])
+  await ui.unmount()
+})
+
+test('the band, while no pane shows, is the meters and the button alone: no word of the turn; before a /clear its line is the row above them', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  store(on)
+  panes = []
+  let live: SessionUsage = USAGE
+  on('session.usage', () => ({ value: live }))
+  on('ui.blit', () => ({ value: {} }))
+  on('turn.start', () => ({ turnId: 'main' }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('tool.call', (_$, e) => ((e as { command?: string }).command === 'false' ? { deny: 'no' } : { result: 'ok' }))
+  const sent: string[] = []
+  on('prompt.submit', (_$, e) => {
+    sent.push(e.text)
+
+    return { text: e.text }
+  })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const band = await $.ui.mount(BAND)
+  const said = async () => kidsOf(await band.drawn()).map(rowOf)
+  const METERS = ['$1.23 · wk 90% · ctx 20% [ kirby ]']
+  // At rest, at work, after three calls that failed in a row and once the turn is over: the meters, and nothing of the turn.
+  expect(await said()).toEqual(METERS)
+  await clock.advance(1000)
+  await $.turn.start({ text: 'go', turnId: 'main' })
+  expect(await said()).toEqual(METERS)
+  for (const id of ['f1', 'f2', 'f3']) await $.tool.call({ tool: 'Bash', tool_use_id: id, command: 'false' })
+  expect(await said()).toEqual(METERS)
+  await clock.advance(4000)
+  expect(await said()).toEqual(METERS)
+  await $.turn.complete({ reason: 'answer', answer: 'Done. Shall I push?', durationMs: 1, isAborted: false, turnId: 'main' })
+  expect(await said()).toEqual(METERS)
+
+  // The context fills: the meters move, and the /clear line comes above them, whole at this width.
+  live = FULL
+  await clock.advance(4400)
+  expect(await said()).toEqual(['before /clear  h: handoff  e: lesson  ctx 75%', '$1.23 · wk 90% · ctx 75% [ kirby ]'])
+  await band.press({ key: 'mods-h' })
+  expect(sent.length).toBe(1)
+  expect(sent[0]).toMatch(/^Write a handoff to HANDOFF\.md before I \/clear/)
+  // A turn at work again: the line goes, the meters stay.
+  await $.turn.start({ text: 'more', turnId: 'main' })
+  expect(await said()).toEqual(['$1.23 · wk 90% · ctx 75% [ kirby ]'])
+  await $.turn.complete({ reason: 'answer', answer: 'Done.', durationMs: 1, isAborted: false, turnId: 'main' })
+  await band.unmount()
+
+  // A narrow terminal: the line gives its figure up, then its title; the meters `$`, then `wk`.
+  const narrow = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 38 } })
+  expect(kidsOf(await narrow.drawn()).map(rowOf)).toEqual(['before /clear  h: handoff  e: lesson', '$1.23 · wk 90% · ctx 75% [ kirby ]'])
+  await narrow.unmount()
+  const tight = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 24 } })
+  expect(kidsOf(await tight.drawn()).map(rowOf)).toEqual(['h: handoff  e: lesson', 'ctx 75% [ kirby ]'])
+  await tight.unmount()
+})
+
+test('a long turn asks nothing of the person: no recall card in the pane, whatever deck file an older version left; that file is not read, and the answers that version kept are dropped', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  const kept = store(on, { pets: 3, recall: { sched: {}, log: [{ at: NOW, id: 'q1', knew: true }] } })
+  on('store.delete', (_$, e) => {
+    kept.delete(e.key)
+
+    return { value: undefined }
+  })
+  const read: string[] = []
+  on('fs.read', (_$, e) => {
+    read.push(e.path)
+    if (!e.path.endsWith('/loadout-deck.json')) throw new Error('ENOENT')
+
+    return { value: JSON.stringify([{ id: 'q1', q: 'What do you check first?', a: 'the file again', src: 't' }]) }
+  })
   on('session.usage', () => ({ value: USAGE }))
   on('ui.blit', () => ({ value: {} }))
   on('turn.start', () => ({ turnId: 'main' }))
-  on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'Text', props: {}, children: ['the band beneath'] }) as never)
-  on('turn.complete', (_$, e) => ({ text: e.answer }))
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const said = async (ui: { drawn: () => Promise<unknown> }) => flow(await ui.drawn()).join('\n')
-  // At rest they say nothing: the pane is the avatar's alone.
-  const rest = await $.ui.mount(KIRBY_PANE)
-  expect(await said(rest)).not.toContain('IDLE')
-  await rest.unmount()
-
+  expect([...kept.keys()]).toEqual(['pets'])
   await clock.advance(1000)
   await $.turn.start({ text: 'go', turnId: 'main' })
-  await clock.advance(1000)
-  await $.turn.complete({ reason: 'answer', answer: 'Done. Shall I push?', durationMs: 1, isAborted: false, turnId: 'main' })
-  const pane = await $.ui.mount(KIRBY_PANE)
-  const lines = flow(await pane.drawn())
-  expect(lines.some(line => line.includes('YOUR TURN'))).toBe(true)
-  expect(lines.findIndex(line => line.includes('YOUR TURN'))).toBeLessThan(lines.findIndex(line => line.startsWith('<')))
+  await clock.advance(25_000)
+  const wide = { ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns: 53 } }
+  const pane = await $.ui.mount(wide)
+  expect(flow(await pane.drawn()).join('\n')).not.toMatch(/recall|What do you check first/)
+  expect((await pane.findAll({ type: 'Button' })).map(button => button.props.hotkey).filter(key => key === 'f' || key === 'k')).toEqual([])
   await pane.unmount()
-  const band = await $.ui.mount(BAND)
-  expect(await said(band)).toBe('the band beneath')
-  await band.unmount()
-
-  panes = []
-  const alone = await $.ui.mount(BAND)
-  expect(await said(alone)).toContain('YOUR TURN')
-  await alone.unmount()
+  // The deck file is the person's own and no longer Loadout's to read.
+  expect(read.filter(path => path.endsWith('/loadout-deck.json'))).toEqual([])
 })
 
 // --- true pixels -------------------------------------------------------------
@@ -763,14 +857,16 @@ function flow(node: unknown): string[] {
   return type === 'Text' || type === 'Button' ? [inner.join('')] : inner
 }
 
-/** The pane under the Loadouts line (picker.tsx; given up where it would cost the mascot): the avatar's own tree, the pane's last child, as these tests read it. */
-// (The avatar's tree: the pane's last child. The mods above it, where they show, open on the status line.)
-const isMods = (kid: unknown) => /^ ?[▶●○▲△ ] ?[A-Z]/.test(flow(kid)[0] ?? '')
-const under = (root: unknown): unknown => ((root as { children?: unknown[] }).children ?? []).filter(kid => kid !== null && kid !== undefined && kid !== false && !isMods(kid)).at(-1)
+/** The avatar's own tree, as these tests read it: the pane's last row group, under the Loadouts line (picker.tsx) and, where one is due, the /clear line. */
+const under = (root: unknown): unknown => kidsOf(root).at(-1)
 
 const rgbaOf = (source: unknown) => atob(String((source as { rgba: string }).rgba))
+/** A canvas as rows of pixels, null where it is clear; pixels `n` times as large; pixels mirrored. */
+const pixelsIn = ({ width, height, data }: Canvas): Pixels => Array.from({ length: height }, (_row, y) => Array.from({ length: width }, (_cell, x) => (data[y * width + x] === CLEAR ? null : data[y * width + x]!)))
+const scaled = (px: Pixels, n: number): Pixels => px.flatMap(row => Array.from({ length: n }, () => row.flatMap(color => Array<number | null>(n).fill(color))))
+const mirrored = (px: Pixels): Pixels => px.map(row => [...row].reverse())
 
-test('in true pixels the pane is the legend, the stage under it, the bubble, then the mascot right under it', async ($, on) => {
+test('in true pixels the pane is the count line, the bubble, then the mascot right under it', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
   store(on, {}, 'custom:kirby', 'claude-opus-5-5')
   kitty(on)
@@ -786,62 +882,46 @@ test('in true pixels the pane is the legend, the stage under it, the bubble, the
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount(TALL)
-  const order = async () => flow(under(await ui.drawn()))
+  const order = async () => steady(flow(under(await ui.drawn())))
   const mascot = async () => (await ui.find({ key: 'kirby' }))?.props
 
-  // Alone: the bubble's tail is the line right above the mascot's picture, his name right under it. No Raster anywhere.
+  // Alone: the bubble's tail is the line right above the mascot's picture, his name right under it. One picture, and no Raster.
   const alone = await order()
   const at = alone.indexOf('<Image kirby>')
   expect(alone[at - 1]).toMatch(/^╰─+▼─+╯$/)
   expect(alone[at + 1]).toBe('Kirby')
-  expect(alone.some(line => line.startsWith('<Raster'))).toBe(false)
-  expect(alone).not.toContain('<Image stage>')
+  expect(alone.filter(line => line.startsWith('<'))).toEqual(['<Image kirby>'])
 
-  // The picture: 23 by 9 cells of 9 by 21 device pixels is 69 by 63 art pixels of 3 device pixels each way, square; clear around him.
-  // 23 columns, not the 22 he needs: as many off the bubble's 33 as centres him under its tail.
+  // The picture: 17 by 7 cells of 9 by 21 device pixels is 51 by 49 art pixels of 3 device pixels each way, square; clear around him.
+  // A sprite pixel is two art pixels, not the three a column would hold: the mascot is two thirds of its largest.
   const before = await mascot()
-  expect([before?.columns, before?.rows]).toEqual([23, 9])
-  expect(before?.source).toMatchObject({ width: 69, height: 63 })
-  expect(rgbaOf(before?.source).length).toBe(69 * 63 * 4)
+  expect([before?.columns, before?.rows]).toEqual([17, 7])
+  expect(before?.source).toMatchObject({ width: 51, height: 49 })
+  expect(rgbaOf(before?.source).length).toBe(51 * 49 * 4)
   expect(rgbaOf(before?.source).charCodeAt(3)).toBe(0)
   expect([(23 * 9) / 69, (9 * 21) / 63]).toEqual([3, 3])
 
-  // An agent: its legend line and, under it, the stage come in above the bubble; the bubble and the mascot are as they were.
+  // An agent: the count line comes in above the bubble; the bubble and the mascot are as they were, and no other picture is drawn.
   await $.agent.spawn({ ...SPAWN, description: 'scout the repo' })
   const busy = await order()
-  const [stageAt, legendAt, bubbleAt, mascotAt] = [busy.indexOf('<Image stage>'), busy.findIndex(line => line.startsWith('●')), busy.findIndex(line => line.startsWith('╭')), busy.indexOf('<Image kirby>')]
-  expect(legendAt).toBe(0)
-  expect(stageAt).toBe(1)
-  expect(bubbleAt).toBe(2)
-  expect(busy[mascotAt - 1]).toMatch(/^╰─+▼─+╯$/)
-  expect(busy.slice(bubbleAt)).toEqual(alone.slice(alone.findIndex(line => line.startsWith('╭'))))
+  expect(busy[0]).toBe('● 1 agent')
+  expect(busy.slice(1)).toEqual(alone)
   const after = await mascot()
-  expect([after?.columns, after?.rows]).toEqual([23, 9])
-  const stage = (await ui.find({ key: 'stage' }))?.props
-  expect([stage?.columns, stage?.rows]).toEqual([33, 10])
-  expect(stage?.source).toMatchObject({ width: 99, height: 70 })
-  expect(14 + 9 + 10 + 1).toBeLessThan(60)
+  expect([after?.columns, after?.rows]).toEqual([17, 7])
+  expect(busy.filter(line => line.startsWith('<'))).toEqual(['<Image kirby>'])
 
-  // Two seconds of frames: each picture always its mounted size, the stage moving at about eleven frames a second.
+  // Two seconds of frames: the picture always its mounted size, and the mascot's alone.
   await clock.advance(2000)
-  const frames = blits.filter(b => b.key === 'stage')
-  expect(frames.length).toBeGreaterThan(15)
-  expect(frames.length).toBeLessThan(24)
-  expect(new Set(frames.map(b => b.rgba)).size).toBe(frames.length)
-  for (const b of frames) expect([b.width, b.height, atob(b.rgba).length]).toEqual([99, 70, 99 * 70 * 4])
-  for (const b of blits.filter(b => b.key === 'kirby')) expect([b.width, b.height]).toEqual([69, 63])
-  expect([...new Set(blits.map(b => b.key))].sort()).toEqual(['kirby', 'stage'])
+  expect(blits.length).toBeGreaterThan(3)
+  for (const b of blits) expect([b.key, b.width, b.height]).toEqual(['kirby', 51, 49])
 
-  // The agent leaves: the stage goes, the column from the bubble down has not moved.
-  await $.turn.complete({ agentId: 'a1', reason: 'answer', answer: 'done', durationMs: 1, isAborted: false, turnId: 't1' })
-  await clock.advance(LEFT_MS)
-  const left = await order()
-  expect(left).not.toContain('<Image stage>')
-  expect(left.indexOf('<Image kirby>')).toBe(at)
+  // The agent leaves: the line goes, the column from the bubble down has not moved.
+  await $.turn.complete(ended('a1'))
+  expect(await order()).toEqual(alone)
   await ui.unmount()
 })
 
-test('idle and alone the frames slow down; a blit that hangs holds the next back; no pictures, the cell blocks take over', async ($, on) => {
+test('idle the frames slow down, agents at work or not; a blit that hangs holds the next back; no pictures, the cell blocks take over', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
   store(on, {}, 'custom:kirby', 'claude-opus-5-5')
   kitty(on, '') // nothing measured: a cell is taken for one wide by two tall
@@ -856,21 +936,26 @@ test('idle and alone the frames slow down; a blit that hangs holds the next back
     return { value: answer === 'refuse' ? { deny: 'the Image draws its alt here: no placeholder images' } : {} }
   })
   on('agent.spawn', () => ({ model: 'claude-haiku-4-5', agentId: 'a1' }))
+  on('turn.start', () => ({ turnId: 'main' }))
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount(TALL)
   // 23 columns of 9 by 18: 69 art pixels by 11 rows of 6.
-  expect((await ui.find({ key: 'kirby' }))?.props.source).toMatchObject({ width: 69, height: 66 })
+  expect((await ui.find({ key: 'kirby' }))?.props.source).toMatchObject({ width: 51, height: 48 })
 
-  // Idle, nobody on stage: he only breathes, a frame in three is drawn and only those that differ are sent.
+  // Idle: he only breathes, a frame in three is drawn and only those that differ are sent.
+  await clock.advance(3000)
+  expect(asked).toBeGreaterThan(2)
+  expect(asked).toBeLessThan(13)
+  // An agent at work changes nothing of that: no picture is drawn of it, so the frames stay as slow.
+  await $.agent.spawn({ ...SPAWN, description: 'scout the repo' })
+  asked = 0
   await clock.advance(3000)
   expect(asked).toBeGreaterThan(2)
   expect(asked).toBeLessThan(13)
 
-  // A blit that never answers: the frames after it are skipped, not queued behind it.
-  await $.agent.spawn({ ...SPAWN, description: 'scout the repo' })
-  // (A stage is seventy art pixels at the least: twelve rows of six.)
-  expect((await ui.find({ key: 'stage' }))?.props.source).toMatchObject({ width: 99, height: 72 })
+  // At work he moves on every frame. A blit that never answers: the frames after it are skipped, not queued behind it.
+  await $.turn.start({ text: 'go', turnId: 'main' })
   answer = 'hang'
   asked = 0
   await clock.advance(1500)
@@ -880,16 +965,16 @@ test('idle and alone the frames slow down; a blit that hangs holds the next back
   await clock.advance(500)
   expect(asked).toBeGreaterThan(3)
 
-  // The terminal turns out to draw the alt: the pane goes back to Rasters, same order, by itself.
+  // The terminal turns out to draw the alt: the pane goes back to a Raster, by itself.
   answer = 'refuse'
   await clock.advance(500)
   const kinds = flow(under(await ui.drawn())).filter(line => line.startsWith('<'))
-  expect(kinds).toEqual(['<Raster stage>', '<Raster kirby>'])
+  expect(kinds).toEqual(['<Raster kirby>'])
 
   // Not for good: the engine says the same while it is still asking the terminal. Pictures are tried again a little later.
   answer = 'take'
   await clock.advance(21_000)
-  expect(flow(under(await ui.drawn())).filter(line => line.startsWith('<'))).toEqual(['<Image stage>', '<Image kirby>'])
+  expect(flow(under(await ui.drawn())).filter(line => line.startsWith('<'))).toEqual(['<Image kirby>'])
   await ui.unmount()
 })
 
@@ -905,21 +990,22 @@ test('a refused frame is not sent again until the pane is drawn anew; a hidden p
 
     return { value: deny === undefined ? {} : { deny } }
   })
-  on('agent.spawn', () => ({ model: 'claude-haiku-4-5', agentId: 'a1' }))
+  on('turn.start', () => ({ turnId: 'main' }))
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount(TALL)
-  await $.agent.spawn({ ...SPAWN, description: 'scout the repo' })
+  // (At work, so he moves on every frame.)
+  await $.turn.start({ text: 'go', turnId: 'main' })
   await clock.advance(1000)
   expect(asked).toBeGreaterThan(10)
 
-  // "Not mounted": each picture is tried again only now and then, more and more sparsely, the pictures staying Images; the next draw (the slow tick's) starts them again.
+  // "Not mounted": the picture is tried again only now and then, more and more sparsely, and stays an Image; the next draw (the slow tick's) starts its frames again.
   deny = 'nothing of this plugin is mounted there'
   asked = 0
   await clock.advance(2000)
   expect(asked).toBeGreaterThan(2)
   expect(asked).toBeLessThan(8)
-  expect(flow(under(await ui.drawn())).filter(line => line.startsWith('<'))).toEqual(['<Image stage>', '<Image kirby>'])
+  expect(flow(under(await ui.drawn())).filter(line => line.startsWith('<'))).toEqual(['<Image kirby>'])
   deny = undefined
   await clock.advance(4400)
   asked = 0
@@ -981,9 +1067,9 @@ test('a theme picks the family: kirby, the cyber one in red for Ghostrunner or i
     const family = 'skin' in one ? one.cars : one
     if (family === undefined) continue
     for (const form of FORMS) expect(family.forms[form].frames.length).toBeGreaterThan(0)
-    expect(Object.keys(family.mini(0).poses).length).toBe(20)
   }
-  expect(Object.values(FAMILIES).map(family => ('skin' in family ? family.cars?.blocks ?? 'text' : family.blocks))).toEqual(['kirby', 'clawd', 'text', 'text', 'clawd', 'text', 'text', 'text', 'text'])
+  // Which are drawn in pixels and which in text, a world with cars in both.
+  expect(Object.values(FAMILIES).map(family => ('skin' in family ? (family.cars === undefined ? 'text' : 'text, cars') : 'pixels'))).toEqual(['pixels', 'pixels', 'text', 'text', 'text, cars', 'text', 'text', 'text', 'text'])
 })
 
 const MOODS: Mood[] = ['idle', 'working', 'happy', 'worried']
@@ -1119,76 +1205,6 @@ test('the ghostrunner mascot is Raijin, a mask in text: one size whatever it doe
   }
 })
 
-test('the ghostrunner agents are HUD blocks that follow what the agents really do, and leave', () => {
-  const runner = (more: Partial<Runner> = {}, tool?: string): Runner => ({ slot: 0, label: 'scout the repo', calls: tool === undefined ? [] : [{ tool, summary: 'src/main.ts' }], ...more })
-  const tags = { Read: 'SCAN', Grep: 'SCAN', Edit: 'EDIT', Bash: 'EXEC', WebFetch: 'NET', mcp__chrome__click: 'NET', Agent: 'CALL', Skill: 'LOAD', AskUserQuestion: 'ASK', mcp__db__query: 'TOOL' }
-  const block = (one: Runner, now = NOW, rows = 2) => textOf(agentRows(SKINS.red, [one], now, 33, rows))
-  for (const [tool, tag] of Object.entries(tags)) {
-    const rows = block(runner({}, tool))
-    expect(rows[0]).toContain(`[${tag}] scout the repo`)
-    expect(rows[1]).toContain(`${tool.replace(/^mcp__/, '')} src/main.ts`)
-  }
-  expect(block(runner())[0]).toContain('[THNK]')
-  // A failed call, whatever runs, and until one ends well; then how it ended: stopped is not finished.
-  const failed = runner({ hurtAt: NOW })
-  expect([stateOf({ ...runner({}, 'Read'), hurtAt: NOW }, NOW), stateOf(failed, NOW + 60_000), stateOf({ ...failed, hitAt: NOW + 1 }, NOW + 60_000)]).toEqual(['fail', 'fail', 'think'])
-  expect(block(failed)[0]).toContain('[FAIL]')
-  const [done, lost] = [runner({ doneAt: NOW }), runner({ doneAt: NOW, isLost: true })]
-  expect([block(done, NOW + 900)[0]!.includes('[DONE]'), block(lost, NOW + 900)[0]!.includes('[HALT]')]).toEqual([true, true])
-  expect([stateOf(done, NOW + LEAVE_MS - 1), stateOf(lost, NOW + LEAVE_MS - 1)]).toEqual(['done', 'halt'])
-  expect(block(done, NOW + 900)[0]).toContain('✓')
-
-  // Each state is its own figure, three cells that move; the bar down the left edge is the agent's colour.
-  const states: Runner[] = [runner(), ...['Read', 'Edit', 'Bash', 'WebFetch', 'Agent', 'Skill', 'AskUserQuestion', 'mcp__db__query'].map(tool => runner({}, tool)), failed, lost, { ...done, doneAt: NOW - 5000 }]
-  const figure = (one: Runner, now: number) => block(one, now)[0]!.slice(2, 5)
-  const loops = states.map(one => Array.from({ length: 16 }, (_f, i) => figure(one, NOW + i * 180)).join('|'))
-  expect(new Set(loops).size).toBe(states.length)
-  for (const [i, loop] of loops.entries()) if (i < states.length - 1) expect(new Set(loop.split('|')).size).toBeGreaterThan(1)
-  expect(new Set(Object.values(TAGS)).size).toBe(12)
-  // The bar down the left edge says the state, as the tag does (live, failed, stopped, finished), whoever the agent is:
-  // no colour of an agent's own that could be read as one. The agent is told by its number, under its figure.
-  const { cyan, alert, dim, value } = SKINS.yellow
-  for (const [one, tone] of [[runner({ slot: 2 }), cyan], [runner({ slot: 6 }, 'Bash'), cyan], [failed, alert], [lost, dim], [done, value]] as const) {
-    const grid = agentRows(SKINS.yellow, [one], NOW, 33, 2)
-    expect([String.fromCodePoint(grid.words[0]!), grid.words[1], String.fromCodePoint(grid.words[33 * 3]!), grid.words[33 * 3 + 1]]).toEqual(['▌', tone, '▌', tone])
-    expect(textOf(grid)[1]!.slice(2, 4)).toBe(String(one.slot + 1).padStart(2, '0'))
-  }
-  // One row a block: the tools are a column at the right edge, and no figure fills its cell top to bottom.
-  const tight = textOf(agentRows(SKINS.red, [runner({ label: 'find references' }, 'WebFetch'), runner({ slot: 1 }, 'Read'), runner({ slot: 2 })], NOW, 33, 3))
-  expect(tight.map(line => line.trimEnd().length)).toEqual([33, 33, tight[2]!.trimEnd().length])
-  expect([tight[0]!.endsWith(' WebFetch'), tight[1]!.endsWith(' Read'), tight[2]!.length]).toEqual([true, true, 33])
-  for (let ms = 0; ms < 3000; ms += 180) for (const one of states) expect(/[█▓▒░▌▐▍]/.test(figure(one, NOW + ms))).toBe(false)
-  // No frame of a figure is blank, and a figure's anchor keeps its cell: the prompt, the signal's dot, the question mark.
-  for (let ms = 0; ms < 3000; ms += 90) {
-    for (const one of states) expect(figure(one, NOW + ms).trim()).not.toBe('')
-    expect([figure(states[3]!, NOW + ms)[0], figure(states[7]!, NOW + ms)[1], '·•'.includes(figure(states[4]!, NOW + ms)[0]!)]).toEqual(['>', '?', true])
-  }
-  // On one row each agent keeps its number, before its figure, and its task has all the row its own tool leaves:
-  // a task is never cut for the length of another agent's tool, nor at all where no tool runs.
-  expect(tight.map(line => line.slice(2, 4))).toEqual(['01', '02', '03'])
-  const roomy = textOf(agentRows(SKINS.red, [runner({ label: 'find references' }, 'WebFetch'), runner({ slot: 1, label: 'read the source' }, 'Read'), runner({ slot: 2, label: 'thinking it over' })], NOW, 33, 3))
-  expect([roomy[0]!.includes('find ref… WebFetch'), roomy[1]!.includes('read the so… Read'), roomy[2]!.trimEnd().endsWith('[THNK] thinking it over')]).toEqual([true, true, true])
-
-  // Always columns by rows: two rows a block where the room allows, one otherwise, and past five agents (or the rows) a count.
-  const crew = (count: number): Runner[] => Array.from({ length: count }, (_a, i) => runner({ slot: i, label: `agent ${i + 1}` }, i % 2 === 0 ? 'Bash' : undefined))
-  expect([blockRowsOf(1, 20), blockRowsOf(3, 20), blockRowsOf(3, 5), blockRowsOf(5, 9), blockRowsOf(6, 20), blockRowsOf(7, 3), blockRowsOf(2, 0)]).toEqual([2, 6, 3, 5, 6, 3, 0])
-  for (const [count, room] of [[1, 20], [3, 20], [3, 5], [5, 9], [6, 20], [7, 3], [9, 1]] as const) {
-    for (const columns of [33, 20, 60]) {
-      const rows = blockRowsOf(count, room)
-      const grid = agentRows(SKINS.red, crew(count), NOW, columns, rows)
-      expect([grid.columns, grid.rows, grid.words.length]).toEqual([columns, rows, columns * rows * 3])
-      const lines = textOf(grid)
-      const named = lines.filter(line => /\[[A-Z]+\]/.test(line)).length
-      // (A single row names the first agent rather than only count them: the rule over the blocks has the count.)
-      expect(named).toBe(rows >= 2 * count && count <= 5 ? count : count > 5 || count > rows ? Math.max(1, rows - 1) : count)
-      expect(lines.some(line => line.includes(`+${count - named} MORE`))).toBe(named < count && rows > 1)
-    }
-  }
-  // A task or a command in characters a cell cannot hold is still told, those characters aside.
-  const odd = block(runner({ label: 'fix \u{1f525} 日本 tab\there' }))
-  expect(odd[0]).toContain('fix ? ?? tab here')
-})
-
 /** A Raster's cells as rows of text. */
 function written(raster: { props: Record<string, unknown> } | undefined): string[] {
   const bytes = atob(String(raster?.props.cells))
@@ -1213,7 +1229,7 @@ function widest(node: unknown): number {
   return kids.map(widest).reduce((sum, wide) => sum + wide, 0) + Number(props?.gap ?? 0) * Math.max(0, kids.length - 1)
 }
 
-test('a ghostrunner theme skins the whole pane as a HUD: Raijin under the banner, the agents as blocks above it, nothing wider than the pane', async ($, on) => {
+test('a ghostrunner theme skins the whole pane as a HUD: Raijin under the banner, the agents counted on a rule above it, nothing wider than the pane', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
   store(on, {}, 'custom:ghostrunner', 'claude-sonnet-5-5')
   kitty(on) // even where pictures are drawn, a family in text is cells: no Image, in any terminal
@@ -1228,13 +1244,13 @@ test('a ghostrunner theme skins the whole pane as a HUD: Raijin under the banner
   on('agent.spawn', () => ({ model: 'claude-haiku-4-5', agentId: 'a1' }))
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('turn.start', (_$, e) => ({ turnId: e.turnId }))
-  // `false` fails, the build runs until the test ends it, the rest answer at once.
+  // The build runs until the test ends it, the rest answer at once.
   let finish = () => {}
   on('tool.call', (_$, e) => {
     const { command } = e as { command?: string }
     if (command?.startsWith('npm run build') === true) return new Promise(done => { finish = () => done({ result: 'ok' }) })
 
-    return command === 'false' ? { deny: 'no' } : { result: 'ok' }
+    return { result: 'ok' }
   })
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
@@ -1282,46 +1298,29 @@ test('a ghostrunner theme skins the whole pane as a HUD: Raijin under the banner
   expect(new Set(frames).size).toBe(frames.length)
   for (const cells of frames) expect(atob(cells).length).toBe(33 * MASK_ROWS * 12)
 
-  // An agent: its block comes in above the banner, under a rule that counts them; from the banner down nothing has moved.
+  // An agent: the rule that counts them comes in right above the banner, and nothing with it; from the banner down nothing has moved.
   await $.agent.spawn({ ...SPAWN, description: 'scout the repo' })
   const busy = await order()
-  expect(busy.filter(line => line.startsWith('<'))).toEqual(['<Raster stage>', '<Raster kirby>'])
-  const stageAt = busy.indexOf('<Raster stage>')
-  expect(busy[stageAt - 1]).toMatch(/^╱─ SUBNET \/\/ 01 PROC ─+┐$/)
-  expect(busy.slice(0, stageAt)).toEqual([...alone.slice(0, 2), busy[stageAt - 1]!])
+  expect(busy.filter(line => line.startsWith('<'))).toEqual(['<Raster kirby>'])
+  const bannerAt = busy.findIndex(line => line.startsWith('┌─┐'))
+  expect(busy[bannerAt - 1]).toMatch(/^╱─ SUBNET \/\/ 01 PROC ─+┐$/)
+  expect(busy.slice(0, bannerAt)).toEqual([...alone.slice(0, 2), busy[bannerAt - 1]!])
   expect(column(busy)).toEqual(column(alone))
-  const blocks = async () => written(await ui.find({ key: 'stage' }))
-  expect([(await blocks()).length, (await blocks())[0]!.length]).toEqual([2, 33])
-  expect((await blocks())[0]).toContain('[THNK] scout the repo')
   expect((await mask())?.rows).toBe(MASK_ROWS)
 
-  // What it really does: a failed call, then one that ends well; its figure moves between redraws.
-  await $.tool.call(inAgent('a1', { tool: 'Bash', command: 'false' }))
-  expect((await blocks())[0]).toContain('[FAIL]')
-  blits.length = 0
-  await clock.advance(2000)
-  expect(new Set(blits.filter(b => b.key === 'stage').map(b => b.cells)).size).toBeGreaterThan(3)
-  await $.tool.call(inAgent('a1', { tool: 'Bash', command: 'true' }))
-  expect((await blocks())[0]).toContain('[THNK]')
-  // A second one, known only by its calls; then five more: five blocks and a count, the mask where it was.
+  // Six more, known only by their calls: counted, the mask where it was.
   for (const id of ['a2', 'a3', 'a4', 'a5', 'a6', 'a7']) await $.tool.call(inAgent(id, { tool: 'Read', file_path: `/tmp/${id}` }))
   await clock.advance(1)
-  expect((await blocks()).filter(line => /\[[A-Z]+\]/.test(line)).length).toBe(5)
-  expect((await blocks()).some(line => line.includes('+2 MORE'))).toBe(true)
   expect(await text()).toContain('SUBNET // 07 PROC')
   expect(widest(await ui.drawn())).toBe(33)
   expect(column(await order())).toEqual(column(alone))
 
-  // Finished is not stopped; both leave.
-  await $.turn.complete({ agentId: 'a1', reason: 'answer', answer: 'done', durationMs: 1, isAborted: false, turnId: 't1' })
-  await $.turn.complete({ agentId: 'a2', reason: 'aborted', answer: '', durationMs: 1, isAborted: true, turnId: 't2' })
-  expect((await blocks()).slice(0, 2).map(line => /\[[A-Z]+\]/.exec(line)?.[0])).toEqual(['[DONE]', '[HALT]'])
-  await clock.advance(LEFT_MS)
+  // Finished or stopped, an agent leaves the count at once; the last one takes the rule with it.
+  await $.turn.complete(ended('a1'))
+  await $.turn.complete(ended('a2', 'aborted'))
   expect(await text()).toContain('SUBNET // 05 PROC')
-  for (const id of ['a3', 'a4', 'a5', 'a6', 'a7']) await $.turn.complete({ agentId: id, reason: 'answer', answer: 'ok', durationMs: 1, isAborted: false, turnId: id })
-  await clock.advance(LEFT_MS)
-  expect((await order()).filter(line => line.startsWith('<'))).toEqual(['<Raster kirby>'])
-  expect(column(await order())).toEqual(column(alone))
+  for (const id of ['a3', 'a4', 'a5', 'a6', 'a7']) await $.turn.complete(ended(id))
+  expect(steady(await order())).toEqual(steady(alone))
 
   // The main loop's call is the banner, in cyan, its tool in the caption; a pet is a clean run, and counts.
   const call = $.tool.call({ tool: 'Bash', command: 'npm run build' })
@@ -1358,11 +1357,10 @@ test('a ghostrunner theme skins the whole pane as a HUD: Raijin under the banner
   await ui.unmount()
 
   // A pane too short for the whole mask crops it about its visor; shorter still, the HUD alone.
-  // (A pane of `bodyRows` rows for the avatar, the one above them the Loadouts line takes, and the two under them
-  // the mods take: the turn over, YOUR TURN and a blank row.)
-  const pane = (bodyRows: number, bodyColumns = 34) => ({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns, scroll: { offset: 0, bodyRows: bodyRows + 3 } } })
+  // (A pane of `bodyRows` rows for the avatar, and the one above them the Loadouts line takes.)
+  const pane = (bodyRows: number, bodyColumns = 34) => ({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns, scroll: { offset: 0, bodyRows: bodyRows + 1 } } })
   const short = await $.ui.mount(pane(22))
-  expect((await short.find({ key: 'kirby' }))?.props.rows).toBe(7)
+  expect((await short.find({ key: 'kirby' }))?.props.rows).toBe(8)
   await short.unmount()
   const tiny = await $.ui.mount(pane(16))
   expect(await tiny.find({ type: 'Raster' })).toBeUndefined()
@@ -1374,9 +1372,9 @@ test('a ghostrunner theme skins the whole pane as a HUD: Raijin under the banner
   expect(widest(await roomy.drawn())).toBe(45)
   await roomy.unmount()
 
-  // Whatever the pane's height, a running agent is told: the mask never takes the rows of the rule and one block,
-  // and is the same with and without the agent. (From 15 rows: the HUD's thirteen and those two.)
-  const heights = Array.from({ length: 26 }, (_row, i) => 15 + i)
+  // Whatever the pane's height, running agents are told: the mask never takes the row of their rule,
+  // and is the same with and without them. (From 14 rows: the HUD's thirteen and that one.)
+  const heights = Array.from({ length: 27 }, (_row, i) => 14 + i)
   const bare = new Map<number, unknown>()
   for (const rows of heights) {
     const before = await $.ui.mount(pane(rows))
@@ -1384,19 +1382,17 @@ test('a ghostrunner theme skins the whole pane as a HUD: Raijin under the banner
     await before.unmount()
   }
   await $.tool.call(inAgent('late', { tool: 'Bash', command: 'true' }))
-  // (An agent at work, the mods say nothing and give their two rows back: the pane is that much shorter for the same avatar.)
   for (const rows of heights) {
-    const ui = await $.ui.mount({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns: 34, scroll: { offset: 0, bodyRows: rows + 1 } } })
-    expect(((await ui.drawn()) as { children?: unknown[] }).children?.some(isMods)).toBe(false)
+    const ui = await $.ui.mount(pane(rows))
     const lines = flow(under(await ui.drawn()))
-    expect(lines.some(line => line.includes('SUBNET // 01 PROC'))).toBe(true)
-    expect(written(await ui.find({ key: 'stage' })).join('\n')).toContain('[THNK]')
+    expect([rows, lines.filter(line => line.includes('SUBNET // 01 PROC')).length]).toEqual([rows, 1])
+    expect(lines.filter(line => line.startsWith('<') && line !== '<Raster kirby>')).toEqual([])
     const maskRows = (await ui.find({ key: 'kirby' }))?.props.rows
-    expect(maskRows).toBe(bare.get(rows))
-    // The column fits the pane: the HUD's thirteen rows, the mask, the rule and the blocks.
+    expect([rows, maskRows]).toEqual([rows, bare.get(rows)])
+    // The column fits the pane: the HUD's thirteen rows, the mask and the rule.
     // (The Loadouts line gives its row up at the one height where it would cost the pane its mask: the avatar then has `rows + 1`.)
     const own = rows + ((await ui.find({ key: 'loadout' })) === undefined ? 1 : 0)
-    expect(HUD_ROWS + Number(maskRows ?? 0) + 1 + Number((await ui.find({ key: 'stage' }))?.props.rows)).toBeLessThan(own + 1)
+    expect(HUD_ROWS + Number(maskRows ?? 0) + 1).toBeLessThan(own + 1)
     await ui.unmount()
   }
 })
@@ -1451,258 +1447,6 @@ test('the Cyberpunk Edgerunners theme is the same HUD in yellow', async ($, on) 
   await ui.unmount()
 })
 
-const BODY_OF = new Map<number, number>(SWAPS.flatMap((swap, slot) => [[swap[0], slot], [swap[2], slot]] as const))
-
-/**
- * What is on a true-pixel frame, in one pass over it: every mini's box, by its body's colours, from
- * row `sky` down; the colours above that row; and whether the queue's count is anywhere.
- */
-function seenOn(scene: Canvas, sky: number): { boxes: Map<number, Span4>; above: Set<number>; hasMarker: boolean } {
-  const boxes = new Map<number, Span4>()
-  const above = new Set<number>()
-  let hasMarker = false
-  scene.data.forEach((color, i) => {
-    const [x, y] = [i % scene.width, Math.floor(i / scene.width)]
-    if (color === MARKER) hasMarker = true
-    if (y < sky) return void above.add(color)
-    const slot = BODY_OF.get(color)
-    if (slot === undefined) return
-    const box = boxes.get(slot)
-    boxes.set(slot, box === undefined ? { left: x, right: x, top: y, bottom: y } : { left: Math.min(box.left, x), right: Math.max(box.right, x), top: box.top, bottom: y })
-  })
-
-  return { boxes, above, hasMarker }
-}
-
-test('the true-pixel stage: real sprites in exact colour swaps, each act its own picture, motion by the pixel', () => {
-  const [W, H] = [99, 70]
-  const sky = H - GROUND_PX - REACH_PX
-  const boxOf = (scene: Canvas, slot: number) => seenOn(scene, sky).boxes.get(slot)
-  const agent = (tool?: string, slot = 0): Agent => ({ slot, calls: tool === undefined ? [] : [{ tool }] })
-  const print = (scene: Canvas) => scene.data.join(',')
-
-  // Kirby is the game's 16 by 16 sprite; a slot's colours swap his body, its shaded edge and his feet, exactly, and nothing else:
-  // the edge is the body's shade all round, never the feet's colour.
-  expect(kirbyMini(0).poses.stand[0]!.px.slice(0, 8).flat().includes(SWAPS[0]![2])).toBe(false)
-  expect(kirbyMini(0).poses.stand[0]!.px.flat().filter(color => color === SWAPS[0]![2]).length).toBeGreaterThan(5)
-  expect([kirbyMini(0).poses.stand[0]!.px.length, kirbyMini(0).poses.stand[0]!.px[0]!.length]).toEqual([16, 16])
-  for (const mini of [kirbyMini, clawdMini]) {
-    for (const pose of Object.keys(mini(0).poses) as HiPose[]) {
-      mini(0).poses[pose].forEach((one, i) => {
-        const [a, b] = [one.px.flat(), mini(1).poses[pose][i]!.px.flat()]
-        a.forEach((color, k) => {
-          const swap = color === null ? -1 : SWAPS[0]!.slice(0, 3).indexOf(color)
-          expect(b[k]).toBe(swap < 0 ? color : SWAPS[1]![swap]!)
-        })
-        expect(a.filter(color => color === SWAPS[0]![0]).length).toBeGreaterThan(20)
-      })
-    }
-  }
-
-  // Each act is its own picture in both families, roomy or crowded, and a frame is a function of its inputs alone.
-  const hurt = { ...agent('Read'), hurtAt: NOW }
-  const done = { ...agent(), doneAt: NOW }
-  const lost = { ...agent(), doneAt: NOW, isLost: true }
-  const shaken = { ...agent(), hurtAt: NOW - 60_000 }
-  for (const mini of [kirbyMini, clawdMini]) {
-    for (const crowd of [0, 4]) {
-      const others = Array.from({ length: crowd }, (_a, i) => agent(undefined, i + 1))
-      const drawn = (a: Agent, now = NOW + 450) => [0, 180, 720].map(ms => print(stageFrame(mini, [a, ...others], now + ms, W, H))).join('|')
-      const pictures = ['Read', 'Edit', 'Bash', 'WebFetch', 'Agent', 'Skill', 'AskUserQuestion', 'mcp__db__query'].map(tool => drawn(agent(tool)))
-      const more = [drawn(agent()), drawn(hurt), drawn(done), drawn(lost), drawn(shaken)]
-      expect(new Set([...pictures, ...more]).size).toBe(pictures.length + more.length)
-      expect(drawn(agent('Edit'))).toBe(drawn(agent('Edit')))
-    }
-  }
-
-  // Motion is by the pixel: an agent thinking walks at most two pixels from one frame to the next.
-  let was: number | undefined
-  let moved = 0
-  for (let ms = 0; ms < 9000; ms += 90) {
-    const left = boxOf(stageFrame(kirbyMini, [agent()], NOW + ms, W, H), 0)?.left
-    expect(left).toBeDefined()
-    if (was !== undefined && left !== undefined) {
-      expect(Math.abs(left - was)).toBeLessThan(4)
-      moved += left === was ? 0 : 1
-    }
-    was = left
-  }
-  expect(moved).toBeGreaterThan(20)
-})
-
-test('the true-pixel stage: nothing overlaps or leaves the frame, whoever comes and goes, and the queue is in the sky', () => {
-  const [W, H] = [99, 70]
-  const ground = H - GROUND_PX
-  const sky = ground - REACH_PX
-  const tools = [undefined, 'Read', 'Edit', 'Bash', 'WebFetch', 'Agent', 'Skill', 'AskUserQuestion', 'Other']
-  const models = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5', 'claude-fable-5']
-  // What is wrong with any frame, said once: nothing.
-  const wrong: string[] = []
-  for (const mini of [kirbyMini, clawdMini]) {
-    for (const width of [NARROWEST_PX, W, 150]) {
-      for (const count of [0, 1, 2, 4, 5, 7]) {
-        // Every other frame of the story (each agent's own clock is out of step with the others': no beat is missed by all).
-        for (let frame = 0; frame < 84; frame += 2) {
-          const now = NOW + frame * 90
-          // One fails, one joins late, one finishes, one is stopped short; both are forgotten once they have left.
-          const crew: Agent[] = Array.from({ length: count }, (_a, i): Agent => ({
-            slot: i,
-            model: models[i % models.length]!,
-            calls: [tools[(i * 2 + (frame >> 4)) % tools.length]].flatMap(tool => (tool === undefined ? [] : [{ tool }])),
-            ...(i === 1 ? { hurtAt: NOW + 300 } : {}),
-            ...(i === 2 ? { joinedAt: NOW + 1000, hitAt: NOW + 3000 } : {}),
-            ...(i === 0 && count > 1 ? { doneAt: NOW + 400 } : {}),
-            ...(i === 3 ? { doneAt: NOW + 900, isLost: true } : {}),
-          })).filter(a => (a.joinedAt ?? 0) <= now && (a.doneAt === undefined || a.doneAt > now || now - a.doneAt < LEAVE_MS))
-            .map(a => (a.doneAt !== undefined && a.doneAt > now ? { ...a, doneAt: undefined, isLost: undefined } : a))
-            .map(a => (a.hurtAt !== undefined && a.hurtAt > now ? { ...a, hurtAt: undefined } : a))
-          const scene = stageFrame(mini, crew, now, width, H)
-          const where = `${mini === kirbyMini ? 'kirby' : 'clawd'} ${width} px, ${count} agents, +${frame * 90} ms`
-          if (scene.width !== width || scene.height !== H || scene.data.length !== width * H) wrong.push(`${where}: not width by height`)
-
-          // Each mini's body in a box of its own, inside the stage's margins and on the ground: no two boxes ever meet.
-          const { boxes, above, hasMarker } = seenOn(scene, sky)
-          const found = [...boxes.values()]
-          if (found.some(box => box.left < 1 || box.right > width - 2 || box.bottom >= ground)) wrong.push(`${where}: a mini outside the margins`)
-          if (found.some((a, i) => found.slice(i + 1).some(b => !(a.right < b.left || b.right < a.left)))) wrong.push(`${where}: two minis meet`)
-
-          // As many get a mini as the width holds. Each agent that waits is in the sky as its own mini; the "+" and a
-          // count are there only for those that did not fit (but while one rides off up through the sky, over them).
-          const staged = stagedArt(crew, now, width)
-          const waiting = crew.filter(a => actOf(a, now) !== 'exit' && !staged.includes(a))
-          if (staged.length > capArt(width, Infinity)) wrong.push(`${where}: more minis than the width holds`)
-          const isCrossed = crew.some(a => actOf(a, now) === 'exit' && a.isLost !== true)
-          if (!isCrossed && hasMarker !== waiting.some(a => !above.has(SWAPS[a.slot]![0]))) wrong.push(`${where}: the queue's count`)
-          if (width === W && waiting.length > 0 && waiting.length < 3 && hasMarker) wrong.push(`${where}: a count where every waiting mini fits`)
-        }
-      }
-    }
-  }
-  expect(wrong).toEqual([])
-})
-
-test('the true-pixel stage: as many minis as the width holds, a zone holds its mini whole, the sky is clear, the enemy comes for two', () => {
-  const [W, H] = [99, 70]
-  const ground = H - GROUND_PX
-  const sky = ground - REACH_PX
-  const at = (scene: Canvas, x: number, y: number) => scene.data[y * scene.width + x]!
-  const boxOf = (scene: Canvas, slot: number) => seenOn(scene, sky).boxes.get(slot)
-  const agent = (tool?: string, slot = 0): Agent => ({ slot, calls: tool === undefined ? [] : [{ tool }] })
-  // Four minis on the default pane's 99 pixels, five on a wider stage, one on the narrowest; the picture is at least STAGE_PX tall.
-  expect([capArt(W, 9), capArt(150, 9), capArt(NARROWEST_PX, 9), capArt(60, 2)]).toEqual([4, 5, 1, 2])
-  // A zone holds its mini whole whatever it does: no pose is wider than the narrowest zone, but the sword's swing and
-  // the ride, which have a narrow form of their own there.
-  for (const mini of [kirbyMini, clawdMini]) {
-    for (const pose of Object.keys(mini(0).poses) as HiPose[]) {
-      if (pose !== 'slash' && pose !== 'ride') for (const one of mini(0).poses[pose]) expect(one.px[0]!.length).toBeLessThan(24)
-    }
-  }
-  // A ride wider than its zone is a small star instead, whole: with four on stage, the column left clear at each zone's end is clear.
-  const riders = [0, 1, 2, 3].map(slot => agent('WebFetch', slot))
-  for (const mini of [kirbyMini, clawdMini]) {
-    for (let ms = 0; ms < 3000; ms += 90) {
-      const scene = stageFrame(mini, riders, NOW + ms, W, H)
-      for (const edge of [24, 49, 73]) for (let y = sky; y < ground - 2; y++) expect(at(scene, edge, y)).toBe(CLEAR)
-    }
-  }
-  expect(H).toBeGreaterThan(STAGE_PX - 1)
-
-  // The background is clear: most of a frame is nothing at all, the ground strip alone is filled.
-  const quiet = stageFrame(kirbyMini, [agent()], NOW, W, H)
-  expect(quiet.data.filter(color => color === CLEAR).length).toBeGreaterThan(W * H * 0.7)
-  for (let x = 0; x < W; x++) expect(at(quiet, x, H - 1)).not.toBe(CLEAR)
-
-  // A freed place is taken at once, and comings and goings that overlap never make a working mini jump.
-  for (const mini of [kirbyMini, clawdMini]) {
-    for (const gap of [90, 1300]) {
-      const crew = (now: number): Agent[] => [
-        { slot: 0, calls: [], doneAt: NOW },
-        { slot: 1, calls: [], doneAt: NOW + gap },
-        { slot: 2, calls: [{ tool: 'Read' }] },
-        { slot: 3, calls: [{ tool: 'Read' }], joinedAt: NOW + 4800 },
-      ].filter(a => (a.joinedAt ?? 0) <= now && (a.doneAt === undefined || now - a.doneAt < LEAVE_MS))
-      let before: number | undefined
-      for (let ms = 0; ms < 16_000; ms += 90) {
-        const box = boxOf(stageFrame(mini, crew(NOW + ms), NOW + ms, W, H), 2)
-        expect(box).toBeDefined()
-        const middle = box === undefined ? undefined : (box.left + box.right) / 2
-        if (before !== undefined && middle !== undefined) expect(Math.abs(middle - before)).toBeLessThan(9)
-        before = middle
-      }
-    }
-  }
-
-  // With two or more at it Bronto Burt is in the sky, and not for one alone; he is gone for a while when an agent finishes.
-  const BURT = INKS[6]
-  const skyOf = (crew: Agent[], ms: number) => {
-    const scene = stageFrame(kirbyMini, crew, NOW + ms, W, H)
-
-    return new Set(scene.data.slice(0, sky * W))
-  }
-  const trio: Agent[] = [0, 1, 2].map(slot => agent('Edit', slot))
-  expect(skyOf(trio, 2000).has(BURT)).toBe(true)
-  expect(skyOf(trio.slice(0, 1), 2000).has(BURT)).toBe(false)
-  const won = trio.map(a => (a.slot === 1 ? { ...a, calls: [], doneAt: NOW } : a))
-  expect(skyOf(won, 800).has(BURT)).toBe(false)
-  expect(skyOf(won, 6500).has(BURT)).toBe(true)
-  const stopped = won.map(a => ({ ...a, isLost: a.doneAt !== undefined }))
-  expect(skyOf(stopped, 800).has(BURT)).toBe(true)
-})
-
-test('nothing on the true-pixel stage is somewhere else from one frame to the next, whatever changes', () => {
-  const [W, H] = [99, 63]
-  const sky = H - GROUND_PX - REACH_PX
-  /** The middle of a mini's body on a frame, by its colours, below the sky. */
-  const middleOf = (scene: Canvas, slot: number) => {
-    const body = new Set<number>([SWAPS[slot]![0], SWAPS[slot]![2]])
-    let [left, right] = [Infinity, -Infinity]
-    for (let y = sky; y < scene.height; y++) {
-      for (let x = 0; x < scene.width; x++) if (body.has(scene.data[y * W + x]!)) [left, right] = [Math.min(left, x), Math.max(right, x)]
-    }
-
-    return left === Infinity ? undefined : (left + right) / 2
-  }
-  // The crew as the pane's hooks leave it: `turnedAt` and `wasTool` at each change.
-  const stories: Record<string, (now: number, at: number) => Agent> = {
-    'a call fails': (now, at) => (now < at ? { slot: 0, calls: [{ tool: 'Bash' }] } : { slot: 0, calls: [], hurtAt: at, turnedAt: at, wasTool: 'Bash' }),
-    'a read fails under an edit': (now, at) => ({ slot: 0, calls: [{ tool: 'Edit' }], ...(now < at ? {} : { hurtAt: at }) }),
-    'stopped while thinking': (now, at) => ({ slot: 0, calls: [], ...(now < at ? {} : { doneAt: at, turnedAt: at, isLost: true }) }),
-    'stopped mid call': (now, at) => (now < at ? { slot: 0, calls: [{ tool: 'Bash' }] } : { slot: 0, calls: [], doneAt: at, turnedAt: at, wasTool: 'Bash', isLost: true }),
-    'finished': (now, at) => ({ slot: 0, calls: [], ...(now < at ? {} : { doneAt: at, turnedAt: at }) }),
-    'a call begins': (now, at) => ({ slot: 0, calls: now < at ? [] : [{ tool: 'Read' }], ...(now < at ? {} : { turnedAt: at }) }),
-    'a call ends': (now, at) => (now < at ? { slot: 0, calls: [{ tool: 'Bash' }] } : { slot: 0, calls: [], hitAt: at, turnedAt: at, wasTool: 'Bash' }),
-    'one call after another': (now, at) => (now < at ? { slot: 0, calls: [{ tool: 'WebFetch' }] } : { slot: 0, calls: [{ tool: 'Bash' }], turnedAt: at, wasTool: 'WebFetch' }),
-  }
-  for (const mini of [kirbyMini]) {
-    for (const story of Object.values(stories)) {
-      // The change at several moments of what it was doing: at either end of a walk, mid lunge.
-      for (const at of [NOW + 630, NOW + 1170, NOW + 1980, NOW + 3150]) {
-        let before: number | undefined
-        for (let now = NOW; now < at + 2700; now += 90) {
-          const middle = middleOf(stageFrame(mini, [story(now, at)], now, W, H), 0)
-          // Half a body a frame at the very most (a lunge's slide a little more), never the fifteen pixels of a mini put somewhere else.
-          if (before !== undefined && middle !== undefined) expect(Math.abs(middle - before)).toBeLessThan(actOf(story(now, at), now) === 'dash' ? 12 : 8)
-          before = middle
-        }
-      }
-    }
-  }
-
-  // A failed call is the enemy's doing, even for an agent alone: it dives in, and is gone again.
-  const BURT = INKS[6]
-  const failed: Agent = { slot: 0, calls: [], hurtAt: NOW, turnedAt: NOW, wasTool: 'Bash' }
-  expect(coloursOf(stageFrame(kirbyMini, [failed], NOW + 180, W, H)).has(BURT)).toBe(true)
-  expect(coloursOf(stageFrame(kirbyMini, [failed], NOW + 180, W, H)).has(IMPACT)).toBe(true)
-  expect(coloursOf(stageFrame(kirbyMini, [failed], NOW + 2000, W, H)).has(BURT)).toBe(false)
-  // An agent that finishes throws a star at the enemy first: it pops when that lands, not before.
-  const pair: Agent[] = [{ slot: 0, calls: [], doneAt: NOW, turnedAt: NOW }, { slot: 1, calls: [{ tool: 'Read' }] }]
-  expect(coloursOf(stageFrame(kirbyMini, pair, NOW + 270, W, H)).has(BURT)).toBe(true)
-  expect(coloursOf(stageFrame(kirbyMini, pair, NOW + 900, W, H)).has(BURT)).toBe(false)
-
-  // The pop is the game's own, brown and cream.
-  expect(coloursOf(stageFrame(kirbyMini, pair, NOW + 800, W, H)).has(INKS[4])).toBe(true)
-})
-
 test('the mascot in true pixels: the user\'s Kirby keeps its exact pixels, the game frames exact, a shake that eases', () => {
   const kirby = familyOf('custom:kirby')
   if ('skin' in kirby) throw new Error('Kirby is drawn in pixels')
@@ -1731,7 +1475,7 @@ test('the mascot in true pixels: the user\'s Kirby keeps its exact pixels, the g
   expect(shake.filter(dx => dx === 0).length).toBeGreaterThan(48)
 })
 
-test('in true pixels a short pane keeps the mascot its size and the legend alone; every mini on stage has its legend line', async ($, on) => {
+test('in true pixels the mascot is as large with five agents as with none, at every pane height, and they are one count line', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
   store(on, {}, 'custom:kirby', 'claude-opus-5-5')
   kitty(on)
@@ -1740,37 +1484,33 @@ test('in true pixels a short pane keeps the mascot its size and the legend alone
   on('tool.call', () => ({ result: 'ok' }))
   // (A pane of `bodyRows` rows for the avatar, and the one above them the Loadouts line takes.)
   const pane = (bodyRows: number) => ({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns: 34, scroll: { offset: 0, bodyRows: bodyRows + 1 } } })
+  const heights = Array.from({ length: 18 }, (_row, i) => 21 + i)
+  const seen = async (rows: number) => {
+    const ui = await $.ui.mount(pane(rows))
+    const mascot = (await ui.find({ key: 'kirby' }))?.props
+    const lines = flow(under(await ui.drawn()))
+    await ui.unmount()
+
+    return { box: [mascot?.columns, mascot?.rows, (mascot?.source as { width: number }).width], rows: Number(mascot?.rows), pictures: lines.filter(line => line.startsWith('<')), count: countsIn(lines) }
+  }
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const bare = new Map<number, Awaited<ReturnType<typeof seen>>>()
+  for (const rows of heights) bare.set(rows, await seen(rows))
   for (const id of ['a1', 'a2', 'a3', 'a4', 'a5']) await $.tool.call(inAgent(id, { tool: 'Read', file_path: `/tmp/${id}` }))
   await clock.advance(1)
 
-  // Whatever the height, from the shortest pane that holds him whole: never a mascot a third of its size to make room for the stage.
-  const widths: number[] = []
-  for (let rows = 21; rows <= 38; rows++) {
-    const ui = await $.ui.mount(pane(rows))
-    const mascot = (await ui.find({ key: 'kirby' }))?.props
-    const stage = (await ui.find({ key: 'stage' }))?.props
-    const width = Number((mascot?.source as { width: number }).width)
-    widths.push(width)
-    expect(width).toBeGreaterThan(45) // two art pixels to a sprite pixel at the least: 20 * 2 + 6
-    // The column fits the pane: the meters and the bubble, the mascot, and the stage where there is one.
-    expect(CHROME_ROWS + Number(mascot?.rows) + Number(stage?.rows ?? 0)).toBeLessThan(rows + 1)
-    if (rows < 30) expect(stage).toBeUndefined()
-    if (rows < 30 || rows > 31) expect(width).toBe(69)
-    // No stage, the agents are still told: a line of legend each while rows are left, the last one counting the rest.
-    const lines = (await ui.findAll({ type: 'Text' })).map(t => String(t.text)).filter(t => /^[●○] .|more$/.test(t))
-    expect(lines.length).toBe(Math.min(5, rows - CHROME_ROWS - Number(mascot?.rows) - Number(stage?.rows ?? 0)))
-    await ui.unmount()
+  // Whatever the height, from the shortest pane that holds him whole: the picture is the one he has alone, never a smaller one to make room.
+  for (const rows of heights) {
+    const [before, after] = [bare.get(rows)!, await seen(rows)]
+    expect([rows, after.box, after.pictures]).toEqual([rows, before.box, ['<Image kirby>']])
+    // Two art pixels to a sprite pixel wherever the pane has his seven rows and the count's one: 51 art pixels across.
+    if (rows >= CHROME_ROWS + 7 + 1) expect([rows, after.box[2]]).toEqual([rows, 51])
+    // The column fits the pane: the meters and the bubble, the mascot, and the count's row over them.
+    const room = rows - CHROME_ROWS - after.rows
+    expect([rows, before.count, after.count]).toEqual([rows, [], room >= 1 ? ['● 5 agents'] : []])
+    if (rows >= CHROME_ROWS + 9 + 1) expect([rows, room >= 1]).toEqual([rows, true])
   }
-  expect(new Set(widths).size).toBeLessThan(3)
-
-  // A tall pane: four have a mini on 99 pixels and the fifth waits; all five are named, in their colours, none merely counted.
-  const tall = await $.ui.mount(TALL)
-  const texts = (await tall.findAll({ type: 'Text' })).map(t => String(t.text))
-  expect([texts.filter(t => t === '● ').length, texts.filter(t => t === '○ ').length]).toEqual([4, 1])
-  expect(texts.some(t => t.includes('more'))).toBe(false)
-  await tall.unmount()
 })
 
 // --- the grounds: the terminal's background and the pane's ---------------------
@@ -2016,8 +1756,7 @@ for (const [theme, name] of [['custom:kirby', 'kirby'], ['custom:kirby-pink', 'k
     expect([(await rootOf(ui)).backgroundColor, (await rootOf(ui)).width, (await rootOf(ui)).height]).toEqual([hex(pane), 34, 60])
     // In cells, nothing shows the terminal's own background inside it: an empty cell is the pane's colour.
     const rasters = await ui.findAll({ type: 'Raster' })
-    expect(rasters.map(raster => raster.key)).toEqual(['stage', 'kirby'])
-    if (name.startsWith('kirby')) expect((await ui.findAll({ type: 'Text' })).filter(isDot).map(t => t.props.color)).toEqual([colorOf(0)])
+    expect(rasters.map(raster => raster.key)).toEqual(['kirby'])
     for (const raster of rasters) {
       const bytes = atob(String(raster.props.cells))
       const grounds = new Set(Array.from({ length: bytes.length / 12 }, (_c, i) => bytes.charCodeAt(i * 12 + 8) | (bytes.charCodeAt(i * 12 + 9) << 8) | (bytes.charCodeAt(i * 12 + 10) << 16) | (bytes.charCodeAt(i * 12 + 11) << 24)))
@@ -2041,7 +1780,7 @@ test('a built-in theme keeps the terminal\'s own background: no fill, and the ce
   await plain.unmount()
 })
 
-test('in true pixels the pictures stay clear over the pane\'s background', async ($, on) => {
+test('in true pixels the picture stays clear over the pane\'s background', async ($, on) => {
   mock.clock(on, { now: NOW })
   store(on, {}, 'custom:kirby', 'claude-sonnet-5-5')
   kitty(on)
@@ -2052,14 +1791,12 @@ test('in true pixels the pictures stay clear over the pane\'s background', async
   await $.tool.call(inAgent('a1', { tool: 'Read', file_path: '/tmp/a1' }))
   const ui = await $.ui.mount(TALL)
   expect(((await ui.drawn()) as Node).props?.backgroundColor).toBe('#1b2414')
-  for (const key of ['kirby', 'stage']) {
-    const rgba = rgbaOf((await ui.find({ key }))?.props.source)
-    const alphas = Array.from({ length: rgba.length / 4 }, (_p, i) => rgba.charCodeAt(i * 4 + 3))
-    // A pixel is drawn or it is not: nothing half clear, and most of a picture is nothing at all. No pixel is the pane's colour painted in.
-    expect(alphas.every(alpha => alpha === 0 || alpha === 255)).toBe(true)
-    expect(alphas.filter(alpha => alpha === 0).length).toBeGreaterThan(alphas.length * 0.4)
-    expect(Array.from({ length: rgba.length / 4 }, (_p, i) => (rgba.charCodeAt(i * 4) << 16) | (rgba.charCodeAt(i * 4 + 1) << 8) | rgba.charCodeAt(i * 4 + 2)).includes(0x1b2414)).toBe(false)
-  }
+  const rgba = rgbaOf((await ui.find({ key: 'kirby' }))?.props.source)
+  const alphas = Array.from({ length: rgba.length / 4 }, (_p, i) => rgba.charCodeAt(i * 4 + 3))
+  // A pixel is drawn or it is not: nothing half clear, and most of the picture is nothing at all. No pixel is the pane's colour painted in.
+  expect(alphas.every(alpha => alpha === 0 || alpha === 255)).toBe(true)
+  expect(alphas.filter(alpha => alpha === 0).length).toBeGreaterThan(alphas.length * 0.4)
+  expect(Array.from({ length: rgba.length / 4 }, (_p, i) => (rgba.charCodeAt(i * 4) << 16) | (rgba.charCodeAt(i * 4 + 1) << 8) | rgba.charCodeAt(i * 4 + 2)).includes(0x1b2414)).toBe(false)
   await ui.unmount()
 })
 
@@ -2075,7 +1812,7 @@ for (const theme of ['custom:kirby', 'custom:kirby-pink', 'dark']) {
     on('turn.complete', (_$, e) => ({ text: e.answer }))
     const seen: string[] = []
     await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-    // Calm, then worried by a limit, then by a context to clear; each time with agents thinking, failed, finished and
+    // Calm, then worried by a limit, then by a context to clear; each time with agents at work, others finished and
     // stopped; idle and at work; and the band that stands in for the pane.
     for (const [n, usage] of [{ ...USAGE, rateLimits: [] }, USAGE, { ...USAGE, context: { tokens: 150_000, window: 200_000, percent: 75 } }].entries()) {
       live = usage
@@ -2095,11 +1832,22 @@ for (const theme of ['custom:kirby', 'custom:kirby-pink', 'dark']) {
       await band.unmount()
       await $.turn.complete({ reason: 'aborted', answer: '', durationMs: 1, isAborted: true, turnId: `main-${n}` })
     }
-    // A fixed colour is an agent's dot, in its mini's colour, or the pane's own ground; or, in the band, the theme's
-    // own pack palette, which the status line and the cards are painted with: nothing else.
+    // The turn over, every agent ended and the context to clear: the /clear line, in the pane and in the band.
+    for (const n of [0, 1, 2]) for (const id of ['a1', 'a4']) await $.turn.complete({ agentId: `${id}-${n}`, reason: 'answer', answer: 'ok', durationMs: 1, isAborted: false, turnId: `${id}-${n}` })
+    const cleared = async (ui: { find: (query: { key: string }) => Promise<unknown>; drawn: () => Promise<unknown>; unmount: () => Promise<void> }) => {
+      expect([await ui.find({ key: 'mods-h' }), await ui.find({ key: 'mods-e' })].map(key => key !== undefined)).toEqual([true, true])
+      seen.push(...coloursIn(await ui.drawn()))
+      await ui.unmount()
+    }
+    panes = SHOWN
+    await cleared(await $.ui.mount(TALL))
+    panes = []
+    await cleared(await $.ui.mount(BAND))
+    // A fixed colour is the pane's own ground; or the theme's own pack palette, which the /clear line is painted
+    // with: nothing else. (The agents' count is in the theme's colours too.)
     const ground = groundOf(theme)
     const pack = Object.values(lookOf(theme, Object.values(PACK_TEXT).flatMap(text => toPack(JSON.parse(text)) ?? [])).P)
-    const allowed = [...SWAPS.map((_swap, slot) => colorOf(slot, isLightOf(theme))), ...(ground === undefined ? [] : [hex(ground.pane)]), ...pack]
+    const allowed = [...(ground === undefined ? [] : [hex(ground.pane)]), ...pack]
     expect([...new Set(seen)].filter(color => color.startsWith('#') && !allowed.includes(color))).toEqual([])
     expect(seen.some(color => color.startsWith('#') && color !== (ground === undefined ? '' : hex(ground.pane)))).toBe(true)
     // The border is the prompt's, a worry's the warning's, a context to clear the error's; the bars turn from success to
@@ -2120,28 +1868,24 @@ test('every mascot form at every pane height is its own pixels, each a whole num
       for (let rows = 20; rows <= 60; rows++) {
         const where = `${family.key} ${form}, ${rows} rows`
         // In cell blocks, a pixel of the form is a pixel of the picture: the look drawn, mirrored, at one place, and nothing else.
-        for (const alive of [0, 2]) {
-          const drawn = laidOut(look, alive, 34, rows, true)
-          const source = mirrored(pixelsOf(drawn.look, 'idle', 0, false))
-          const picture = mascotBlocks(drawn, 'idle', 0)
-          const top = picture.findIndex(row => row.some(color => color !== null))
-          const left = Math.min(...picture.map(row => row.findIndex(color => color !== null)).filter(x => x >= 0)) - source[0]!.findIndex((_c, x) => source.some(row => row[x] !== null))
-          const firstRow = source.findIndex(row => row.some(color => color !== null))
-          const shown = picture.length - (top - firstRow)
-          const isExact = picture.every((row, y) => row.every((color, x) => color === (source[y - (top - firstRow)]?.[x - left] ?? null)))
-          if (!isExact) wrong.push(`${where}, cell blocks: not the form's own pixels`)
-          // A model's form is whole or not there: only the plain one, on a pane too short even for it, loses its feet. The form drawn is the model's or, failing that, the plain one.
-          if (drawn.look.form !== 'opus' && shown < source.length) wrong.push(`${where}, cell blocks: a model's form cut`)
-          if (drawn.look.form !== form && drawn.look.form !== 'opus') wrong.push(`${where}, cell blocks: another form`)
-          // He is never shrunk for the stage: with agents he is what he is alone, and the column fits the pane wherever plain Kirby does.
-          if (JSON.stringify(drawn.size) !== JSON.stringify(laidOut(look, 0, 34, rows, true).size)) wrong.push(`${where}: the mascot moves for the stage`)
-          if (rows >= 22 && CHROME_ROWS + drawn.size.rows + (drawn.stage?.rows ?? 0) + drawn.lines > rows) wrong.push(`${where}, cell blocks: taller than the pane`)
-          // A model's form never takes the pane's last rows: where it is drawn, both agents are still told, on the stage or by name.
-          if (alive === 2 && drawn.look.form !== 'opus' && drawn.stage === null && drawn.lines < 2) wrong.push(`${where}, cell blocks: the agents are not told`)
-        }
+        const drawn = laidOut(look, 34, rows)
+        const source = mirrored(pixelsOf(drawn.look, 'idle', 0, false))
+        const picture = mascotBlocks(drawn, 'idle', 0)
+        const top = picture.findIndex(row => row.some(color => color !== null))
+        const left = Math.min(...picture.map(row => row.findIndex(color => color !== null)).filter(x => x >= 0)) - source[0]!.findIndex((_c, x) => source.some(row => row[x] !== null))
+        const firstRow = source.findIndex(row => row.some(color => color !== null))
+        const shown = picture.length - (top - firstRow)
+        const isExact = picture.every((row, y) => row.every((color, x) => color === (source[y - (top - firstRow)]?.[x - left] ?? null)))
+        if (!isExact) wrong.push(`${where}, cell blocks: not the form's own pixels`)
+        // A model's form is whole or not there: only the plain one, on a pane too short even for it, loses its feet. The form drawn is the model's or, failing that, the plain one.
+        if (drawn.look.form !== 'opus' && shown < source.length) wrong.push(`${where}, cell blocks: a model's form cut`)
+        if (drawn.look.form !== form && drawn.look.form !== 'opus') wrong.push(`${where}, cell blocks: another form`)
+        // The column fits the pane wherever plain Kirby does, and a model's form never takes the pane's last row: where it is drawn, the agents are still counted.
+        if (rows >= 22 && CHROME_ROWS + drawn.size.rows > rows) wrong.push(`${where}, cell blocks: taller than the pane`)
+        if (rows >= 22 && drawn.look.form !== 'opus' && !hasCountRow(drawn, rows)) wrong.push(`${where}, cell blocks: no row for the agents' count`)
         // In true pixels, each sprite pixel is `scale` art pixels each way, a whole number: the frame is the form enlarged, exactly.
         for (const [name, cell] of Object.entries(cellOf)) {
-          const { art } = laidOutArt(look, 0, 34, rows, cell)
+          const { art } = laidOutArt(look, 34, rows, cell)
           const source = frameOf(look, 'idle', NOW)
           if (art === undefined || !Number.isInteger(art.scale) || art.scale < 1) {
             wrong.push(`${where}, ${name}: no whole scale`)
@@ -2160,226 +1904,18 @@ test('every mascot form at every pane height is its own pixels, each a whole num
   expect(wrong).toEqual([])
   // What a short pane shows, by looking at it: a form sliced flat under its cheeks reads worse than plain Kirby, so a model's
   // form is whole or not there; and it is not there on a pane it would fill to the last row, the agents told by nothing at all:
-  // it leaves three rows of legend. Sword Kirby from 40 rows, Fire Kirby from 36, Beam Kirby from 31; plain Kirby, whole, below.
+  // it leaves the row of their count. Sword Kirby from 38 rows, Fire Kirby from 34, Beam Kirby from 29; plain Kirby, whole, below.
   const kirby = sprites.find(family => family.key === 'kirby')!
   const shownAt = (form: (typeof FORMS)[number], rows: number) => {
-    const drawn = laidOut({ family: kirby, form }, 0, 34, rows, true)
+    const drawn = laidOut({ family: kirby, form }, 34, rows)
 
     return `${nameOf(drawn.look)} ${drawn.size.rows * 2 - 2 >= framesOf(drawn.look)[0]!.length ? 'whole' : 'cut'}`
   }
-  expect([22, 32, 36, 39, 40].map(rows => shownAt('sonnet', rows))).toEqual(['Kirby whole', 'Kirby whole', 'Kirby whole', 'Kirby whole', 'Sword Kirby whole'])
-  expect([22, 28, 32, 35, 36].map(rows => shownAt('fable', rows))).toEqual(['Kirby whole', 'Kirby whole', 'Kirby whole', 'Kirby whole', 'Fire Kirby whole'])
-  expect([22, 27, 30, 31].map(rows => shownAt('haiku', rows))).toEqual(['Kirby whole', 'Kirby whole', 'Kirby whole', 'Beam Kirby whole'])
+  expect([22, 32, 36, 37, 38].map(rows => shownAt('sonnet', rows))).toEqual(['Kirby whole', 'Kirby whole', 'Kirby whole', 'Kirby whole', 'Sword Kirby whole'])
+  expect([22, 28, 32, 33, 34].map(rows => shownAt('fable', rows))).toEqual(['Kirby whole', 'Kirby whole', 'Kirby whole', 'Kirby whole', 'Fire Kirby whole'])
+  expect([22, 27, 28, 29].map(rows => shownAt('haiku', rows))).toEqual(['Kirby whole', 'Kirby whole', 'Kirby whole', 'Beam Kirby whole'])
   // Too narrow for the form, the plain one, whatever the height.
-  expect(nameOf(laidOut({ family: kirby, form: 'sonnet' }, 0, 22, 60, true).look)).toBe('Kirby')
-})
-
-// --- a mini wears its agent's model ---------------------------------------------
-
-test('a helper\'s model gives its mini its form: a hat in its own colours, on every pose, in both families and on both stages', async ($, on) => {
-  const HATS = { sonnet: 0x38c048, haiku: 0xe82838, fable: 0xf8a800 } as const // the sword's green cap, the beam's red horn, the fire's flames
-  const models = { opus: 'claude-opus-5-5', sonnet: 'claude-sonnet-5-5', haiku: 'claude-haiku-4-5', fable: 'claude-fable-5' } as const
-  const body = new Set(SWAPS.flat())
-  // No hat's colour is a colour an agent's swap could give a body: a hat is told from its wearer.
-  for (const ink of [...HAT_INKS, ...Object.values(HATS)]) expect(body.has(ink)).toBe(false)
-
-  for (const mini of [kirbyMini, clawdMini]) {
-    const plain = mini(0)
-    for (const form of ['sonnet', 'haiku', 'fable'] as const) {
-      const [worn, other] = [mini(0, form), mini(1, form)]
-      for (const pose of Object.keys(plain.poses) as HiPose[]) {
-        expect(worn.poses[pose].length).toBe(plain.poses[pose].length)
-        worn.poses[pose].forEach((one, i) => {
-          const bare = plain.poses[pose][i]!
-          // Every frame of every pose wears it: colours the bare one has not; and under it the same body, where it was.
-          const [had, has] = [new Set(bare.px.flat()), new Set(one.px.flat())]
-          expect([pose, i, [...has].some(color => color !== null && !had.has(color))]).toEqual([pose, i, true])
-          expect([one.px.length - one.ay, one.px[0]!.length - one.ax >= bare.px[0]!.length - bare.ax]).toEqual([bare.px.length - bare.ay, true])
-          // Another agent's colours change the body alone: the hat keeps its own.
-          const [a, b] = [one.px.flat(), other.poses[pose][i]!.px.flat()]
-          expect(a.every((color, k) => b[k] === (color === null || !SWAPS[0]!.slice(0, 3).includes(color) ? color : SWAPS[1]![SWAPS[0]!.indexOf(color)]!))).toBe(true)
-        })
-      }
-      expect(worn.tall).toBeGreaterThan(plain.tall)
-    }
-    expect(mini(0, 'opus')).toBe(plain)
-  }
-  // Kirby's hats are the abilities' own: at native size on the game's sixteen-pixel sprite, never scaled.
-  for (const [form, ink] of Object.entries(HATS)) expect(kirbyMini(0, form as keyof typeof HATS).poses.stand[0]!.px.flat().includes(ink)).toBe(true)
-  expect(kirbyMini(0, 'sonnet').poses.stand[0]!.px[0]!.length).toBe(16)
-  // Each edits with its own move: Fire Kirby his breath, Beam Kirby his whip, plain Kirby a pencil, and Sword Kirby alone the sword. Each still an edit's picture, not a read's.
-  expect([kirbyMini(0).attack, kirbyMini(0, 'sonnet').attack, kirbyMini(0, 'haiku').attack, kirbyMini(0, 'fable').attack]).toEqual(['pencil', undefined, 'beam', 'fire'])
-  const act = (model: string, tool: string) => [0, 270, 540, 810].map(ms => stageFrame(kirbyMini, [{ slot: 0, model, calls: [{ tool }] }], NOW + ms, 99, 70).data.join(',')).join('|')
-  for (const model of Object.values(models)) expect(new Set(['Read', 'Edit', 'Bash', 'WebFetch'].map(tool => act(model, tool))).size).toBe(4)
-  expect(new Set(Object.values(models).map(model => act(model, 'Edit'))).size).toBe(4)
-
-  // The sword's cap keeps its bobble on every frame of every pose, from the front, the side and behind (never popping off
-  // for a turn of the dance or the wind-up of a slash): more yellow than the band alone, which is the cap seen edge on.
-  // The sword is steel, inked as the rest: no frame keeps the game's brown one.
-  const yellow = (one: { px: readonly (readonly (number | null)[])[] }) => one.px.flat().filter(color => color === 0xf8d838).length
-  const sword = kirbyMini(0, 'sonnet').poses
-  for (const pose of Object.keys(sword) as HiPose[]) {
-    if (pose !== 'turn') sword[pose].forEach((one, i) => expect([pose, i, yellow(one) >= 12]).toEqual([pose, i, true]))
-  }
-  // Only Sword Kirby has a blade: plain Kirby's edit shows none of its steel, on any frame, and Sword Kirby's does. His sword is a
-  // sword: a blade, a gold guard across it, a hilt.
-  const STEEL_INKS = [0xe8f8ff, 0x58c8f0]
-  const edits = (model: string) => new Set(Array.from({ length: 30 }, (_f, i) => [...coloursOf(stageFrame(kirbyMini, [{ slot: 0, model, calls: [{ tool: 'Edit' }] }], NOW + i * 90, 99, 70))]).flat())
-  expect([STEEL_INKS.some(ink => edits(models.opus).has(ink)), STEEL_INKS.every(ink => edits(models.sonnet).has(ink))]).toEqual([false, true])
-  const held = sword.slash[7]!.px
-  const guard = held.findIndex(row => row.filter(color => color === 0xf8d838 || color === 0xc08818).length >= 5)
-  expect([guard > held.findIndex(row => row.includes(0xe8f8ff)), guard < held.length - 16]).toEqual([true, true])
-  // Clawd is his small self doubled, and so is his sword: one drawing, in one size of pixel. No pixel of the blade stands alone.
-  for (const form of FORMS) {
-    for (const one of clawdMini(0, form).poses.slash) {
-      for (let y = 1; y + 1 < one.px.length; y += 2) {
-        for (let x = 1; x + 1 < one.px[0]!.length; x += 2) {
-          const block = [one.px[y]![x], one.px[y]![x + 1], one.px[y + 1]![x], one.px[y + 1]![x + 1]]
-          if (block.some(color => typeof color === 'number' && STEEL_INKS.includes(color))) expect(new Set(block).size).toBe(1)
-        }
-      }
-    }
-  }
-  for (const mini of [kirbyMini, clawdMini]) for (const one of mini(0, 'sonnet').poses.slash) expect(one.px.flat().includes(INKS[4])).toBe(false)
-  // From behind a hat shows its back: the fire's crown without its green stone.
-  const fire = kirbyMini(0, 'fable')
-  expect([fire.poses.stand[0]!.px.flat().includes(0x00b838), fire.poses.back[0]!.px.flat().includes(0x00b838)]).toEqual([true, false])
-  // A fire is alive: a second drawing of every frame, the same size and stood at the same place, its flames elsewhere. No other hat flickers.
-  expect([kirbyMini(0).flicker, kirbyMini(0, 'sonnet').flicker, kirbyMini(0, 'haiku').flicker]).toEqual([undefined, undefined, undefined])
-  for (const pose of Object.keys(fire.poses) as HiPose[]) {
-    fire.poses[pose].forEach((one, i) => {
-      const other = fire.flicker![pose][i]!
-      expect([other.ax, other.ay, other.px.length, other.px[0]!.length]).toEqual([one.ax, one.ay, one.px.length, one.px[0]!.length])
-      expect(JSON.stringify(other.px)).not.toBe(JSON.stringify(one.px))
-    })
-  }
-  // Out for the count, Clawd lies on his belly, his hat still on his head: over him, not under.
-  const out = clawdMini(0, 'fable').poses.flat[0]!.px
-  expect(out.findIndex(row => row.includes(0x7b4bd6))).toBeLessThan(out.findIndex(row => row.includes(SWAPS[0]![0])))
-
-  // On a light theme the stage is by day, on both stages: no night cloud, no dim star; and an agent's dot is its mini's shade.
-  const NIGHT = [0x4c5174, 0x363a56, 0xb9a55a]
-  const skies = (isLight: boolean) => new Set(Array.from({ length: 40 }, (_f, i) => [
-    ...coloursOf(stageFrame(kirbyMini, [{ slot: 0, calls: [] }], NOW + i * 700, 99, 70, isLight)),
-    ...sceneOf('kirby', [{ slot: 0, calls: [] }], i * 2, NOW + i * 800, 33, isLight).flat(),
-  ]).flat())
-  expect([NIGHT.some(color => skies(true).has(color)), NIGHT.every(color => skies(false).has(color)), skies(true).has(0xe58ab8)]).toEqual([false, true, true])
-  expect([colorOf(0), colorOf(0, true)]).toEqual(['#ffe066', '#e8a020'])
-
-  // On the stage, in true pixels and in cell blocks: the agent's model picks the hat; no model told, or one of no known family, none.
-  const on99 = (model?: string) => coloursOf(stageFrame(kirbyMini, [{ slot: 0, calls: [], ...(model === undefined ? {} : { model }) }], NOW, 99, 70))
-  const on33 = (family: Family, model?: string) => new Set(sceneOf(family, [{ slot: 0, calls: [], ...(model === undefined ? {} : { model }) }], 0, NOW, 33).flat())
-  for (const [form, ink] of Object.entries(HATS)) {
-    expect(on99(models[form as keyof typeof HATS]).has(ink)).toBe(true)
-    expect([...on33('kirby', models[form as keyof typeof HATS])].some(color => color !== null && HAT_INKS.includes(color))).toBe(true)
-    expect([...on33('clawd', models[form as keyof typeof HATS])].some(color => color !== null && HAT_INKS.includes(color))).toBe(true)
-  }
-  for (const model of [undefined, models.opus, 'gpt-something']) {
-    expect(Object.values(HATS).some(ink => on99(model).has(ink))).toBe(false)
-    expect([...on33('kirby', model), ...on33('clawd', model)].some(color => color !== null && HAT_INKS.includes(color))).toBe(false)
-  }
-  // A waiting mini wears it too, whole, in the sky.
-  const crowd: Agent[] = [0, 1, 2, 3, 4].map(slot => ({ slot, calls: [], model: slot === 4 ? models.fable : models.opus }))
-  const sky = stageFrame(kirbyMini, crowd, NOW, 99, 70).data.slice(0, (70 - GROUND_PX - REACH_PX) * 99)
-  expect(sky.includes(HATS.fable)).toBe(true)
-
-  // In the pane: a spawn tells the model, and that agent's mini wears its hat; an agent known only by its calls is plain.
-  const clock = mock.clock(on, { now: NOW })
-  store(on)
-  on('session.usage', () => ({ value: USAGE }))
-  on('ui.blit', () => ({ value: {} }))
-  on('tool.call', () => ({ result: 'ok' }))
-  on('agent.spawn', () => ({ model: 'claude-haiku-4-5', agentId: 'a1' }))
-  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount(TALL)
-  await $.tool.call(inAgent('a2', { tool: 'Read', file_path: '/tmp/a2' }))
-  const before = colours((await ui.find({ key: 'stage' }))?.props.cells)
-  expect(HAT_INKS.some(ink => before.has(ink))).toBe(false)
-  await $.agent.spawn({ ...SPAWN, description: 'scout the repo' })
-  await clock.advance(4400) // it has dropped in
-  const after = colours((await ui.find({ key: 'stage' }))?.props.cells)
-  expect([0xf8a030, 0xe82838].every(ink => after.has(ink))).toBe(true)
-  await ui.unmount()
-
-  // The ghostrunner blocks tag the model at the right end of the agent's line; no model told, no tag.
-  expect(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5', 'claude-fable-5', 'sonnet', '', undefined, 'gpt-something'].map(modelTag)).toEqual(['OPS', 'SNT', 'HKU', 'FBL', 'SNT', '', '', ''])
-  const runner = (model?: string, tool?: string): Runner => ({ slot: 0, label: 'scout the repository again', calls: tool === undefined ? [] : [{ tool, summary: 'src/main.ts' }], ...(model === undefined ? {} : { model }) })
-  const two = textOf(agentRows(SKINS.red, [runner('claude-sonnet-5-5', 'Read')], NOW, 33, 2))
-  expect([two[0]!.endsWith(' SNT'), two[0]!.length, two[0]!.includes('[SCAN] scout the rep')]).toEqual([true, 33, true])
-  expect(textOf(agentRows(SKINS.red, [runner(undefined, 'Read')], NOW, 33, 2))[0]!.trimEnd().endsWith('scout the repositor…')).toBe(true)
-  // On one row a block the tool has that end; with none running, the tag.
-  const one = textOf(agentRows(SKINS.red, [runner('claude-fable-5', 'Read'), runner('claude-fable-5'), runner()], NOW, 33, 3))
-  expect([one[0]!.endsWith(' Read'), one[1]!.endsWith(' FBL'), /FBL|OPS/.test(one[2]!)]).toEqual([true, true, false])
-})
-
-// --- nothing is cut off at the sky ------------------------------------------------
-
-test('on the true-pixel stage no hat is ever cut: on a ride at the top of its bob, under what floats over a head, waiting in the sky', () => {
-  const models = { sonnet: 'claude-sonnet-5-5', haiku: 'claude-haiku-4-5', fable: 'claude-fable-5' } as const
-  const H = STAGE_PX
-  const sky = H - GROUND_PX - REACH_PX
-  const count = (colours: Iterable<number | null>, inks: Set<number>) => [...colours].filter(color => color !== null && inks.has(color)).length
-  const HEART = 0xff6fa8
-  const wrong: string[] = []
-  for (const [family, mini] of [['kirby', kirbyMini], ['clawd', clawdMini]] as const) {
-    const plain = new Set(mini(0).poses.stand[0]!.px.flat())
-    for (const form of ['sonnet', 'haiku', 'fable'] as const) {
-      const set = mini(0, form)
-      const inks = new Set([set.poses, ...(set.flicker === undefined ? [] : [set.flicker])].flatMap(poses => poses.stand[0]!.px.flat()).filter((color): color is number => color !== null && !plain.has(color)))
-      /** The fewest hat pixels any of these frames has, drawn whole: a frame of the stage with fewer has cut one. */
-      const least = (frames: readonly (readonly [HiPose, number])[]) =>
-        Math.min(...[set.poses, ...(set.flicker === undefined ? [] : [set.flicker])].flatMap(poses => frames.map(([pose, i]) => count(poses[pose][i]!.px.flat(), inks))))
-      const acts = [['WebFetch', least([['ride', 0], ['stand', 0]])], ['Agent', least([['cheer', 0], ['cheer', 2]])], ['AskUserQuestion', least([['stand', 0], ['blink', 0]])]] as const
-      for (const width of [99, 60, NARROWEST_PX + 4]) {
-        for (const [tool, whole] of acts) {
-          for (let ms = 0; ms < 5200; ms += 90) {
-            const frame = stageFrame(mini, [{ slot: 0, model: models[form], calls: [{ tool }] }], NOW + ms, width, H)
-            const where = `${family} ${form}, ${tool}, ${width} px, +${ms} ms`
-            if (count(frame.data, inks) < whole) wrong.push(`${where}: its hat is cut`)
-            // What floats over its head is whole too: all of the heart, all of the "?".
-            if (tool === 'Agent' && count(frame.data, new Set([HEART])) !== count(HI.heart.px.flat(), new Set([HEART]))) wrong.push(`${where}: the heart is cut`)
-            if (tool === 'AskUserQuestion' && count(frame.data, new Set([0xffffff])) !== count(HI.ask.px.flat(), new Set([0xffffff]))) wrong.push(`${where}: the "?" is cut`)
-          }
-        }
-      }
-      // Waiting in the sky it is whole, on the shortest stage there is: nothing of it above the picture, nothing under the sky.
-      const crowd: Agent[] = [0, 1, 2, 3, 4].map(slot => ({ slot, calls: [], model: slot === 4 ? models[form] : 'claude-opus-5-5' }))
-      const waiting = stageFrame(mini, crowd, NOW, 99, H)
-      if (count(waiting.data.slice(0, sky * 99), inks) < least([['stand', 0]])) wrong.push(`${family} ${form}: cut in the queue`)
-      if (set.tall > sky - 2) wrong.push(`${family} ${form}: taller than the sky it waits in`)
-    }
-  }
-  expect(wrong).toEqual([])
-  // The "?" has a line round it: white alone would be lost on a light theme's sky.
-  expect(HI.ask.px.flat().includes(INKS[0])).toBe(true)
-})
-
-test('by day the effects are drawn dark enough for a pale ground: no wind, sparkle or beam in the colours made for the dark', () => {
-  const PALE = [STREAK, GOLD, CYAN]
-  const tools = [undefined, 'Read', 'Edit', 'Bash', 'WebFetch', 'Agent', 'Skill', 'AskUserQuestion', 'mcp__db__query']
-  const models = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5', 'claude-fable-5']
-  const seen = { day: new Set<number | null>(), night: new Set<number | null>() }
-  for (const tool of tools) {
-    for (const model of models) {
-      const stories: Agent[] = [
-        { slot: 1, model, calls: tool === undefined ? [] : [{ tool }] },
-        // (Not a failed call's knock: that burst has a dark line round it, as the "?" has, and reads on any ground.)
-        { slot: 1, model, calls: [], doneAt: NOW }, { slot: 1, model, calls: [], doneAt: NOW, isLost: true },
-      ]
-      for (const agent of tool === undefined ? stories : stories.slice(0, 1)) {
-        for (let ms = 0; ms < 5400; ms += 270) {
-          for (const [name, isLight] of [['day', true], ['night', false]] as const) {
-            const frame = stageFrame(kirbyMini, [agent], NOW + ms, 99, 70, isLight)
-            for (const color of frame.data.slice((70 - GROUND_PX - REACH_PX) * 99, (70 - GROUND_PX) * 99)) seen[name].add(color)
-            for (const color of sceneOf('kirby', [agent], Math.floor(ms / TICK_MS), NOW + ms, 33, isLight).slice(SKY, STAGE_ROWS * 2 - 2).flat()) seen[name].add(color)
-          }
-        }
-      }
-    }
-  }
-  expect([PALE.filter(color => seen.day.has(color)), PALE.every(color => seen.night.has(color))]).toEqual([[], true])
-  // In cell blocks the jester's white balls and a waiting head are told from a pale sky too.
-  expect([miniOf('kirby', 0, 'haiku', true).stand.flat().includes(0xf8f8f8), miniOf('kirby', 0, 'haiku').stand.flat().includes(0xf8f8f8)]).toEqual([false, true])
+  expect(nameOf(laidOut({ family: kirby, form: 'sonnet' }, 22, 60).look)).toBe('Kirby')
 })
 
 test('a write to the terminal that fails is not taken for done: it is tried again, a few times, and the end still gives the background back', async ($, on) => {
@@ -2501,7 +2037,7 @@ test('without footage the cyber Opus is a drawn character of its own, Jack on Gh
   await clock.advance(4400)
   // (26 rows for the avatar, and the Loadouts line above them.)
   const short = await $.ui.mount({ ...KIRBY_PANE, props: { ...KIRBY_PANE.props, bodyColumns: 34, scroll: { offset: 0, bodyRows: 27 } } })
-  expect((await short.find({ key: 'kirby' }))?.props.rows).toBe(11)
+  expect((await short.find({ key: 'kirby' }))?.props.rows).toBe(12)
   expect(flow(await short.drawn()).join('\n')).toContain('RAIJIN // OPUS-5-5')
   await short.unmount()
 })
@@ -2690,7 +2226,7 @@ test('the flourishes come on the clock alone, one each cycle, in order; loops cl
   }
 })
 
-test('the red skin is red, dark red and light blue and nothing else: the HUD, the masks, the agents and Jack; Lucy is yellow, white and light blue', () => {
+test('the red skin is red, dark red and light blue and nothing else: the HUD, the masks and Jack; Lucy is yellow, white and light blue', () => {
   // The skin's own colours: no yellow, green, magenta or orange among them.
   const { variant: _variant, ...reds } = SKINS.red
   expect(new Set(Object.values(reds).map(hueOf))).toEqual(new Set(['red', 'blue', 'dark']))
@@ -2699,11 +2235,8 @@ test('the red skin is red, dark red and light blue and nothing else: the HUD, th
   expect(hex(SKINS.red.cyan)).toBe('#5ef6ff')
   const off = (colours: Iterable<number>, allowed: readonly string[]) => [...new Set(colours)].filter(color => !allowed.includes(hueOf(color))).map(hex)
   const RED = ['red', 'blue', 'dark', 'plain']
-  // Every mask, in every mood, and the agents' blocks in every state.
+  // Every mask, in every mood.
   for (const form of FORMS) for (const mood of MOODS) for (let k = 0; k < 48; k += 3) expect(off(gridColours(maskFrame(SKINS.red, form, mood, NOW + k * 90, 33, 16)), RED)).toEqual([])
-  const runner = (more: Partial<Runner>): Runner => ({ slot: 0, label: 'scout', calls: [{ tool: 'Bash', summary: 'ls' }], ...more })
-  const crew = [runner({}), runner({ slot: 1, hurtAt: NOW }), runner({ slot: 2, doneAt: NOW, calls: [] }), runner({ slot: 3, doneAt: NOW, isLost: true, calls: [] }), runner({ slot: 4, calls: [], model: 'claude-opus-5-5' })]
-  for (let k = 0; k < 24; k++) expect(off(gridColours(agentRows(SKINS.red, crew, NOW + k * 90, 33, 10)), RED)).toEqual([])
   // Jack, in both styles, through every animation; what is plain in her is a pale red or the blade's white, never a grey.
   for (const [, at] of ANIMS) {
     for (let k = 0; k < 48; k += 2) {
@@ -2888,19 +2421,29 @@ test('Lucy\'s bob keeps its mass through a flip; Jack\'s scabbard glows only whi
   }
 })
 
-test('off the terminal the red HUD lists its agents with dots of its own light blue, not the minis\' colours', async ($, on) => {
-  mock.clock(on, { now: NOW })
+test('off the terminal the agents are counted the same way: the red HUD\'s rule in its own colours, the Kirby pane\'s count line', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
   store(on, {}, 'custom:ghostrunner', 'claude-opus-5-5')
   on('session.usage', () => ({ value: { ...USAGE, rateLimits: [] } }))
   on('tool.call', () => ({ result: 'ok' }))
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   for (const id of ['a1', 'a2', 'a3', 'a4']) await $.tool.call(inAgent(id, { tool: 'Read', file_path: `/tmp/${id}` }))
   const ui = await $.ui.mount({ ...TALL, surface: 'desktop' })
-  const dots = (await ui.findAll({ type: 'Text' })).filter(isDot).map(t => String(t.props.color))
-  expect(dots).toEqual(['#5ef6ff', '#5ef6ff', '#5ef6ff', '#5ef6ff'])
+  const lines = flow(under(await ui.drawn()))
+  // One rule, right over the banner, and no line per agent.
+  expect(lines.filter(line => /SUBNET|\/tmp\/a\d|^[●○] /.test(line))).toEqual([lines[lines.findIndex(line => line.startsWith('┌─┐')) - 1]!])
+  expect(lines.find(line => line.includes('SUBNET'))).toMatch(/^╱─ SUBNET \/\/ 04 PROC ─+┐$/)
   const named = coloursIn(await ui.drawn()).filter(color => color.startsWith('#')).map(color => parseInt(color.slice(1), 16))
   expect([...new Set(named)].filter(color => !['red', 'blue', 'dark'].includes(hueOf(color))).map(hex)).toEqual([])
   await ui.unmount()
+
+  // The Kirby pane off the terminal: no picture is mounted, the count line is drawn all the same.
+  sessionTheme = 'custom:kirby'
+  await clock.advance(4400)
+  const kirby = await $.ui.mount({ ...TALL, surface: 'desktop' })
+  const told = flow(under(await kirby.drawn()))
+  expect([told[0], told[1]?.slice(0, 1), told.some(line => line.startsWith('<'))]).toEqual(['● 4 agents', '╭', false])
+  await kirby.unmount()
 })
 
 test('at rest a character is drawn one frame in three, and every frame as soon as something of it moves', async ($, on) => {
@@ -3815,10 +3358,11 @@ test('in true pixels the built-in themes\' pane draws Clawd from his parts: the 
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount(TALL)
-  const { art } = laidOutArt({ family: FAMILIES.clawd as SpriteFamily, form: 'sonnet' }, 0, 34, 60, { w: 9, h: 21 })
+  const { art } = laidOutArt({ family: FAMILIES.clawd as SpriteFamily, form: 'sonnet' }, 34, 60, { w: 9, h: 21 })
   const source = (await ui.find({ key: 'kirby' }))?.props.source as { rgba: string; width: number; height: number }
-  expect([source.width, source.height, art!.scale]).toEqual([art!.mascot.width, art!.mascot.height, 3])
-  expect(source.rgba).toBe(sourceOf(clawdFrame('sonnet', { mood: 'idle', now: NOW }, art!.mascot.width, art!.mascot.height, 3)).rgba)
+  // A sprite pixel is two art pixels on a pane with every row to spare: two thirds of a column, never the whole of one.
+  expect([source.width, source.height, art!.scale]).toEqual([art!.mascot.width, art!.mascot.height, 2])
+  expect(source.rgba).toBe(sourceOf(clawdFrame('sonnet', { mood: 'idle', now: NOW }, art!.mascot.width, art!.mascot.height, 2)).rgba)
   // His frames go on by themselves: over one idle loop, his breathing and each of his moments are sent, a frame only when it changed.
   await clock.advance(CLAWD_LOOP_MS.idle)
   expect(new Set(blits).size).toBeGreaterThan(12)
@@ -3907,32 +3451,6 @@ test('Clawd in true pixels: one size, crisp, his sprite exactly at rest, every m
   for (let i = 0; i + 3 < 140; i++) if (rests[i] === true) expect([i, Math.abs(topOf(idle[i + 3]!) - topOf(idle[i]!)) <= 1, feetOf(idle[i + 2]!) === idle[0]!.height - 1]).toEqual([i, true, true])
 })
 
-test('Clawd\'s minis: a walk of four drawn frames, a fall of its own, a landing squashed flat before the crouch, a slide; Kirby\'s are the game\'s, untouched', () => {
-  for (const form of FORMS) {
-    const { poses } = clawdMini(0, form)
-    const prints = (pose: HiPose) => poses[pose].map(one => JSON.stringify(one.px))
-    expect([poses.walk.length, new Set(prints('walk')).size, prints('walk')[1] === prints('stand')[0]]).toEqual([4, 3, true])
-    for (const [pose, other] of [['fall', 'jump'], ['slide', 'duck']] as const) expect(prints(pose)[0]).not.toBe(prints(other)[0])
-    // The landing: wider than he stands and lower than his crouch, then the crouch.
-    const [crouch, flat, stand] = [poses.duck[0]!, poses.duck[1]!, poses.stand[0]!]
-    const wideOf = (px: readonly (readonly (number | null)[])[]) => Math.max(...px.map(row => row.filter(color => color === SWAPS[0]![0] || color === SWAPS[0]![1]).length))
-    expect([poses.duck.length, wideOf(flat.px) > wideOf(stand.px) - 3, flat.px.length < crouch.px.length || form !== 'opus']).toEqual([2, true, true])
-    expect(clawdMini(0).poses.duck[1]!.px.length).toBeLessThan(clawdMini(0).poses.duck[0]!.px.length)
-  }
-  expect(kirbyMini(0).poses.duck.length).toBe(1)
-  // On the stage: dropping in, he falls, lands flat, crouches, stands: four pictures, in that order.
-  const body = (ms: number) => {
-    const scene = stageFrame(clawdMini, [{ slot: 0, calls: [], joinedAt: NOW }], NOW + ms, 66, 70)
-    const rows = Array.from({ length: 70 }, (_r, y) => [...scene.data.slice(y * 66, (y + 1) * 66)].filter(color => color === SWAPS[0]![0]).length)
-
-    return rows.filter(n => n > 0).length
-  }
-  const [falling, landed, crouched, stood] = [body(1100), body(1230), body(1320), body(1500)]
-  expect([landed < crouched, crouched < stood, falling > crouched]).toEqual([true, true, true])
-  // And walking, his body bobs a pixel of his on the planted legs.
-  expect(clawdMini(0).poses.walk[0]!.px.length).toBe(clawdMini(0).poses.walk[1]!.px.length + 2)
-})
-
 test('the chrome skins polish a bar: one colour a cell, a hard light a third of the way along, darker toward the right end', () => {
   const bar = sheen(SKINS.chrome.primary, 20).map(color => Number.parseInt(color.slice(1), 16))
   const lightOf = (color: number) => (color >> 16) + ((color >> 8) & 255) + (color & 255)
@@ -3971,13 +3489,16 @@ test('the chrome skins draw the model\'s object in ASCII: one size, plain charac
   // Any size is drawn, none throws: a pane of a few rows, of none.
   expect([textOf(chromeFrame(SKINS.chrome, 'opus', 'idle', 0, 30, 6)).length, chromeFrame(SKINS.chrome, 'opus', 'idle', 0, 30, 0).words.length]).toEqual([6, 0])
   // The layout gives it its rows where the pane has them, a mask's place otherwise.
-  expect([laidOutText({ skin: SKINS.chrome, form: 'opus' }, 0, 53, 60, true).size, laidOutText({ skin: SKINS.red, form: 'opus' }, 0, 53, 60, true).size]).toEqual([{ columns: 52, rows: OBJECT_ROWS }, { columns: 52, rows: MASK_ROWS }])
+  expect([laidOutText({ skin: SKINS.chrome, form: 'opus' }, 53, 60, true).size, laidOutText({ skin: SKINS.red, form: 'opus' }, 53, 60, true).size]).toEqual([{ columns: 52, rows: OBJECT_ROWS }, { columns: 52, rows: MASK_ROWS }])
 })
 
 test('the Halo skins draw their figure in ASCII as the chrome ones do: Cortana by day, the Chief\'s helmet by night, each acting out the call that runs, in its own colours per model', () => {
   expect([isHalo(SKINS.cortana), isHalo(SKINS.mjolnir), isHalo(SKINS.chrome), isHalo(SKINS.red)]).toEqual([true, true, false, false])
-  // A running call's kind is the cue; a failed one is a worry, an ended one leaves the mood.
-  expect([cueOf('idle'), cueOf('working'), cueOf('working', 'scan'), cueOf('working', 'think'), cueOf('idle', 'fail'), cueOf('happy', 'done')]).toEqual(['idle', 'working', 'scan', 'working', 'worried', 'happy'])
+  // A running call's kind is the cue; with none, the mood.
+  expect([cueOf('idle'), cueOf('working'), cueOf('working', 'scan'), cueOf('worried', 'edit')]).toEqual(['idle', 'working', 'scan', 'edit'])
+  // What a call is, as the figures act it out: a kind of tool, whatever its name.
+  expect(['Read', 'Grep', 'Edit', 'Bash', 'WebFetch', 'mcp__chrome__click', 'Agent', 'Skill', 'AskUserQuestion', 'mcp__db__query', 'Unknown'].map(tool => STATES[kindOf(tool)]))
+    .toEqual(['scan', 'scan', 'edit', 'exec', 'net', 'net', 'call', 'load', 'ask', 'tool', 'tool'])
   const CUES: readonly (readonly [Mood, State?])[] = [['idle'], ['working'], ['happy'], ['worried'], ['working', 'scan'], ['working', 'edit'], ['working', 'exec'], ['working', 'net'], ['working', 'call'], ['working', 'load'], ['working', 'ask'], ['working', 'tool']]
   const seen = new Set<string>()
   for (const skin of [SKINS.cortana, SKINS.mjolnir]) {
@@ -4001,7 +3522,7 @@ test('the Halo skins draw their figure in ASCII as the chrome ones do: Cortana b
     expect(haloFrame(skin, 'opus', 'working', 5000, 52, OBJECT_ROWS, 'ask', { cue: 'idle', at: 1000 }).words).toEqual(there.words)
     // Any size is drawn, none throws.
     expect([textOf(haloFrame(skin, 'opus', 'idle', 0, 30, 6)).length, haloFrame(skin, 'opus', 'idle', 0, 30, 0).words.length]).toEqual([6, 0])
-    expect(laidOutText({ skin, form: 'opus' }, 0, 53, 60, true).size).toEqual({ columns: 52, rows: HALO_ROWS })
+    expect(laidOutText({ skin, form: 'opus' }, 53, 60, true).size).toEqual({ columns: 52, rows: HALO_ROWS })
   }
   // Each cue is its own picture, for her and for him.
   expect(seen.size).toBe(2 * CUES.length)

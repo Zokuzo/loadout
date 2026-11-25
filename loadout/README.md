@@ -6,8 +6,8 @@ It is three parts in one plugin (they were the mods `kirby-hud`, `flow-map` and 
 
 | Part | Folder | What it draws |
 |---|---|---|
-| Avatar | `avatar/` | The "Avatar" side pane: the theme picker, a mascot or character per theme, the agents on a stage, the usage meters. It also tints the terminal background per theme (and, on a light theme, sets the terminal's text colours to dark inks, so code stays readable). |
-| Flow map | `flow/` | The "Flow map" pane: workflow runs, plain subagents (each with its model: `◆ haiku 4.5` on a running card, the family on a finished row, opus orange, sonnet cyan, haiku green, fable violet), the step plan, the wayfinder map. Registers the tool `mcp__loadout__steps`. |
+| Avatar | `avatar/` | The "Avatar" side pane: the theme line (a button that opens the theme picker), a mascot or character per theme, a count of the agents at work, the usage meters. It also tints the terminal background per theme (and, on a light theme, sets the terminal's text colours to dark inks, so code stays readable). |
+| Flow map | `flow/` | The "Flow map" pane: the step plan, then the bubble map. In kitty and Ghostty, docked and outside a multiplexer, the bubble map is one picture the mod computes: the main session on top, a bubble per agent at work (model, call in progress, calls before, time, calls, tokens, the cache share read and rewritten, the time before the cache expires), a chip per finished agent, a dashed zone per workflow run naming its phase, a numbered arrow per launch and per reply, a legend. `j` and `k` choose an agent, `s` writes to it, `x` stops a run. The pane asks for 94 columns, the width the picture is drawn for. Anywhere else the same agents are text cards (each with its model: `◆ haiku 4.5` on a running card, the family on a finished row, opus orange, sonnet cyan, haiku green, fable violet). The picture's letters are JetBrains Mono drawn to pixels once by `flow/tools/atlas.py` (SIL Open Font License, `flow/hooks/atlas-OFL.txt`). Beside it the "Tickets" pane: the wayfinder map alone, every row of it (each ticket under its number, what blocks it cited by number, the resolved listed with the last one on top). It is a tab from the session's start and never comes to the front by itself: `/tickets` or a click on its tab shows it. Registers the tool `mcp__loadout__steps`. |
 | Frames | `frames/` | A coloured frame around each conversation row, one hue per kind of action; and the working line in the theme's own words behind its own turning icon (a pack's `spinner`, `THEMES.md`). |
 
 ## The command
@@ -18,7 +18,7 @@ It is three parts in one plugin (they were the mods `kirby-hud`, `flow-map` and 
 | `/loadout <theme>` | That theme for every terminal, with no restart (see "Live theme files" for the first time). |
 | `/loadout <theme> here` | This terminal only. With no restart in a terminal the shell launcher started. In any other, nothing changes: it copies and prints the line that starts the conversation again through the launcher (press Ctrl+D, paste, Enter). |
 | `/loadout follow` | The line that makes a terminal with its own theme follow the global one again. |
-| `/loadout avatar` \| `flow` | Opens that pane. |
+| `/loadout avatar` \| `flow` \| `tickets` | Opens that pane. |
 | `/loadout frames on\|off` | The frames around conversation rows. |
 | `/loadout background on\|off` | Whether the theme tints the terminal background. |
 | `/loadout style pixel\|text\|auto` | How a Ghostrunner or Edgerunners character is drawn: `text` shows no footage. |
@@ -33,9 +33,9 @@ Two themes were renamed, and their old names still work, here and in the shell l
 
 `/loadout` and `/loadout status` say what set the theme: "the global theme", "this terminal's own theme", "pinned to this terminal", "the theme this terminal started with" (the global one changed since and shows at its next start), a project's or a managed settings file. A session started in the home directory reads `~/.claude/settings.json` as its project file too: that is said as "set by your global settings", and `/loadout <theme>` changes it as anywhere else.
 
-In the picker, each theme is a row: four of its own colours, a digit (1 to 9), its name, a mark on the one this terminal shows. Press the digit or click the row: it does what `/loadout <theme>` does, says so in a toast, and the picker folds to one line, `loadout: <name> [ change ]`. On a pane too short for the picker and the avatar, it stays folded, and `[ change ]` or `/loadout` says so in a toast: make the pane taller or type `/loadout <theme>`. At the one height where even the folded line would cost the pane its mascot, the line is not drawn.
+In the picker, each theme is a row: four of its own colours, a digit (1 to 9), its name, a mark on the one this terminal shows. Press the digit or click the row: it does what `/loadout <theme>` does, says so in a toast, and the picker folds to the theme line: `loadout`, then one button, a filled chip with the theme's name and `▾` (`l:  Kirby ▾ `). A click on it, `l` with the pane focused, or `/loadout` opens the picker again. On a pane too short for the picker and the avatar, it stays folded, and the button or `/loadout` says so in a toast: make the pane taller or type `/loadout <theme>`. At the one height where even the theme line would cost the pane its mascot, the line is not drawn.
 
-`/avatar`, `/kirby`, `/flow` and `/colors` still work with their old arguments.
+`/avatar`, `/kirby`, `/flow` and `/colors` still work with their old arguments. `/tickets` is `/loadout tickets`.
 
 ## Live theme files
 
@@ -81,29 +81,22 @@ alias cl="$HOME/.claude/plugins/marketplaces/zokuzo/loadout/bin/loadout"
 - Claude themes (colours): `~/.claude/themes/<slug>.json`, and the built-in ones. The plugin ships its own in `colors/` and copies them there at its first start (see Install). `loadout.json` and `loadout-<tag>.json` there are the live files, written by Loadout: do not edit them.
 - Theme packs (background, mascot, Flow map look): `themes/<slug>.json`, in this folder. Without that folder the built-in tables answer.
 - Pictures and footage: `assets/<slot>/`, one folder per character (below).
-- What is kept between sessions (pet count, style, background switch, frames on or off, the Flow map's learned durations, the recall cards' schedule and answers): this plugin's own store. At its first start it copies what the three old mods kept.
+- What is kept between sessions (pet count, style, background switch, frames on or off, the Flow map's learned durations): this plugin's own store. At its first start it copies what the three old mods kept.
 
 To add a theme, see `THEMES.md`.
 
-## The status line and the cards, in the Avatar pane
+## The Avatar pane, from the top
 
-They live at the top of the Avatar pane, above the avatar (the prompt's suggestions cover the pane's foot while `/clear` is typed), each sentence whole on as many lines as it takes. While that pane is not shown (closed, behind another tab, or waiting for a wider terminal), the status line and the /clear and back cards are drawn above the prompt instead, beside the meters; the recall card waits for the pane.
+- **The theme line**: `loadout`, then one button, a filled chip with the theme's name and `▾`. A click on it, or `l`, opens the theme picker.
+- **before /clear**, one line, shown only when it is time to clear the conversation: the main turn has ended, no agent is alive, and the context meter is at 70 % or more (of the model's window, or of 300k tokens where the window is wider: a 1M model raises it at 210k), or `/clear` is typed. It reads `before /clear  h: handoff  e: lesson`. `h` asks Claude to write a handoff, so the next conversation starts from it; `e` asks for a Professeur lesson where Professeur is on (`LOADOUT_PROF` names its folder; its switch is read, never written), and is dim where it is off. It is at the top because the prompt's suggestions cover the pane's foot while `/clear` is typed.
+- **The agent count**, one line over the mascot's bubble, shown only while agents are alive: `● 3 agents · 1 waiting`. Waiting are the agents the engine lists as pending or waiting. A HUD theme says it in its own rule: `SUBNET // 03 PROC · 01 WAITING`, `FIRETEAM // 03 SPARTANS`. An agent that ends leaves the count at once; one whose turn ends while its own background work still runs stays, waiting. A pane the mascot fills to its last row has no row for the count. The Flow map names the agents.
+- Then the mascot's bubble (a HUD theme's banner), the mascot, its name, the `pet` button, the session's cost and the two meters, week and context.
 
-One line tells where the session stands, in the same words on every theme (only the colours are the theme's):
+The pane asks for 41 columns. In a narrower one the `before /clear` line shortens its title to `/clear`, then drops it; the theme line drops `loadout`, then cuts the name's end. The keys and the `▾` stay.
 
-- `▶ RUNNING` a turn runs, or an agent still works after it; `● YOUR TURN` Claude has answered; `○ IDLE` at rest.
-- `△ 2× DENIED` one or two failed calls in a row; `▲ PROBLEM` from three, its glyph blinking for 3 s. The first call that goes through clears it.
+While the pane is not shown (closed, behind another tab, or waiting for a wider terminal), the `before /clear` line is drawn above the prompt instead, on a row of its own over the meters, with `ctx 72%` at its end where the terminal is wide enough.
 
-In the pane, a calm `RUNNING` and `IDLE` with no card are left unsaid (the avatar's bubble names the call, its legend the agents), so the avatar keeps its rows.
-
-Under that line, one card at a time, in the theme's own frame (Halo's `MISSION ▸`, Ghostrunner's hexagon, Kirby's plate):
-
-- **before /clear**: the context is past 70 %, or `/clear` is typed. `h` asks Claude for a handoff, `e` for a Professeur lesson where it is on (`LOADOUT_PROF` names its folder; its switch is read, never written).
-- **back**: after 15 minutes away, what Claude's last answer asks of you, and where the Flow plan stands.
-
-Then the recall card, when a turn has run 20 s and the prompt is empty: a card from your own work, gone when Claude answers. `f` forgot, `k` knew it (or a click). Spaced by SM-2; `/loadout status` gives the rate known over 30 days. In the pane a key works with the pane focused (ctrl+x tab); the pane's own keys stay theirs (`p` pets, `l` and `0` to `9` the theme picker).
-
-The recall cards come from `bin/recall-deck`, which writes `~/.claude/loadout-deck.json` from the quizzes of the Professeur lessons (in `$LOADOUT_PROF/lecons`) and from the tool errors your sessions hit 5 times or more that say their own remedy. Run it again now and then: a card keeps its schedule.
+A key works with the pane focused (ctrl+x tab), or with a click: `h` and `e` on the `before /clear` line, `p` pets, `l` opens the theme picker, and in the open picker `1` to `9` pick a theme and `0` closes it.
 
 ## The characters: one per theme and model
 

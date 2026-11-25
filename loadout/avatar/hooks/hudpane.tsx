@@ -1,6 +1,6 @@
 // The pane as a text family's skin draws it: a HUD in one colour on the dark, thin rules with a cut
 // corner (the block of meters closed by one at its foot), small uppercase captions that carry real
-// values, the speech as a filled banner beside a boxed sign, flat bars with their number at the right. What moves (the mask, the agents' blocks)
+// values, the speech as a filled banner beside a boxed sign, flat bars with their number at the right. What moves (the mask)
 // is handed in already mounted; everything here is redrawn only when what it says changes.
 import type { ElementTable, RenderElement } from 'claude-code'
 
@@ -8,10 +8,10 @@ import { hex, mix } from './hud'
 import type { Skin } from './hud'
 import type { Mood } from './mascot'
 
-/** The rows the HUD takes besides the mask and the agents: a caption, the banner's three, the name, the controls, a rule, the cost, two meters of two (week, context), the frame's foot. */
+/** The rows the HUD takes besides the mask and the agents' rule: a caption, the banner's three, the name, the controls, a rule, the cost, two meters of two (week, context), the frame's foot. */
 export const HUD_ROWS = 13
 
-/** A HUD's own words: what heads the pane, the agents' rule and what it counts them as, the banner's head, the meters' rule. */
+/** A HUD's own words: what heads the pane, the rule that counts the agents and what it counts them as, the banner's head, the meters' rule. */
 export type Captions = { link: string; crew: string; unit: string; banner: string; meters: string }
 const CAPTIONS: Captions = { link: 'CONNECTION', crew: 'SUBNET', unit: 'PROC', banner: 'PROTOCOL', meters: 'MONITOR' }
 
@@ -37,9 +37,11 @@ export type HudView = {
   title: string
   said: string
   isCall: boolean
-  /** The agents' blocks and how many agents there are; the mask. Null for none. */
-  agents: RenderElement | null
+  /** How many agents live and how many of them wait; whether the rule that counts them is drawn: some live, and the pane has its row. */
   alive: number
+  waiting: number
+  hasCount: boolean
+  /** The mask; null for none. */
   mask: RenderElement | null
   petted: number
   onPet: () => Promise<void>
@@ -49,6 +51,16 @@ export type HudView = {
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
+
+/**
+ * A HUD's count line, the caption of its agents' rule: `SUBNET // 03 PROC`, and ` · 01 WAITING` where some wait.
+ * In `room` cells: what does not fit is never cut mid-word, the waiting part is said shorter, then left out.
+ */
+export function crewCaption(words: Captions, alive: number, waiting: number, room: number): string {
+  const count = `${words.crew} // ${pad2(alive)} ${words.unit}`
+
+  return waiting === 0 ? count : [`${count} · ${pad2(waiting)} WAITING`, `${count} · ${pad2(waiting)} WAIT`].find(text => text.length <= room) ?? count
+}
 
 /** A session id as the game writes an address: the first eight of its letters and digits, grouped. */
 const addressOf = (id: string): string => {
@@ -126,8 +138,7 @@ export function hudTree({ Box, Button, Text }: ElementTable, view: HudView): Ren
         <Text color={dim} wrap="truncate-end">{words.link}{addressOf(view.session)}</Text>
         {columns >= 30 && <Text color={dim}>{clock}</Text>}
       </Box>
-      {view.agents !== null && rule(`${words.crew} // ${pad2(view.alive)} ${words.unit}`)}
-      {view.agents}
+      {view.hasCount && rule(crewCaption(words, view.alive, view.waiting, columns - 5))}
       <Text wrap="truncate-end">
         <Text color={tone}>┌─┐ </Text>
         <Text color={dim}>{words.banner} // {view.title.toUpperCase()}</Text>

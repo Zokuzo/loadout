@@ -5,6 +5,7 @@ import type { TestBody } from 'claude-code/testing'
 import { cells, compose, isSeg, widthOf } from '../hooks/draw'
 import type { Line } from '../hooks/draw'
 import { chart, newRun, runView } from '../hooks/lib'
+import { tickets } from '../hooks/tickets'
 import { contrast, PALETTES, paletteOf } from '../hooks/palette'
 import type { Palette, PaletteName } from '../hooks/palette'
 import { engine, HIST, inAgent, lines, midflight, notify, paint, pane, SCRIPT, spawn } from './kit'
@@ -402,7 +403,7 @@ test('x asks before it stops: only y, on a question that is showing, stops the r
 test('z folds the pane to one tab above the prompt, and the tab restores it', async ($, on) => {
   on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'Text', props: {}, children: ['the band beneath'] }) as never)
   const { ui, world, land } = await flight($, on)
-  // Not folded: the band is left to whoever else draws there (beneath the Avatar's status line while agents run).
+  // Not folded: the band is left to whoever else draws there.
   const before = await $.ui.mount(BAND)
   expect(lines((await before.drawn()) as Node)).toContain('the band beneath')
   await before.unmount()
@@ -428,7 +429,7 @@ test('z folds the pane to one tab above the prompt, and the tab restores it', as
   expect(all.flat().some(r => r.bg !== undefined)).toBe(false)
   // The tab's Button (z while the band holds the keys, or a click) opens the pane again, with the keyboard.
   await band.press({ key: 'show' })
-  expect(world.opened).toEqual([56])
+  expect(world.opened).toEqual([94])
   expect(lines((await band.drawn()) as Node)).toContain('the band beneath')
   await band.unmount()
   await ui.unmount()
@@ -530,19 +531,29 @@ test('every width from 34 to 96: no line passes the pane and every box keeps its
     for (let w = 34; w <= 96; w++) {
       const drawn = compose({
         w, rows: 600, P, now: 300_000, runs: [runView(live, 300_000, HIST), runView(over, 300_000, HIST)], view, plan,
-        way: { active: true, root: '', touched: '', chosen: '', hint: '', open: ['done', 'fog', 'out'] }, map,
       })
       const texts = drawn.lines.map(shown)
       expect([w, view.mode, drawn.lines.filter(l => cells(l) > w).map(shown)]).toEqual([w, view.mode, []])
       // A box's row is the box's width whatever it holds: its right border stands under its corner.
       const edge = texts.find(l => l.includes('╮') && !l.includes('┆'))?.length
-      const boxed = texts.filter(l => /^ {1,2}│ (\d+ \/ \d+ resolved|here \d+|step \d+ of|ETA)/.test(l))
-      expect([w, boxed.length, boxed.filter(l => !l.endsWith(' │') || l.length !== edge)]).toEqual([w, 5, []])
+      const boxed = texts.filter(l => /^ {1,2}│ (step \d+ of|ETA)/.test(l))
+      expect([w, boxed.length, boxed.filter(l => !l.endsWith(' │') || l.length !== edge)]).toEqual([w, 3, []])
       // The finished run is drawn as the live one is: no list of past runs, no Button that opens one.
       expect([w, texts.filter(l => /recent runs|press one for/i.test(l))]).toEqual([w, []])
       expect([w, drawn.lines.flat().flatMap(p => ('btn' in p && (p.btn.key.startsWith('run:') || /^\d$/.test(p.btn.hotkey ?? '')) ? [p.btn.key] : []))]).toEqual([w, []])
       expect(cells(drawn.lines[drawn.lines.length - 1] ?? [])).toBeLessThanOrEqual(w)
     }
+  }
+  // The Tickets pane holds the map, here with three-digit ticket numbers: no line passes it, and its box keeps its border; the titles of #01 and #100 start at one column.
+  for (let w = 34; w <= 96; w++) {
+    const drawn = tickets({ w, P, way: { active: true, root: '', touched: '', chosen: '', hint: '', open: ['fog', 'out'] }, map })
+    const texts = drawn.map(shown)
+    expect([w, drawn.filter(l => cells(l) > w).map(shown)]).toEqual([w, []])
+    const edge = texts.find(l => l.includes('╮'))?.length
+    const boxed = texts.filter(l => /^ {1,2}│ (Somewhere far|GitLab #1234|■)/.test(l))
+    expect([w, boxed.length, boxed.filter(l => !l.endsWith(' │') || l.length !== edge)]).toEqual([w, 3, []])
+    expect([w, texts.filter(l => /#\d+ +■ Ticket \d+/.test(l)).length]).toEqual([w, 120])
+    expect([w, new Set(texts.filter(l => /#\d+ +■ Ticket \d+/.test(l)).map(l => l.indexOf('■'))).size]).toEqual([w, 1])
   }
 })
 

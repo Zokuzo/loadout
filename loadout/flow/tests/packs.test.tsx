@@ -4,6 +4,7 @@ import { expect, test } from 'claude-code/testing'
 import { cells, compose, isSeg } from '../hooks/draw'
 import type { Line, Seg } from '../hooks/draw'
 import { chart } from '../hooks/lib'
+import { tickets } from '../hooks/tickets'
 import { contrast, filled, lookOf, packOf, PALETTES, STEPS, toPack } from '../hooks/palette'
 import type { Pack } from '../hooks/palette'
 import type { Plan, View } from '../../types'
@@ -167,11 +168,12 @@ test('each pack draws the four states its own way, readably, and fits every widt
   const looks = new Set<string>()
   for (const pack of packs) {
     const { palette: P, steps: S } = pack
-    const draw = (w: number, plan: Plan, isWay: boolean, now = 0) => compose({ w, rows: 900, P, S, now, runs: [], view: VIEW, plan, way: { active: isWay, root: '', touched: '', chosen: '', hint: '', open: ['done', 'fog', 'out'] }, map: isWay ? map : null })
+    const draw = (w: number, plan: Plan, now = 0, style = S) => compose({ w, rows: 900, P, S: style, now, runs: [], view: VIEW, plan })
+    const way = (w: number) => tickets({ w, P, S, way: { active: true, root: '', touched: '', chosen: '', hint: '', open: ['fog', 'out'] }, map })
     for (let w = 34; w <= 96; w++) {
-      for (const drawn of [draw(w, PLAN, false), draw(w, long, false), draw(w, PLAN, true)]) expect([pack.slug, w, drawn.lines.filter(l => cells(l) > w).map(shown)]).toEqual([pack.slug, w, []])
+      for (const drawn of [draw(w, PLAN).lines, draw(w, long).lines, way(w)]) expect([pack.slug, w, drawn.filter(l => cells(l) > w).map(shown)]).toEqual([pack.slug, w, []])
     }
-    const drawn = draw(56, PLAN, false)
+    const drawn = draw(56, PLAN)
     const rows = drawn.lines.map(shown)
     const segOf = (label: string) => drawn.lines.flat().filter(isSeg).find(seg => seg.t === label) as Seg
     // Where we are, what is done, what is next and how many remain: the count, the active step's place, what is left.
@@ -193,12 +195,29 @@ test('each pack draws the four states its own way, readably, and fits every widt
     for (const [label, name] of states) if (name !== 'active') expect([pack.slug, name, contrast(active.c ?? P.fg, active.bg ?? P.bg) >= contrast(segOf(label).c ?? P.fg, P.bg)]).toEqual([pack.slug, name, true])
     // Its node holds still (only an alarm moves): the cycle's first glyph, whatever the clock.
     if (S.cycle !== null) {
-      const nodeAt = (now: number) => draw(56, PLAN, false, now).lines.map(shown).find(l => l.includes('Rough cut'))
+      const nodeAt = (now: number) => draw(56, PLAN, now).lines.map(shown).find(l => l.includes('Rough cut'))
       expect([pack.slug, nodeAt(0) === nodeAt(S.cycle.ms), nodeAt(0)?.includes(S.cycle.glyphs[0] ?? '')]).toEqual([pack.slug, true, true])
     }
-    // The map: here, next and blocked each under the pack's node, and what blocks a ticket named beside it.
-    const way = draw(56, PLAN, true).lines.map(shown)
-    expect([pack.slug, way.some(l => /here ×2/i.test(l)), way.some(l => /next ×4/i.test(l)), way.some(l => l.includes(S.states.blocked.glyph) && /blocked ×3/i.test(l)), way.filter(l => /╰ by Ticket 8, /.test(l)).length]).toEqual([pack.slug, true, true, true, 3])
+    // A long active label takes a second line, painted as the first, its ground run to the pane's edge; no other step adds a line.
+    const tall = draw(56, long).lines
+    const whole = long.steps[12]?.label ?? ''
+    const partOf = (line: Line) => line.filter(isSeg).find(seg => seg.t.trim().length > 3 && whole.includes(seg.t.replace(/…$/, '')))
+    const at = tall.findIndex(l => shown(l).includes('step 13 with'))
+    const [one, two] = [partOf(tall[at] ?? []), partOf(tall[at + 1] ?? [])]
+    expect([pack.slug, whole.includes(`${one?.t} ${two?.t}`.replace(/…$/, '')), two?.c === one?.c, two?.b, (tall[at + 1] ?? []).slice(1).filter(isSeg).every(seg => seg.bg === one?.bg), cells(tall[at + 1] ?? []) === cells(tall[at] ?? [])]).toEqual([pack.slug, true, true, true, true, true])
+    // Under the label the list keeps its edge; a struck label is struck on both lines.
+    if (S.layout === 'list') expect([pack.slug, shown(tall[at + 1] ?? []).trimEnd(), tall[at + 1]?.[1]]).toEqual([pack.slug, `  ${S.states.active.edge}   ${two?.t}`, { t: S.states.active.edge, c: P[S.states.active.edgeColor], ...(one?.bg === undefined ? {} : { bg: one.bg }) }])
+    const struck = draw(56, long, 0, { ...S, states: { ...S.states, active: { ...S.states.active, strike: true } } }).lines
+    expect([pack.slug, partOf(struck[at] ?? [])?.x, partOf(struck[at + 1] ?? [])?.x]).toEqual([pack.slug, true, true])
+    // The same statuses with labels too short to wrap: the long plan is one row taller, the active step's.
+    const calm: Plan = { ...long, steps: long.steps.map((x, i) => ({ ...x, label: `Step ${i + 1}` })) }
+    const drawnRows = (lines: Line[]) => lines.filter(l => l.length > 0).length
+    expect([pack.slug, drawnRows(tall) - drawnRows(draw(56, calm).lines)]).toEqual([pack.slug, 1])
+    // The map, in the Tickets pane: here, next and blocked each under the pack's node with its count said once, every
+    // ticket under its number, and what blocks a ticket cited by its number.
+    const map56 = way(56).map(shown)
+    expect([pack.slug, map56.some(l => /here +2 claimed$/i.test(l)), map56.some(l => /next +4 unblocked$/i.test(l)), map56.some(l => l.includes(S.states.blocked.glyph) && /blocked +3 waiting$/i.test(l))]).toEqual([pack.slug, true, true, true])
+    expect([pack.slug, map56.filter(l => /#\d\d ■ Ticket \d+/.test(l)).length, map56.filter(l => /← #08, an outside blocker/.test(l)).length]).toEqual([pack.slug, 14, 3])
     looks.add(rows.slice(0, 12).join('\n'))
   }
   // Ten packs, eight different lists: the two Y2K packs are one design in two palettes, and so are the two Halo ones.

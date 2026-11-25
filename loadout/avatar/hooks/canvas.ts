@@ -1,4 +1,4 @@
-// A picture in true pixels: what the stage and the mascot are composed on where the terminal
+// A picture in true pixels: what the mascot is composed on where the terminal
 // draws images. Pure: no engine import, so previews and tests compose what the pane shows.
 import type { Pixels } from './look'
 
@@ -6,54 +6,19 @@ import type { Pixels } from './look'
 export type Canvas = { width: number; height: number; data: Int32Array }
 export const CLEAR = -1
 
-/** A sprite and its anchor: the column of its body's middle and the row under its feet. */
-export type Sprite = { px: Pixels; ax: number; ay: number }
-
-/** [from, to) in pixels, on either axis. */
-export type Span = readonly [from: number, to: number]
-
 export const blank = (width: number, height: number): Canvas => ({ width, height, data: new Int32Array(width * height).fill(CLEAR) })
 
-export const sprite = (px: Pixels, ax = px[0]!.length >> 1, ay = px.length): Sprite => ({ px, ax, ay })
-
-/** `px` with its top-left at (x, y), each pixel `scale` wide and tall, mirrored when `flip`; nothing lands outside `columns`, `rows` or the canvas. */
-export function paint(canvas: Canvas, px: Pixels, x: number, y: number, { flip = false, scale = 1, columns = [0, canvas.width] as Span, rows = [0, canvas.height] as Span, tint = CLEAR } = {}) {
-  const [left, right] = [Math.max(0, columns[0]), Math.min(canvas.width, columns[1])]
-  const [top, bottom] = [Math.max(0, rows[0]), Math.min(canvas.height, rows[1])]
+/** `px` with its top-left at (x, y), each pixel `scale` wide and tall, mirrored when `flip`, in the one colour `tint` where given; nothing lands outside the canvas. */
+export function paint(canvas: Canvas, px: Pixels, x: number, y: number, { flip = false, scale = 1, tint = CLEAR } = {}) {
   px.forEach((row, j) => row.forEach((color, i) => {
     if (color === null) return
     const [x0, y0] = [x + (flip ? row.length - 1 - i : i) * scale, y + j * scale]
     for (let dy = 0; dy < scale; dy++) {
       for (let dx = 0; dx < scale; dx++) {
-        if (x0 + dx >= left && x0 + dx < right && y0 + dy >= top && y0 + dy < bottom) canvas.data[(y0 + dy) * canvas.width + x0 + dx] = tint === CLEAR ? color : tint
+        if (x0 + dx >= 0 && x0 + dx < canvas.width && y0 + dy >= 0 && y0 + dy < canvas.height) canvas.data[(y0 + dy) * canvas.width + x0 + dx] = tint === CLEAR ? color : tint
       }
     }
   }))
-}
-
-type Clip = { flip?: boolean; columns?: Span; rows?: Span; tint?: number }
-
-/** A sprite with its anchor at (x, y): its feet on row y - 1, its middle on column x. */
-export const stand = (canvas: Canvas, { px, ax, ay }: Sprite, x: number, y: number, clip: Clip = {}) =>
-  paint(canvas, px, Math.round(x) - (clip.flip === true ? px[0]!.length - ax : ax), Math.round(y) - ay, clip)
-
-/** The canvas as rows of pixels, null where it is clear. */
-export const pixelsOf = ({ width, height, data }: Canvas): Pixels =>
-  Array.from({ length: height }, (_row, y) => Array.from({ length: width }, (_cell, x) => (data[y * width + x] === CLEAR ? null : data[y * width + x]!)))
-
-/** `px` with each pixel `n` wide and tall. */
-export const scaled = (px: Pixels, n: number): Pixels => px.flatMap(row => Array.from({ length: n }, () => row.flatMap(color => Array<number | null>(n).fill(color))))
-
-export const mirrored = (px: Pixels): Pixels => px.map(row => [...row].reverse())
-
-/** `base` with `add` drawn over it, its top-left `dx`, `dy` from the anchor: the anchor stays where the body's was. */
-export function joined(base: Sprite, add: Pixels, dx: number, dy: number): Sprite {
-  const [left, top] = [Math.min(0, base.ax + dx), Math.min(0, base.ay + dy)]
-  const canvas = blank(Math.max(base.px[0]!.length, base.ax + dx + add[0]!.length) - left, Math.max(base.px.length, base.ay + dy + add.length) - top)
-  paint(canvas, base.px, -left, -top)
-  paint(canvas, add, base.ax + dx - left, base.ay + dy - top)
-
-  return { px: pixelsOf(canvas), ax: base.ax - left, ay: base.ay - top }
 }
 
 /** The colours a canvas paints. */

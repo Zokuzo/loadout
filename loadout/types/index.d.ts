@@ -17,48 +17,26 @@ export type KirbyHudUsage = {
 export type KirbyHudCall = { id: string; tool: string; summary: string }
 
 /**
- * A subagent on stage: its loop's id, its task, the colour slot it keeps for life, its running
- * calls (oldest first) and when it was last heard. Then when it was first heard, and, each absent
- * until it happens: when a call of its last failed, when one last ended well, and when it ended
- * (it leaves a little later), `isLost` when that end was no answer: an interrupt, a refusal, an error.
- * `turnedAt` is when what it does last changed (a call began, its newest ended, it ended) and
- * `wasTool` the tool it ran until then, absent for none: its mini moves on from where that left it.
- * `model` is what it runs on, where its spawn told: its mini wears that model's form.
+ * An agent alive now, as the Avatar pane counts it: its loop's id, its running calls (oldest first)
+ * and when it was last heard. `isWaiting` is what the engine's list last said of it: true while its
+ * status there is `pending` or `waiting`; an agent the list does not name is not waiting. `isListed`
+ * once the list has named it: such an agent has ended when the list names it no more.
  */
 export type KirbyHudHelper = {
   id: string
-  label: string
-  slot: number
   calls: KirbyHudCall[]
   seenAt: number
-  joinedAt?: number
-  hurtAt?: number
-  hitAt?: number
-  doneAt?: number
-  isLost?: boolean
-  turnedAt?: number
-  wasTool?: string
-  model?: string
+  isWaiting?: boolean
+  isListed?: true
 }
 
-// ── the mods (avatar/hooks/mods.ts, docs/mods/grammar.md) ──
+// ── the line before a /clear (avatar/hooks/mods.ts) ──
 
 /**
- * What the status line and the cards read: when the session was last at rest (its start, a /clear), when the
- * main turn began and ended, what its answer said, the failures in a row (how many, their kind, the last call, when),
- * the files written this session, the draft in the prompt, the end whose back card was put away, the turn whose
- * recall card was, and the recall card turned over (its id, the answer, the days to the next time).
+ * What the `before /clear` line reads: when the main turn last ended (0 while none has since the session's
+ * start or a /clear), the files written this session, and the draft in the prompt.
  */
-export type ModsState = {
-  idleAt: number; turnAt: number; endAt: number; said: string
-  streak: { n: number; kind: string; what: string; at: number }
-  files: string[]; prompt: string; backSeen: number; recallShown: number
-  flip: { id: string; knew: boolean; next: number } | null
-}
-/** One card of ~/.claude/loadout-deck.json (bin/recall-deck): a question, its answer, where it came from. */
-export type RecallCard = { id: string; q: string; a: string; src: string }
-/** In the store: each card's SM-2 schedule by id, and every answer given (when, which, whether known). */
-export type RecallDeck = { sched: Record<string, { ef: number; reps: number; interval: number; due: number }>; log: { at: number; id: string; knew: boolean }[] }
+export type ModsState = { endAt: number; files: string[]; prompt: string }
 
 // ── flow ──
 export type AgentStatus = 'queued' | 'running' | 'done' | 'failed'
@@ -106,7 +84,17 @@ export type Agent = {
   flashBad?: boolean
   /** A plain subagent only: it ended by an interruption, not by an answer or an error. */
   stopped?: boolean
+  /** Its last model request: what the bubble map's tokens, cache share and cache expiry are read from. Absent before the first. */
+  ask?: Ask
+  /** A plain subagent only: its turn ended while it waits for background work of its own, so it is not over. */
+  waiting?: boolean
 }
+
+/**
+ * One model request of an agent: when it was sent, its input by where it came from (`fresh` sent in full,
+ * `read` from the prompt cache, `wrote` to it again) and how long the cache then holds what it wrote.
+ */
+export type Ask = { at: number; fresh: number; read: number; wrote: number; ttlMs: number }
 
 export type Run = {
   /** The run's id (wf_...), '' until the Workflow call answered. */
@@ -164,8 +152,10 @@ export type Ticket = {
   state: TicketState
   /** Its GitLab issue number from gitlab.json, null without one. */
   iid: number | null
-  /** What still blocks it, by name: a ticket's title, "#NN ?" for a number with no file, or the outside blocker's text. */
+  /** What still blocks it: a ticket by its number ("#NN", "#NN ?" for one with no file), or the outside blocker's text. */
   blockers: string[]
+  /** When its file last changed, in ms, 0 when the listing gave no time: the resolved are listed last changed first. */
+  at: number
 }
 /** One wayfinder effort as its files read: .scratch/<effort>/map.md, issues/ and gitlab.json. */
 export type Chart = {
@@ -189,7 +179,7 @@ export type WayMap = Chart & { scratch: string; efforts: string[]; sig: string }
 /**
  * Wayfinder in this session: on once the skill was used; the .scratch directory and effort its file
  * calls last touched; the effort the person picked in the pane; a /wayfinder argument not yet matched
- * to an effort; the sections open in the pane (done, fog, out).
+ * to an effort; the sections open in the Tickets pane (fog, out).
  */
 export type Way = { active: boolean; root: string; touched: string; chosen: string; hint: string; open: string[] }
 
@@ -241,15 +231,15 @@ declare module 'claude-code' {
       isWorking: boolean
       happyUntil: number
       pets: number
-      /** The pane's theme picker: open (one row per theme) or folded to one line. */
+      /** The pane's theme picker: open (one row per theme) or folded to the theme line, one button. */
       isPicking: boolean
       mods: ModsState
-      /** The band's beat: bumped when what the mods say has moved with the clock, so the band alone is drawn again. */
-      modsBeat: number
-      /** Bumped as the Avatar pane goes: the band (and it alone) draws the mods again. */
+      /** Bumped as the Avatar pane goes: the band (and it alone) is drawn again, with the meters and the /clear line. */
       modsBand: number
       // flow
       runs: Run[]; plan: Plan | null; now: number; view: View; way: Way; map: WayMap | null; hist: History; flowTheme: string; solo: Agent[]; packs: { sig: string; list: Pack[] }
+      /** The main session, followed as any agent is: the bubble on top of the bubble map. */
+      main: Agent
       // frames
       isOn: boolean
       /** The working line's icon: beats counted while a turn runs. */

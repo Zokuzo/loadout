@@ -1,10 +1,10 @@
 // The pane as lines of cells, in the designer's handoff layout: no engine here, so a line's width is
 // known before it is drawn. register.tsx turns each line into Text, Button and Input elements.
-import type { Agent, Plan, Run, Ticket, View, Way, WayMap } from '../../types'
-import { brisk, dur, ENTER_MS, fit, FLASH_MS, inState, isOver, kindOf, LEAVE_MS, LINGER_MS, modelOf, targetOf, tok, TOOL_MS, TOOL_STEP, toolName, verbOf } from './lib'
+import type { Agent, Plan, Run, View } from '../../types'
+import { brisk, dur, ENTER_MS, fit, fitTwo, FLASH_MS, isOver, kindOf, LEAVE_MS, LINGER_MS, modelOf, targetOf, tok, TOOL_MS, TOOL_STEP, toolName, verbOf } from './lib'
 import type { AgentView, PhaseView, RunView } from './lib'
 import { filled, gradient, mix, STEPS } from './palette'
-import type { Palette, StepState, StepStatusName, StepsStyle } from './palette'
+import type { Palette, StepStatusName, StepsStyle } from './palette'
 
 /** A run of cells of one style: text, colour, bold, background, struck through. */
 export type Seg = { t: string; c?: string; b?: boolean; bg?: string; x?: boolean }
@@ -33,10 +33,10 @@ export const isSeg = (p: Piece): p is Seg => 't' in p
 export const widthOf = (b: Btn): number => Math.max(b.pad ?? 0, b.hotkey === undefined ? b.label.length : b.label.length + 3)
 export const cells = (line: Line): number => line.reduce((n, p) => n + (isSeg(p) ? p.t.length : 'btn' in p ? widthOf(p.btn) : p.inp.width), 0)
 
-const s = (t: string, c?: string, b?: boolean, bg?: string): Seg => ({ t, ...(c === undefined ? {} : { c }), ...(b === true ? { b } : {}), ...(bg === undefined ? {} : { bg }) })
-const gap = (n: number, bg?: string): Seg => s(' '.repeat(Math.max(0, n)), undefined, false, bg)
+export const s = (t: string, c?: string, b?: boolean, bg?: string): Seg => ({ t, ...(c === undefined ? {} : { c }), ...(b === true ? { b } : {}), ...(bg === undefined ? {} : { bg }) })
+export const gap = (n: number, bg?: string): Seg => s(' '.repeat(Math.max(0, n)), undefined, false, bg)
 /** `left`, then `right` pushed to the line's end `width` cells away. */
-const spread = (width: number, left: Line, right: Line, bg?: string): Line => [...left, gap(width - cells(left) - cells(right), bg), ...right]
+export const spread = (width: number, left: Line, right: Line, bg?: string): Line => [...left, gap(width - cells(left) - cells(right), bg), ...right]
 
 /** `n` cells of `glyph`, the first `filled` coloured cell by cell by `hue` (its position 0..1), the rest in `track`. */
 function bar(n: number, filled: number, glyph: string, hue: (x: number) => string, track: string, rest = glyph): Seg[] {
@@ -69,18 +69,16 @@ export function clip(line: Line, n: number): Line {
   return out
 }
 
-export type Fold = { phases: boolean; agents: boolean; tight: boolean; way: number; cap: number }
-// How much the body gives up to fit the pane, least first. The wayfinder map folds first (1 done, 2 fog and out
-// of scope, 3 the blockers' names), then the finished phases' rows, then the blank rows, then the finished agents
-// of a running phase. Running agents' cards never fold; what is still too tall scrolls in the pane.
+export type Fold = { phases: boolean; agents: boolean; tight: boolean; oneLine: boolean }
+// How much the body gives up to fit the pane, least first. The active step's second line goes first, so it only ever
+// takes rows nothing else wanted. Then the finished phases' rows, then the blank rows, then the finished agents of a
+// running phase. Running agents' cards never fold; what is still too tall scrolls in the pane.
 const LEVELS: readonly Fold[] = [
-  { phases: false, agents: false, tight: false, way: 0, cap: Infinity },
-  { phases: false, agents: false, tight: false, way: 1, cap: Infinity },
-  { phases: false, agents: false, tight: false, way: 2, cap: Infinity },
-  { phases: false, agents: false, tight: false, way: 3, cap: Infinity },
-  { phases: true, agents: false, tight: false, way: 3, cap: Infinity },
-  { phases: true, agents: false, tight: true, way: 3, cap: Infinity },
-  { phases: true, agents: true, tight: true, way: 3, cap: Infinity },
+  { phases: false, agents: false, tight: false, oneLine: false },
+  { phases: false, agents: false, tight: false, oneLine: true },
+  { phases: true, agents: false, tight: false, oneLine: true },
+  { phases: true, agents: false, tight: true, oneLine: true },
+  { phases: true, agents: true, tight: true, oneLine: true },
 ]
 
 export type Scene = {
@@ -95,57 +93,34 @@ export type Scene = {
   runs: RunView[]
   view: View
   plan: Plan | null
-  way: Way
-  map: WayMap | null
-  /** How the steps and the wayfinder map are drawn: the theme pack's, the built-in style without one. */
+  /** How the steps are drawn: the theme pack's, the built-in style without one. */
   S?: StepsStyle
   /** The plain subagents: the running ones, and the finished ones not yet gone. */
   solo?: Agent[]
+  /**
+   * The bubble map stands in the pane, as a picture: the keys of the agents at work, in its order. The agents and
+   * the runs are then not drawn as text: `lines` is the step plan alone, folded the most, and `foot` goes under the picture.
+   */
+  map?: string[]
 }
-/** `steer` is the key of the agent a steer would reach, '' for none. */
-export type Drawn = { lines: Line[]; order: string[]; cur: string; target: Agent | undefined; steer: string; stoppable: Run | undefined }
+/** `steer` is the key of the agent a steer would reach, '' for none. `foot` is the keys' rows: the last of `lines`, unless a bubble map stands between them. */
+export type Drawn = { lines: Line[]; foot: Line[]; order: string[]; cur: string; target: Agent | undefined; steer: string; stoppable: Run | undefined }
 
 export const runKey = (r: Run): string => r.callId || r.id
 export const agentKey = (r: Run, a: Agent): string => `ag:${runKey(r)}:${a.key}`
 /** A plain subagent's key in the pane: no run of a workflow is called "solo". */
 export const soloKey = (a: Agent): string => `ag:solo:${a.key}`
-const STATE_OF = { resolved: 'done', claimed: 'active', frontier: 'pending', blocked: 'blocked' } as const
 
-const TYPE = { research: '◇', grilling: '?', prototype: '±', task: '■', other: '•' } as const
-const FOLDS = { done: ['d', 'done'], fog: ['g', 'fog'], out: ['o', 'out of scope'] } as const
-const EFFORT_KEYS = 'abceh'
-
-export function compose(sc: Scene): Drawn {
-  const { P, view, now } = sc
-  const pad = sc.w >= 44 ? 2 : 1
-  const W = Math.max(20, sc.w - pad * 2)
-  const spin = spinAt(now)
-  const S = sc.S ?? STEPS
-  const solo = sc.solo ?? []
-  // The clock the plain subagents are read at: the pane's, and never before the last thing one of them did.
-  const T = Math.max(now, ...solo.flatMap(a => [a.startedAt, a.endedAt, a.flashAt ?? 0, ...a.calls.map(c => c.at)]))
+/**
+ * What a pane's headers and boxes are drawn with, for one palette, one pack's style and a width of `W` cells: the steps,
+ * a run's summary and the wayfinder map share them, so each reads as the others do.
+ */
+export function shapes(P: Palette, S: StepsStyle, W: number) {
   /** A step state's node: the first glyph of the pack's cycle for the active one, held (only an alarm moves). */
   const nodeOf = (name: StepStatusName): string =>
     (name === 'active' && S.cycle !== null ? S.cycle.glyphs[0] : undefined) ?? S.states[name].glyph
   const up = (text: string): string => (S.header.upper ? text.toUpperCase() : text)
-  const toolHue = (tool: string): string => {
-    const kind = kindOf(tool)
-    return kind === 'read' ? P.blue : kind === 'edit' ? P.yellow : kind === 'shell' ? P.violet : kind === 'web' ? P.cyan : P.text2
-  }
-  // Each model its own colour, the same on every card, row and count: opus warm, sonnet cyan, haiku green, fable violet.
-  const modelHue = (family: string): string => (family === 'opus' ? P.orange : family === 'sonnet' ? P.cyan : family === 'haiku' ? P.green : family === 'fable' ? P.violet : P.text3)
-  /** A running card's model: `◆ haiku 4.5`, bold in its colour; null before the agent has started. */
-  const badge = (a: Agent): Seg | null => {
-    const m = modelOf(a.model)
-    return m === null ? null : s(`◆ ${m.full}`, modelHue(m.family), true)
-  }
-  /** A finished row's model: its family in its colour, in a column of MODEL_COLS cells (blank before it is known). */
-  const modelCol = (a: Agent, bg?: string): Seg => {
-    const m = modelOf(a.model)
-    return s((m === null ? '' : m.family).padEnd(MODEL_COLS), m === null ? P.text4 : modelHue(m.family), false, bg)
-  }
   const flow = (x: number) => gradient([[0, P.cyan], [1, P.green]], x)
-  const card = (x: number) => gradient([[0, P.cyan], [0.7, P.green], [1, P.yellow]], x)
 
   /** Items side by side, two cells apart, on as many lines as the width asks. */
   const wrap = (items: Line[]): Line[] => {
@@ -200,6 +175,38 @@ export function compose(sc: Scene): Drawn {
     }
     return [spread(W, [s(fit(name, Math.max(1, W - right.length - 1)), P[H.color], true)], [s(right, P.text3)]), ...body(W)]
   }
+
+  return { nodeOf, up, flow, wrap, box, meter, frame }
+}
+
+export function compose(sc: Scene): Drawn {
+  const { P, view, now } = sc
+  const pad = sc.w >= 44 ? 2 : 1
+  const W = Math.max(20, sc.w - pad * 2)
+  const spin = spinAt(now)
+  const S = sc.S ?? STEPS
+  const { nodeOf, flow, wrap, box, meter, frame } = shapes(P, S, W)
+  const solo = sc.solo ?? []
+  // The clock the plain subagents are read at: the pane's, and never before the last thing one of them did.
+  const T = Math.max(now, ...solo.flatMap(a => [a.startedAt, a.endedAt, a.flashAt ?? 0, ...a.calls.map(c => c.at)]))
+  const toolHue = (tool: string): string => {
+    const kind = kindOf(tool)
+    return kind === 'read' ? P.blue : kind === 'edit' ? P.yellow : kind === 'shell' ? P.violet : kind === 'web' ? P.cyan : P.text2
+  }
+  // Each model its own colour, the same on every card, row and count: opus warm, sonnet cyan, haiku green, fable violet.
+  const modelHue = (family: string): string => (family === 'opus' ? P.orange : family === 'sonnet' ? P.cyan : family === 'haiku' ? P.green : family === 'fable' ? P.violet : P.text3)
+  /** A running card's model: `◆ haiku 4.5`, bold in its colour; null before the agent has started. */
+  const badge = (a: Agent): Seg | null => {
+    const m = modelOf(a.model)
+    return m === null ? null : s(`◆ ${m.full}`, modelHue(m.family), true)
+  }
+  /** A finished row's model: its family in its colour, in a column of MODEL_COLS cells (blank before it is known). */
+  const modelCol = (a: Agent, bg?: string): Seg => {
+    const m = modelOf(a.model)
+    return s((m === null ? '' : m.family).padEnd(MODEL_COLS), m === null ? P.text4 : modelHue(m.family), false, bg)
+  }
+  const card = (x: number) => gradient([[0, P.cyan], [0.7, P.green], [1, P.yellow]], x)
+
   const cell = (text: Seg, width: number): Seg => ({ ...text, t: fit(text.t, width).padEnd(width) })
   const live = solo.filter(a => !isOver(a))
 
@@ -491,82 +498,18 @@ export function compose(sc: Scene): Drawn {
         const head: Seg[] = S.layout === 'list'
           ? [s(st.edge, P[st.edgeColor], false, bg), s(` ${nodeOf(x.status)} `, P[st.color], st.bold, bg)]
           : [s(`${nodeOf(x.status)}  `, P[st.color], st.bold, bg)]
-        const label = fit(lead === null ? x.label : x.label.slice(lead[0].length), Math.max(4, W - cells(head) - 1 - tail.t.length - tag.length))
-        const row = spread(W, [...head, { ...s(label, P[st.labelColor], st.bold, bg), ...(st.strike ? { x: true } : {}) }, s(tag, P.text3, false, bg)].filter(seg => seg.t !== ''), [tail], bg)
-        return i === total - 1 || fold.tight || S.layout === 'list' ? [row] : [row, [s(st.rail, P[st.railColor])]]
+        const words = (t: string): Seg => ({ ...s(t, P[st.labelColor], st.bold, bg), ...(st.strike ? { x: true } : {}) })
+        const text = lead === null ? x.label : x.label.slice(lead[0].length)
+        const room = Math.max(4, W - cells(head) - 1 - tail.t.length - tag.length)
+        // The active step alone may run onto a second line; a pane short of rows takes it back first.
+        const [label = '', more] = x.status === 'active' && !fold.oneLine ? fitTwo(text, room, W - cells(head)) : [fit(text, room)]
+        const row = spread(W, [...head, words(label), s(tag, P.text3, false, bg)].filter(seg => seg.t !== ''), [tail], bg)
+        const isBare = i === total - 1 || fold.tight || S.layout === 'list'
+        // The second line starts under the label: beside the list's edge, or on the rail that goes on to the next node.
+        const side = S.layout === 'list' ? s(st.edge, P[st.edgeColor], false, bg) : s(isBare ? ' ' : st.rail, P[st.railColor], false, bg)
+        const rows = more === undefined ? [row] : [row, spread(W, [side, gap(cells(head) - side.t.length, bg), words(more)], [], bg)]
+        return isBare ? rows : [...rows, [s(st.rail, P[st.railColor])]]
       }),
-    ]
-  }
-
-  // ── The wayfinder map: where we are, what comes next, what is blocked and by what, and what is left ──
-
-  const wayfinder = (fold: Fold): Line[] => {
-    const map = sc.map
-    if (!sc.way.active) return []
-    if (map === null) return [[s('wayfinder is on: no map found', P.text3)], [s('looked for .scratch/*/map.md', P.text4)]]
-    const done = inState(map, 'resolved')
-    const here = inState(map, 'claimed')
-    const next = inState(map, 'frontier')
-    const blocked = inState(map, 'blocked')
-    const typeHue = { research: P.blue, grilling: P.violet, prototype: P.green, task: P.orange, other: P.text2 } as const
-    const ticket = (t: Ticket, rail: Seg, hue: string, isBold: boolean, tail: Seg): Line => {
-      const id = t.iid === null ? '' : ` #${t.iid}`
-      const title = fit(t.title, Math.max(4, W - 5 - id.length - tail.t.length - (tail.t === '' ? 0 : 1)))
-      return spread(W, [rail, s(`${TYPE[t.type]} `, typeHue[t.type]), s(title, hue, isBold), s(id, P.text4)], [tail])
-    }
-    const [D, A, N, B] = [S.states.done, S.states.active, S.states.pending, S.states.blocked]
-    // What a group's tickets stand behind: the state's rail, or in a list its filled left edge.
-    const railOf = (st: StepState): Seg => (S.layout === 'list' ? s(`${st.edge}  `, P[st.edgeColor]) : s(`${st.rail}  `, P[st.railColor]))
-    // Between two groups: the rail going on in a path, a blank row in a list (an edge with nothing beside it is noise).
-    const between = (rail: Seg): Line[] => (fold.tight ? [] : [S.layout === 'list' ? [] : [rail]])
-    const group = (node: string, name: string, hue: string, isBold: boolean, note: string, n: number, rail: Seg, rows: (rail: Seg) => Line[]): Line[] => [
-      spread(W, [s(`${node}  `, hue, isBold), s(up(name), hue, isBold), s(n > 0 ? ` ×${n}` : '', P.text4)], [s(up(note), P.text4)]),
-      ...rows(rail),
-      ...between(rail),
-    ]
-    const efforts = map.efforts.length < 2 ? [] : wrap(map.efforts.map((name, i): Line => {
-      const key = EFFORT_KEYS[i]
-      return [{ btn: { key: `way:effort:${name}`, label: `${name === map.effort ? '●' : '○'} ${fit(name, Math.max(6, W - 6))}`, dim: name !== map.effort, act: { a: 'effort', name }, ...(key === undefined ? {} : { hotkey: key }) } }]
-    }))
-    // A section that opens: its mark where a phase has its node, its Button from column 3, its rows behind the rail.
-    const section = (id: keyof typeof FOLDS, n: number, items: (rail: Seg) => Line[], isFolded: boolean, isLast = false): Line[] => {
-      const [hotkey, name] = FOLDS[id]
-      const isOpen = sc.way.open.includes(id)
-      const rail = isLast ? s('   ') : railOf(N)
-      const label = fit(`${name} (${n})${isOpen && isFolded ? ' folded' : ''}`, Math.max(4, W - 6))
-      return [
-        [s(`${isOpen && !isFolded ? '▾' : '▸'}  `, P.text4), { btn: { key: `way:${id}`, label, hotkey, dim: !isOpen, act: { a: 'way', id } } }],
-        ...(isOpen && !isFolded ? items(rail) : []),
-        ...(isLast ? [] : between(rail)),
-      ]
-    }
-    const shown = next.slice(0, Math.max(1, fold.cap))
-    const total = map.tickets.length
-    const hasBlocked = blocked.length > 0
-    return [
-      ...efforts,
-      ...frame(map.title, `${done.length}/${total}`, inner => [
-        [s(fit(map.destination || 'no destination written yet', inner), P.text2)],
-        [s(up(`${done.length} / ${total} resolved`), P.fg, true), ...(map.carte === null ? [] : [s(` · GitLab #${map.carte}`, P.text3)])],
-        [s(up(`here ${here.length}`), P[A.color]), s(up(` · next ${next.length}`), P.text3), s(up(` · blocked ${blocked.length}`), hasBlocked ? P[B.color] : P.text3)],
-        meter(inner, total === 0 ? 0 : done.length / total, map.tickets.map(t => STATE_OF[t.state])),
-      ]),
-      ...(fold.tight ? [] : [[]]),
-      ...group(here.length > 0 ? nodeOf('active') : N.glyph, 'here', here.length > 0 ? P[A.color] : P[N.color], here.length > 0 && A.bold, here.length === 0 ? 'no ticket claimed' : `${here.length} claimed`, here.length, railOf(A),
-        rail => here.map(t => ticket(t, rail, P.fg, true, s('')))),
-      ...group(N.glyph, 'next', next.length > 0 ? P.fg : P[N.color], false, next.length === 0 ? 'nothing unblocked' : `${next.length} unblocked`, next.length, railOf(N),
-        rail => [
-          ...shown.map((t, i) => ticket(t, rail, i === 0 ? P.fg : P.text2, false, i === 0 ? s(up('next'), P[A.color]) : s(''))),
-          ...(shown.length < next.length ? [[rail, s(`  +${next.length - shown.length} more`, P.text4)]] : []),
-        ]),
-      ...(hasBlocked ? group(B.glyph, 'blocked', P[B.color], B.bold, `${blocked.length} waiting`, blocked.length, railOf(B), rail => blocked.flatMap(t => [
-        ticket(t, rail, P.text3, false, s('')),
-        ...(fold.way >= 3 ? [] : [[rail, s('  ╰ by ', P[B.color]), s(fit(t.blockers.join(', '), Math.max(4, W - 10)), P.text4)]]),
-      ])) : []),
-      ...(map.unreadable > 0 ? [[s('!  ', P.red, true), s(`${map.unreadable} ticket files unreadable`, P.red)], ...between(railOf(N))] : []),
-      ...section('done', done.length, rail => done.map(t => [rail, s(`${D.glyph} `, P[D.color]), { ...s(fit(t.title, Math.max(4, W - 5 - (t.iid === null ? 0 : String(t.iid).length + 2))), P[D.labelColor]), ...(D.strike ? { x: true } : {}) }, s(t.iid === null ? '' : ` #${t.iid}`, P.text4)]), fold.way >= 1),
-      ...section('fog', map.fog.length, rail => map.fog.map(f => [rail, s('· ', P.text4), s(fit(f, Math.max(4, W - 5)), P.text2)]), fold.way >= 2),
-      ...section('out', map.out.length, rail => map.out.map(f => [rail, s('· ', P.text4), s(fit(f, Math.max(4, W - 5)), P.text4)]), fold.way >= 2, true),
     ]
   }
 
@@ -619,15 +562,15 @@ export function compose(sc: Scene): Drawn {
     // A key that is not a Button's hotkey: the arrows walk the pane's ring, Enter presses what the ring is on.
     const cap = (key: string, label: string): Line => [s(key, P.fg, true), s(` ${label}`, P.text3)]
     const canMove = order.length > 0
-    // The handoff's row.
+    // The handoff's row. (A picture has no Button for the ring to walk: there j and k alone choose.)
     const main: Line[] = [
-      ...(canMove ? [cap('↑↓', 'select'), cap('⏎', 'actions')] : []),
+      ...(canMove && sc.map === undefined ? [cap('↑↓', 'select'), cap('⏎', 'actions')] : []),
       ...(steerable(cur) === undefined ? [] : [hint('s', 'steer', { a: 'steer' })]),
       ...(stoppableOf(cur) === undefined ? [] : [hint('x', 'stop', { a: 'stop' })]),
       hint('z', 'hide', { a: 'hide' }),
     ]
     // The keys the handoff's row has no room for. A hotkey exists only as a drawn Button, so they sit in the divider.
-    const foldable = sc.runs.map(rv => rv.run).find(r => r.agents.some(a => a.status === 'done' || a.status === 'failed'))
+    const foldable = sc.map !== undefined ? undefined : sc.runs.map(rv => rv.run).find(r => r.agents.some(a => a.status === 'done' || a.status === 'failed'))
     const jk: Line[] = canMove ? [hint('k', '↑', { a: 'move', d: -1 }), hint('j', '↓', { a: 'move', d: 1 })] : []
     const rest: Line[] = [
       ...(foldable === undefined ? [] : [[{ btn: { key: `fold:${runKey(foldable)}`, label: view.folded.includes(runKey(foldable)) ? 'unfold' : 'fold', hotkey: 'f', dim: true, act: { a: 'fold', run: runKey(foldable) } } }] as Line]),
@@ -639,6 +582,13 @@ export function compose(sc: Scene): Drawn {
     return [top ?? plain, ...wrap(main).map(inset), ...(top === null ? wrap(rest).map(inset) : [])]
   }
 
+  /** Around a bubble map: the plan, and the keys for the agents the map shows. Only a selection the person made is one. */
+  const around = (order: string[]): Drawn => {
+    const cur = order.includes(view.sel) ? view.sel : ''
+    const lines = stepper(LEVELS[LEVELS.length - 1]!).map((line): Line => (line.length === 0 ? line : [gap(pad), ...clip(line, W)]))
+    return { lines, foot: footer(cur, order), order, cur, target: steerable(cur)?.a, steer: steerable(cur)?.key ?? '', stoppable: stoppableOf(cur) }
+  }
+
   const build = (fold: Fold): Drawn => {
     const order: string[] = []
     // The selection is settled before the rows are built, so a first pass lists the agents drawn.
@@ -648,9 +598,8 @@ export function compose(sc: Scene): Drawn {
     const firstLive = all.filter(x => x.a.status === 'running').map(x => x.key).find(k => listed.includes(k))
     // The person's own selection, else the first running agent; with none running, nothing is selected.
     const cur = listed.includes(view.sel) ? view.sel : firstLive ?? ''
-    const map = wayfinder(fold)
-    // The empty state shows only in an empty pane: a plan or the map takes the run's place.
-    const isEmpty = sc.runs.length === 0 && sc.plan === null && map.length === 0 && solo.length === 0
+    // The empty state shows only in an empty pane: a plan takes the run's place.
+    const isEmpty = sc.runs.length === 0 && sc.plan === null && solo.length === 0
     const group = agents(fold, cur, order)
     const body: Line[] = [
       ...(isEmpty ? [[s(fit('No workflow is running.', W), P.text3)], []] : []),
@@ -660,21 +609,16 @@ export function compose(sc: Scene): Drawn {
       ...(group.length > 0 && sc.runs.length > 0 ? [[]] : []),
       ...sc.runs.flatMap((rv, i) => [...(i > 0 ? [[]] : []), ...run(rv, fold, cur, order)]),
     ]
-    // The model's own plan stays below the map; without one the map stands alone.
-    const steps = sc.way.active && sc.plan === null ? [] : stepper(fold)
-    const below = [...map, ...(map.length > 0 && steps.length > 0 ? [[]] : []), ...steps]
+    const steps = stepper(fold)
     const foot = footer(cur, order)
-    const lines = [...body, ...(body.length > 0 && !isEmpty && below.length > 0 ? [[]] : []), ...below].map((line): Line => (line.length === 0 ? line : [gap(pad), ...clip(line, W)]))
-    return { lines: [...lines, ...Array.from({ length: sc.inline === true ? 0 : Math.max(0, sc.rows - lines.length - foot.length) }, (): Line => []), ...foot], order, cur, target: steerable(cur)?.a, steer: steerable(cur)?.key ?? '', stoppable: stoppableOf(cur) }
+    const lines = [...body, ...(body.length > 0 && !isEmpty && steps.length > 0 ? [[]] : []), ...steps].map((line): Line => (line.length === 0 ? line : [gap(pad), ...clip(line, W)]))
+    return { lines: [...lines, ...Array.from({ length: sc.inline === true ? 0 : Math.max(0, sc.rows - lines.length - foot.length) }, (): Line => []), ...foot], foot, order, cur, target: steerable(cur)?.a, steer: steerable(cur)?.key ?? '', stoppable: stoppableOf(cur) }
   }
 
+  if (sc.map !== undefined) return around(sc.map)
   const tries = LEVELS.map(build)
-  const last = tries[tries.length - 1]
-  const over = (last?.lines.length ?? 0) - sc.rows
-  const queue = sc.way.active && sc.map !== null ? inState(sc.map, 'frontier').length : 0
-  // Still too tall with everything folded: the tail of NEXT goes, one row per ticket and one for "+N more".
-  const cut = over > 0 && queue > 1 && last !== undefined ? build({ phases: true, agents: true, tight: true, way: 3, cap: Math.max(1, queue - over - 1) }) : last
-  return tries.find(d => d.lines.length <= sc.rows) ?? cut ?? { lines: [], order: [], cur: '', target: undefined, steer: '', stoppable: undefined }
+  // Still too tall with everything folded: the most folded is drawn, and scrolls.
+  return tries.find(d => d.lines.length <= sc.rows) ?? tries[tries.length - 1] ?? { lines: [], foot: [], order: [], cur: '', target: undefined, steer: '', stoppable: undefined }
 }
 
 /** The folded pane: one tab above the prompt, as the handoff's "Folded state" draws it, and the Button that restores. */
