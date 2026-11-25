@@ -97,9 +97,14 @@ export type Scene = {
   S?: StepsStyle
   /** The plain subagents: the running ones, and the finished ones not yet gone. */
   solo?: Agent[]
+  /**
+   * The bubble map stands in the pane, as a picture: the keys of the agents at work, in its order. The agents and
+   * the runs are then not drawn as text: `lines` is the step plan alone, folded the most, and `foot` goes under the picture.
+   */
+  map?: string[]
 }
-/** `steer` is the key of the agent a steer would reach, '' for none. */
-export type Drawn = { lines: Line[]; order: string[]; cur: string; target: Agent | undefined; steer: string; stoppable: Run | undefined }
+/** `steer` is the key of the agent a steer would reach, '' for none. `foot` is the keys' rows: the last of `lines`, unless a bubble map stands between them. */
+export type Drawn = { lines: Line[]; foot: Line[]; order: string[]; cur: string; target: Agent | undefined; steer: string; stoppable: Run | undefined }
 
 export const runKey = (r: Run): string => r.callId || r.id
 export const agentKey = (r: Run, a: Agent): string => `ag:${runKey(r)}:${a.key}`
@@ -557,15 +562,15 @@ export function compose(sc: Scene): Drawn {
     // A key that is not a Button's hotkey: the arrows walk the pane's ring, Enter presses what the ring is on.
     const cap = (key: string, label: string): Line => [s(key, P.fg, true), s(` ${label}`, P.text3)]
     const canMove = order.length > 0
-    // The handoff's row.
+    // The handoff's row. (A picture has no Button for the ring to walk: there j and k alone choose.)
     const main: Line[] = [
-      ...(canMove ? [cap('↑↓', 'select'), cap('⏎', 'actions')] : []),
+      ...(canMove && sc.map === undefined ? [cap('↑↓', 'select'), cap('⏎', 'actions')] : []),
       ...(steerable(cur) === undefined ? [] : [hint('s', 'steer', { a: 'steer' })]),
       ...(stoppableOf(cur) === undefined ? [] : [hint('x', 'stop', { a: 'stop' })]),
       hint('z', 'hide', { a: 'hide' }),
     ]
     // The keys the handoff's row has no room for. A hotkey exists only as a drawn Button, so they sit in the divider.
-    const foldable = sc.runs.map(rv => rv.run).find(r => r.agents.some(a => a.status === 'done' || a.status === 'failed'))
+    const foldable = sc.map !== undefined ? undefined : sc.runs.map(rv => rv.run).find(r => r.agents.some(a => a.status === 'done' || a.status === 'failed'))
     const jk: Line[] = canMove ? [hint('k', '↑', { a: 'move', d: -1 }), hint('j', '↓', { a: 'move', d: 1 })] : []
     const rest: Line[] = [
       ...(foldable === undefined ? [] : [[{ btn: { key: `fold:${runKey(foldable)}`, label: view.folded.includes(runKey(foldable)) ? 'unfold' : 'fold', hotkey: 'f', dim: true, act: { a: 'fold', run: runKey(foldable) } } }] as Line]),
@@ -575,6 +580,13 @@ export function compose(sc: Scene): Drawn {
     // Narrow, j and k go first (the arrows do the same), then the rest drops under the row.
     const top = ruled([...jk, ...rest]) ?? ruled(rest)
     return [top ?? plain, ...wrap(main).map(inset), ...(top === null ? wrap(rest).map(inset) : [])]
+  }
+
+  /** Around a bubble map: the plan, and the keys for the agents the map shows. Only a selection the person made is one. */
+  const around = (order: string[]): Drawn => {
+    const cur = order.includes(view.sel) ? view.sel : ''
+    const lines = stepper(LEVELS[LEVELS.length - 1]!).map((line): Line => (line.length === 0 ? line : [gap(pad), ...clip(line, W)]))
+    return { lines, foot: footer(cur, order), order, cur, target: steerable(cur)?.a, steer: steerable(cur)?.key ?? '', stoppable: stoppableOf(cur) }
   }
 
   const build = (fold: Fold): Drawn => {
@@ -600,12 +612,13 @@ export function compose(sc: Scene): Drawn {
     const steps = stepper(fold)
     const foot = footer(cur, order)
     const lines = [...body, ...(body.length > 0 && !isEmpty && steps.length > 0 ? [[]] : []), ...steps].map((line): Line => (line.length === 0 ? line : [gap(pad), ...clip(line, W)]))
-    return { lines: [...lines, ...Array.from({ length: sc.inline === true ? 0 : Math.max(0, sc.rows - lines.length - foot.length) }, (): Line => []), ...foot], order, cur, target: steerable(cur)?.a, steer: steerable(cur)?.key ?? '', stoppable: stoppableOf(cur) }
+    return { lines: [...lines, ...Array.from({ length: sc.inline === true ? 0 : Math.max(0, sc.rows - lines.length - foot.length) }, (): Line => []), ...foot], foot, order, cur, target: steerable(cur)?.a, steer: steerable(cur)?.key ?? '', stoppable: stoppableOf(cur) }
   }
 
+  if (sc.map !== undefined) return around(sc.map)
   const tries = LEVELS.map(build)
   // Still too tall with everything folded: the most folded is drawn, and scrolls.
-  return tries.find(d => d.lines.length <= sc.rows) ?? tries[tries.length - 1] ?? { lines: [], order: [], cur: '', target: undefined, steer: '', stoppable: undefined }
+  return tries.find(d => d.lines.length <= sc.rows) ?? tries[tries.length - 1] ?? { lines: [], foot: [], order: [], cur: '', target: undefined, steer: '', stoppable: undefined }
 }
 
 /** The folded pane: one tab above the prompt, as the handoff's "Folded state" draws it, and the Button that restores. */

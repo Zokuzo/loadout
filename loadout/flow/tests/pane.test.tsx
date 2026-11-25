@@ -429,7 +429,7 @@ test('z folds the pane to one tab above the prompt, and the tab restores it', as
   expect(all.flat().some(r => r.bg !== undefined)).toBe(false)
   // The tab's Button (z while the band holds the keys, or a click) opens the pane again, with the keyboard.
   await band.press({ key: 'show' })
-  expect(world.opened).toEqual([56])
+  expect(world.opened).toEqual([94])
   expect(lines((await band.drawn()) as Node)).toContain('the band beneath')
   await band.unmount()
   await ui.unmount()

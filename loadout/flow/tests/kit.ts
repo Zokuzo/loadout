@@ -85,7 +85,7 @@ export const engine = (on: Parameters<TestBody>[1], init: { theme?: string; hist
   // absolute path, under the working directory /repo; `agents` is what $.agent.list() names; a plain subagent that starts is
   // "solo-1", "solo-2"... `deny` refuses the next one, `noId` starts it with no id,
   // and a promise under -1 in `held` keeps it from starting.
-  const world = { files: init.files, disk: init.disk ?? {}, stamp: 1, agents: [] as AgentInfo[], solos: 0, deny: '', noId: false, isRefused: false, sent: [] as { to: string; text: string }[], stopped: [] as string[], focused: [] as string[], closed: 0, opened: [] as (number | undefined)[], store: { hist: init.hist ?? {} } as Record<string, unknown>, toasts: [] as string[], stepOut: 0, isUp: false, theme: init.theme ?? 'dark', isDelivered: true, held: new Map<number, Promise<void>>() }
+  const world = { files: init.files, disk: init.disk ?? {}, stamp: 1, agents: [] as AgentInfo[], solos: 0, deny: '', noId: false, isRefused: false, sent: [] as { to: string; text: string }[], stopped: [] as string[], focused: [] as string[], closed: 0, opened: [] as (number | undefined)[], store: { hist: init.hist ?? {} } as Record<string, unknown>, toasts: [] as string[], stepOut: 0, usage: {} as Record<string, unknown>, isUp: false, theme: init.theme ?? 'dark', isDelivered: true, held: new Map<number, Promise<void>>() }
   // Every tool beneath the mod, in one hook: Workflow launches, TaskStop stops, an Edit of float.ts fails after 2s,
   // Bash takes 5s, Read 1s, and any other tool 30s: long enough to be seen running.
   on('tool.call', async (_, e) => {
@@ -162,7 +162,7 @@ export const engine = (on: Parameters<TestBody>[1], init: { theme?: string; hist
   on('tool.register', (_, e) => ({ value: { tool: `mcp__loadout__${e.name}` } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('turn.step', async function* (_, e) {
-    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'tool_use' as const, usage: { ...USAGE, output_tokens: world.stepOut } }
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'tool_use' as const, usage: { ...USAGE, output_tokens: world.stepOut, ...world.usage } }
   })
   on('store.get', (_, e) => ({ value: world.store[e.key] }))
   on('store.set', (_, e) => {

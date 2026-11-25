@@ -1,10 +1,15 @@
 import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, FsEntry, Register, RenderElement, Timer } from 'claude-code'
 
-import type { Agent, Call, History, Run, View } from '../../types'
+import type { Agent, Call, History, Palette, Run, View } from '../../types'
+import { ASSUMED } from '../../avatar/hooks/canvas'
+import { look, measure, refuse, RETRY_MS, screen } from '../../hooks/screen'
+import { altOf, layout, render, sceneOf, shownOf } from './bubbles'
+import type { MapScene, Room } from './bubbles'
 import { agentKey, compose, isSeg, runKey, soloKey, tab, widthOf } from './draw'
-import type { Act, Btn, Line, Seg } from './draw'
-import { brief, chart, declared, enlist, frameOf, heal, healRun, histKey, isOver, isWayfinder, keepRuns, kindOf, lingering, MAX_CALLS, newRun, noted, parseMeta, parseSites, phaseKey, pickEffort, QUEUE_MS, runView, scratchOf, settled, soloAgent, sweep, toHistory, toPlan, withSolo } from './lib'
+import type { Act, Btn, Drawn, Line, Seg } from './draw'
+import { rgb, tiles } from './pixels'
+import { askOf, MAIN, brief, chart, declared, enlist, frameOf, heal, healRun, histKey, isOver, isWayfinder, keepRuns, kindOf, lingering, MAX_CALLS, newRun, noted, parseMeta, parseSites, phaseKey, pickEffort, QUEUE_MS, runView, scratchOf, settled, soloAgent, sweep, toHistory, toPlan, withSolo } from './lib'
 import { lookOf, toPack } from './palette'
 import { tickets } from './tickets'
 import type { Pack } from './palette'
@@ -16,7 +21,7 @@ const PANE = 'flow-map'
 const TITLE = 'Flow map'
 const TOOL = 'mcp__loadout__steps'
 // The dock width asked for: the handoff's default. The person's own drag or keys win over it.
-const COLUMNS = 56
+const COLUMNS = 94
 const [NARROWEST, WIDEST] = [34, 96]
 // The live beat: the handoff redraws every 150 ms; the pane is drawn again only when a spinner frame (450 ms) or a second turned.
 const FAST_MS = 150
@@ -53,8 +58,13 @@ const theme = atom({ plugin: 'loadout', key: 'flowTheme' } as const, '')
 // The avatar part's (avatar/hooks/register.tsx writes them): the theme this terminal shows, a live theme file resolved to its source, and the setting it paints from.
 const shownTheme = atom({ plugin: 'loadout', key: 'theme' } as const, '')
 const painted = atom({ plugin: 'loadout', key: 'painted' } as const, '')
+// The avatar part's too: the session's model, which the main session's bubble wears until its first request names one.
+const sessionModel = atom({ plugin: 'loadout', key: 'model' } as const, '')
 const solo = atom({ plugin: 'loadout', key: 'solo' } as const, [])
 const packs = atom({ plugin: 'loadout', key: 'packs' } as const, { sig: '', list: [] })
+const main = atom({ plugin: 'loadout', key: 'main' } as const, MAIN)
+/** The main session as this version writes it. */
+const healMain = (a: Agent): Agent => ({ ...MAIN, ...a })
 
 /** The view as this version writes it: one kept in $.state by an earlier load has only its first two fields. */
 const healView = (v: View): View => ({ ...VIEW, ...v })
@@ -216,6 +226,9 @@ async function onScreen($: EngineInterface, list: Run[], clock: number): Promise
   return kept === undefined ? live : [...live, kept]
 }
 
+/** What $.agent.list() calls an agent whose turn ended with work of its own still running. */
+const WAITS = ['pending', 'waiting']
+
 // Agent ids seen on a tool call that $.agent.list() does not name: a workflow's agent whose spawn was missed, an engine fork. Not asked about twice.
 const strangers = new Set<string>()
 /**
@@ -239,12 +252,21 @@ async function adopt($: EngineInterface, id: string): Promise<boolean> {
 async function reconcile($: EngineInterface) {
   const rows = await $.agent.list().catch(() => null)
   if (rows === null) return
-  const ends = new Map(rows.filter(r => r.status === 'completed' || r.status === 'failed' || r.status === 'killed').map(r => [r.id, r.status]))
-  if (!(await read($, solo)).some(a => !isOver(a) && ends.has(a.id))) return
+  const said = new Map(rows.map(r => [r.id, r.status as string]))
+  // How the list says an agent ended. One the pane holds as waiting has ended too once the list no longer says it waits or works.
+  const endOf = (a: Agent): string | undefined => {
+    const status = said.get(a.id)
+    if (isOver(a)) return undefined
+    if (status === 'completed' || status === 'failed' || status === 'killed') return status
+    return a.waiting === true && status !== 'running' && !WAITS.includes(status ?? '') ? 'completed' : undefined
+  }
+  const isBack = (a: Agent) => !isOver(a) && a.waiting === true && said.get(a.id) === 'running'
+  if (!(await read($, solo)).some(a => endOf(a) !== undefined || isBack(a))) return
   const at = await $.clock.now()
   await update($, solo, list => list.map(a => {
-    const how = isOver(a) ? undefined : ends.get(a.id)
-    return how === undefined ? a : { ...a, status: how === 'completed' ? 'done' as const : 'failed' as const, stopped: how === 'killed', endedAt: Math.max(at, a.startedAt), calls: [] }
+    const how = endOf(a)
+    if (how === undefined) return isBack(a) ? { ...a, waiting: false } : a
+    return { ...a, status: how === 'completed' ? 'done' as const : 'failed' as const, stopped: how === 'killed', waiting: false, endedAt: Math.max(at, a.startedAt), calls: [] }
   }))
 }
 
@@ -283,6 +305,59 @@ let packsAt = 0
 let frame = ''
 // The main conversation's turn is running: the active step's node turns while it does, and stands still after.
 let isWorking = false
+// The bubble map as the pane last showed it: painted again only when what it shows changed.
+type Board = { print: string; /** The room and the colours it was painted for. */ look: string; /** When it was painted. */ at: number; rows: number; tiles: ReturnType<typeof tiles> }
+let kept: Board | null = null
+// A picture is painted once a second at the most: painting one, and the terminal taking it, at each call of each agent
+// kept the session's process busy (measured: one core, with three agents). What changed meanwhile is owed to the next beat.
+const PICTURE_MS = 1000
+let isOwed = false
+// Whether the pane's last drawing held the picture, and whether the terminal was seen to draw it (a blit taken).
+let hasMap = false
+let isProved = false
+// The pane's width when the cell was last measured.
+let shape = ''
+
+/** A session starts: nothing is known of what its terminal showed. */
+const forget = () => {
+  ;[kept, hasMap, isProved, shape, isOwed] = [null, false, false, '', false]
+}
+
+/**
+ * The picture of a scene in a room at `t`, null where it has none: the one kept when nothing it shows changed, and
+ * also when it was painted less than PICTURE_MS ago (the scene's change is then owed).
+ */
+function pictured(scene: MapScene, room: Room, P: Palette, t: number): Board | null {
+  const [print, look] = [JSON.stringify(scene), JSON.stringify([room, P.bg, P.fg, P.text2])]
+  const isFresh = kept !== null && kept.look === look && (kept.print === print || (kept.tiles.length > 0 && t >= kept.at && t - kept.at < PICTURE_MS))
+  isOwed = isFresh && kept?.print !== print
+  if (!isFresh) {
+    const inks = { ground: rgb(P.bg), fg: rgb(P.fg), dim: rgb(P.text2) }
+    const laid = layout(scene, room, inks)
+    kept = { print, look, at: t, rows: laid === null ? 0 : laid.height / room.cellHeight, tiles: laid === null ? [] : tiles(render(laid, inks.ground), room.cellHeight) }
+  }
+
+  return kept === null || kept.tiles.length === 0 ? null : kept
+}
+
+/**
+ * Asks the terminal to take the picture again, once: an Image that draws its words in the picture's place is
+ * known only by a blit's refusal. Pictures are then off for a while, for the Avatar pane too, and the text cards are back.
+ */
+async function prove($: EngineInterface, board: Board, columns: number) {
+  const tile = board.tiles[0]
+  if (tile === undefined) return
+  const got = await $.ui.blit({ requestId: PANE, key: 'bubbles-0', source: tile.source, columns, rows: tile.rows }).catch(() => null)
+  if (got === null) return
+  if (got.deny === undefined) {
+    // taken: the refusals in a row, if any, are over
+    isProved = true
+    screen.retryMs = RETRY_MS
+  } else if (/placeholder|\balt\b/i.test(got.deny)) {
+    await refuse($)
+    $.ui.invalidate('ui.render')
+  }
+}
 function tick($: EngineInterface) {
   const arm = (ms: number) => {
     timer?.cancel()
@@ -314,11 +389,14 @@ function tick($: EngineInterface) {
     // The active step's node turns at the pack's rate, while the model works on it.
     const stepMs = isWorking && (await read($, plan))?.steps.some(x => x.status === 'active') === true
       ? lookOf(await read($, theme), (await read($, packs)).list).S.cycle?.ms ?? 0 : 0
-    const next = frameOf({ isLive, solo: mine, stepMs, t, isKept: lingering(all, t, begunAt) !== undefined })
+    const asked = hasMap ? (await read($, main)).ask : undefined
+    const next = frameOf({ isLive, solo: mine, stepMs, t, isKept: lingering(all, t, begunAt) !== undefined, ...(hasMap ? { mapLeft: asked === undefined ? 0 : asked.at + asked.ttlMs - t } : {}) })
     // Drawn again when the frame changed, and once more when the last thing that moved stopped: what was mid-way
     // (a finished row still bright, a border still lit) is drawn settled. Hidden, the frame stands: the first beat
     // back on screen draws.
-    if (isShown && next !== frame) {
+    if (!isShown) isOwed = false
+    const isDue = isOwed && kept !== null && (t - kept.at >= PICTURE_MS || t < kept.at)
+    if (isShown && (next !== frame || isDue)) {
       await update($, now, () => t)
       frame = next
     }
@@ -326,7 +404,7 @@ function tick($: EngineInterface) {
       mapAt = t
       await refresh($)
     }
-    const isMoving = isLive || mine.length > 0 || stepMs > 0
+    const isMoving = isLive || mine.length > 0 || stepMs > 0 || isOwed
     const want = isMoving && isShown ? FAST_MS : isMoving || isWay ? SLOW_MS : IDLE_MS
     if (want !== period) arm(want)
   }
@@ -368,7 +446,7 @@ async function wake($: EngineInterface, args: string) {
 
 
 /** What the drawing knew when a Button was drawn: the agents in order, the selected one, whom a steer and a stop would reach. */
-type Ctx = { order: string[]; target: string; stop: string; cols: number }
+type Ctx = { order: string[]; target: string; stop: string; cols: number; /** Around a bubble map: the agent the person chose, '' for none; a first move then starts at the first agent. */ chosen?: string }
 
 /** A press, run: every write goes through the state the press finds, never the one the drawing saw. */
 async function act($: EngineInterface, a: Act, c: Ctx) {
@@ -379,7 +457,7 @@ async function act($: EngineInterface, a: Act, c: Ctx) {
     await set(v => ({ ...v, sel: a.key, mode: '', open: v.open.includes(a.key) ? v.open.filter(k => k !== a.key) : [...v.open, a.key].slice(-40) }))
   } else if (a.a === 'move') {
     const from = healView(await read($, view)).sel
-    const at = c.order.indexOf(c.order.includes(from) ? from : c.target)
+    const at = c.order.indexOf(c.order.includes(from) ? from : c.chosen ?? c.target)
     const next = c.order[Math.max(0, Math.min(c.order.length - 1, at + a.d))]
     if (next === undefined) return
     await set(v => ({ ...v, sel: next, mode: '' }))
@@ -538,6 +616,8 @@ const started: Part<'session.start'> = async ($, e, next) => {
   for (const row of rows.filter(r => r.teammateId === undefined && (r.status === 'running' || r.status === 'pending' || r.status === 'waiting'))) {
     await quiet(update($, solo, list => (list.some(a => a.id === row.id) ? list : withSolo(list, soloAgent({ key: `a:${row.id}`, id: row.id, label: row.description || row.type, kind: row.type, startedAt: at })))))
   }
+  await quiet(update($, main, a => (healMain(a).startedAt === 0 ? { ...healMain(a), startedAt: at } : a)))
+  forget()
   const seen = healView(await read($, view))
   // The Tickets tab first, so behind: the pane met last is the one shown, and that stays the Flow map or, opened after
   // it by its own part, the Avatar pane.
@@ -550,7 +630,11 @@ const started: Part<'session.start'> = async ($, e, next) => {
 
 // The main conversation's turn starts: the active step's node turns until it ends.
 const turnStarted: Part<'turn.start'> = async ($, e, next) => {
-  isWorking = true
+  if (e.agentId === undefined) {
+    isWorking = true
+    // the bubble map says the main session thinks: nothing it reads was written, so it is asked to draw
+    if (hasMap) $.ui.invalidate('ui.render')
+  }
   tick($)
   return next(e)
 }
@@ -629,16 +713,19 @@ const called: Part<'tool.call'> = async ($, e, next) => {
   const isRun = id !== undefined && (await read($, runs)).some(r => r.agents.some(isAgent))
   // Not a run's agent: a plain subagent the pane tracks, or one it meets here for the first time.
   const isSolo = id !== undefined && !isRun && ((await read($, solo)).some(isAgent) || (await adopt($, id).catch(() => false)))
-  if (!isMap && !isRun && !isSolo) return next(e)
-  const call: Call = { id: e.tool_use_id, tool, what: brief(tool, input), at: isRun || isSolo ? await $.clock.now() : 0 }
+  // The main session's own calls: the bubble map's top bubble shows them as it shows an agent's.
+  const isMain = id === undefined
+  if (!isMap && !isRun && !isSolo && !isMain) return next(e)
+  const call: Call = { id: e.tool_use_id, tool, what: brief(tool, input), at: await $.clock.now().catch(() => 0) }
   const started = (a: Agent): Agent => ({ ...a, tools: a.tools + 1, calls: [...(a.calls ?? []), call].slice(-MAX_CALLS) })
+  if (isMain) await quiet(update($, main, a => started(healMain(a))))
   if (isRun) {
     await quiet(update($, runs, list => patchAgent(list, isAgent, a => [started(a)])))
     tick($)
   }
   if (isSolo) {
     // A finished agent that works again (a message woke it) runs again.
-    await quiet(update($, solo, list => list.map(a => (isAgent(a) ? { ...started(heal(a)), status: 'running' as const, endedAt: 0 } : a))))
+    await quiet(update($, solo, list => list.map(a => (isAgent(a) ? { ...started(heal(a)), status: 'running' as const, endedAt: 0, waiting: false } : a))))
     tick($)
   }
   let failed = true
@@ -647,14 +734,15 @@ const called: Part<'tool.call'> = async ($, e, next) => {
     failed = got.deny !== undefined || got.isError === true
     return got
   } finally {
-    if (isRun || isSolo) {
+    if (isRun || isSolo || isMain) {
       const at = await $.clock.now().catch(() => call.at)
       const done = { tool, what: call.what, ms: at - call.at, failed }
       const ended = (a: Agent): Agent => ({ ...a, calls: (a.calls ?? []).filter(c => c.id !== call.id), log: [...(a.log ?? []), done].slice(-5) })
       if (isRun) await quiet(update($, runs, list => patchAgent(list, isAgent, a => [ended(a)])))
       // The card's border is lit for a moment: green, red for a call that failed.
-      else await quiet(update($, solo, list => list.map(a => (isAgent(a) ? { ...ended(a), flashAt: at, flashBad: failed } : a))))
-      tick($)
+      else if (isSolo) await quiet(update($, solo, list => list.map(a => (isAgent(a) ? { ...ended(a), flashAt: at, flashBad: failed } : a))))
+      else await quiet(update($, main, a => ended(healMain(a))))
+      if (!isMain) tick($)
     }
     // After the call: a Write that creates the effort's map.md has made it one by now.
     await quiet(touch($, hit))
@@ -689,16 +777,23 @@ const turnCompleted: Part<'turn.complete'> = async ($, e, next) => {
     // The last write's facts: an update that ran twice on a miss gathered them twice.
     await quiet(learn($, facts.slice(-1)))
   }
-  if (id === undefined) isWorking = false
+  // The main session's turn ended: no call of it is in progress any more, whatever became of one (the write draws the bubble map again).
+  if (id === undefined) {
+    isWorking = false
+    await quiet(update($, main, a => ({ ...healMain(a), calls: [] })))
+  }
   // A plain subagent's turn ended: answered (done), interrupted (stopped), or dead on an error or a refusal (failed).
   else if ((await read($, solo)).some(a => a.id === id)) {
     const at = await $.clock.now()
     const u = e.usage
+    // Its turn ended with background work of its own still running: the engine's list says it waits, and it is not over.
+    const isHeld = e.reason === 'answer' && WAITS.includes((await $.agent.list().catch(() => [])).find(r => r.id === id)?.status ?? '')
     await quiet(update($, solo, list => list.map(a => {
       if (a.id !== id) return a
       const tokIn = Math.max(0, (u === undefined ? 0 : u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens) - a.stepIn)
       const mine = { ...a, tokIn: a.tokIn + tokIn, tokOut: a.tokOut + Math.max(0, (u?.output_tokens ?? 0) - a.stepOut), stepIn: 0, stepOut: 0 }
-      return a.status !== 'running' ? mine : { ...mine, status: e.reason === 'answer' ? 'done' as const : 'failed' as const, stopped: e.reason === 'aborted', endedAt: Math.max(at, a.startedAt), calls: [] }
+      if (a.status !== 'running') return mine
+      return isHeld ? { ...mine, waiting: true, calls: [] } : { ...mine, status: e.reason === 'answer' ? 'done' as const : 'failed' as const, stopped: e.reason === 'aborted', waiting: false, endedAt: Math.max(at, a.startedAt), calls: [] }
     })))
     tick($)
   }
@@ -843,18 +938,21 @@ export const register: Register = on => {
 
   // A model request of a run's agent answered: its tokens count at once, so the card's figure moves while the agent runs.
   on('turn.step', async function* ($, e, next) {
+    // When the request leaves: its cache is counted down from there.
+    const sent = await $.clock.now().catch(() => 0)
     const got = yield* next(e)
     const id = e.agentId
     const u = got.usage
+    if (id === undefined && u !== null) await quiet(update($, main, a => ({ ...healMain(a), model: u.model || e.model, ask: askOf(a.ask, u, sent) })))
     if (id !== undefined && u !== null && (await read($, runs).catch(() => [])).some(r => r.agents.some(a => a.id === id && a.status === 'running'))) {
       const tokIn = u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
       await quiet(update($, runs, list =>
-        patchAgent(list, a => a.id === id, (a, r) => [{ ...a, tokIn: a.tokIn + tokIn, tokOut: a.tokOut + u.output_tokens, stepIn: (a.stepIn ?? 0) + tokIn, stepOut: (a.stepOut ?? 0) + u.output_tokens }, { tokIn: r.tokIn + tokIn, tokOut: r.tokOut + u.output_tokens }]),
+        patchAgent(list, a => a.id === id, (a, r) => [{ ...a, model: a.model || u.model, ask: askOf(a.ask, u, sent), tokIn: a.tokIn + tokIn, tokOut: a.tokOut + u.output_tokens, stepIn: (a.stepIn ?? 0) + tokIn, stepOut: (a.stepOut ?? 0) + u.output_tokens }, { tokIn: r.tokIn + tokIn, tokOut: r.tokOut + u.output_tokens }]),
       ))
     }
     if (id !== undefined && u !== null && (await read($, solo).catch(() => [])).some(a => a.id === id && a.status === 'running')) {
       const tokIn = u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
-      await quiet(update($, solo, list => list.map(a => (a.id === id ? { ...a, tokIn: a.tokIn + tokIn, tokOut: a.tokOut + u.output_tokens, stepIn: a.stepIn + tokIn, stepOut: a.stepOut + u.output_tokens } : a))))
+      await quiet(update($, solo, list => list.map(a => (a.id === id ? { ...a, model: a.model || u.model, ask: askOf(a.ask, u, sent), waiting: false, tokIn: a.tokIn + tokIn, tokOut: a.tokOut + u.output_tokens, stepIn: a.stepIn + tokIn, stepOut: a.stepOut + u.output_tokens } : a))))
     }
     return got
   })
@@ -910,11 +1008,50 @@ export const register: Register = on => {
     const isAsking = seen.mode !== 'confirm' || (e.props.isFocused && clock - seen.at <= CONFIRM_MS)
     // Docked, the pane is the dock's height and paints all of it; inline above the prompt the frame fits the tree.
     const isInline = e.props.placement === 'inline'
-    const drawn = compose({
-      w, rows, inline: isInline, P, now: clock, runs: shown, view: isAsking ? seen : { ...seen, mode: '' },
-      plan: await read($, plan), S, solo: (await read($, solo)).map(heal),
-    })
-    const ctx: Ctx = { order: drawn.order, target: drawn.steer, stop: drawn.stoppable === undefined ? '' : runKey(drawn.stoppable), cols: w }
+    const mine = (await read($, solo)).map(heal)
+    const told = { w, rows, inline: isInline, P, now: clock, runs: shown, view: isAsking ? seen : { ...seen, mode: '' as const }, plan: await read($, plan), S, solo: mine }
+    const ctxOf = (d: Drawn): Ctx => ({ order: d.order, target: d.steer, stop: d.stoppable === undefined ? '' : runKey(d.stoppable), cols: w })
+    // Where the terminal draws pictures, docked: the plan, the bubble map as a picture, the keys. The text cards anywhere else.
+    const table = e.surface === 'terminal' ? $.ui.resolve(e) : undefined
+    if (screen.canPicture === undefined) await quiet(look($))
+    // (An Image is 255 columns wide at the most.)
+    if (table !== undefined && !isInline && screen.canPicture === true && w <= 255) {
+      // A pane of another width may be a terminal of another font: the cell is measured again. (Its rows move with the prompt's.)
+      if (shape !== `${w}`) {
+        shape = `${w}`
+        void measure($).then(isNew => isNew && $.ui.invalidate('ui.render')).catch(() => {})
+      }
+      const cell = screen.cell ?? ASSUMED
+      // ponytail: the letters are drawn for cells about 9 pixels wide. On a denser screen the picture is drawn at
+      // half (a third...) of the pixels and the terminal enlarges it, soft but the right size. A second atlas would be sharp.
+      // (And a picture is 2048 pixels wide at the most.)
+      const dense = Math.max(Math.ceil(cell.w / 13), Math.ceil((w * cell.w) / 2048))
+      const unit = { w: Math.round(cell.w / dense), h: Math.round(cell.h / dense) }
+      const self = healMain(await read($, main))
+      const scene = sceneOf({ main: self.model === '' ? { ...self, model: await read($, sessionModel) } : self, isWorking, solo: mine, runs: shown, now: clock, sel: seen.sel })
+      // The keys reach the agents at work of the groups the picture has room for, and no other.
+      const around = compose({ ...told, map: shownOf(scene, w * unit.w).flatMap(g => g.running.map(b => b.key)) })
+      const room = rows - around.lines.length - around.foot.length
+      const board = room < 1 ? null : pictured(scene, { width: w * unit.w, maxHeight: room * unit.h, cellHeight: unit.h }, P, await $.clock.now().catch(() => clock))
+      // A change the picture does not show yet: the beat draws the pane again once the picture may be painted.
+      if (isOwed) tick($)
+      if (board !== null) {
+        if (hasMap && !isProved) void prove($, board, w).catch(() => {})
+        hasMap = true
+        const ctx = { ...ctxOf(around), chosen: around.cur }
+
+        return (
+          <Box flexDirection="column" width={w} minHeight={rows} backgroundColor={P.bg}>
+            {paint($, els, around.lines, w, P.bg, P.fg, ctx)}
+            {board.tiles.map((tile, i) => <table.Image key={`bubbles-${i}`} source={tile.source} columns={w} rows={tile.rows} alt={i === 0 ? altOf(scene) : ' '} />)}
+            {paint($, els, [...Array.from({ length: room - board.rows }, (): Line => []), ...around.foot], w, P.bg, P.fg, ctx)}
+          </Box>
+        )
+      }
+    }
+    ;[hasMap, isOwed] = [false, false]
+    const drawn = compose(told)
+    const ctx = ctxOf(drawn)
 
     return (
       <Box flexDirection="column" width={w} {...(isInline ? {} : { minHeight: rows })} backgroundColor={P.bg}>
