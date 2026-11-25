@@ -1,4 +1,4 @@
-import type { Agent, Chart, History, Plan, Run, Site, Step, Ticket, TicketState, TicketType } from '../../types'
+import type { Agent, Ask, Chart, History, Plan, Run, Site, Step, Ticket, TicketState, TicketType } from '../../types'
 
 export const MAX_CALLS = 20
 
@@ -700,6 +700,21 @@ export const soloAgent = (seed: Pick<Agent, 'key' | 'label' | 'startedAt'> & Par
   n: 0, id: '', model: '', status: 'running', endedAt: 0, tools: 0, calls: [], phase: 0, tokIn: 0, tokOut: 0, log: [], steer: '', stepIn: 0, stepOut: 0, ...seed,
 })
 
+/** The main session before anything is known of it: followed as an agent is, its start set when the session's is seen. */
+export const MAIN: Agent = soloAgent({ key: 'main', label: 'main session', startedAt: 0 })
+
+const [FIVE_MIN, HOUR] = [300_000, 3_600_000]
+/** What a model request reports of its input, as `turn.step` gives it. */
+export type Asked = { input_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number; ephemeral_5m_input_tokens?: number; ephemeral_1h_input_tokens?: number }
+/**
+ * A request sent at `at`, as the bubble map keeps it. The cache holds what it wrote for five minutes or an hour, the
+ * shorter when it wrote both; a request that wrote nothing, or named no lifetime, keeps the lifetime of the one `before` it.
+ */
+export const askOf = (before: Ask | undefined, u: Asked, at: number): Ask => ({
+  at, fresh: u.input_tokens, read: u.cache_read_input_tokens, wrote: u.cache_creation_input_tokens,
+  ttlMs: (u.ephemeral_5m_input_tokens ?? 0) > 0 ? FIVE_MIN : (u.ephemeral_1h_input_tokens ?? 0) > 0 ? HOUR : before?.ttlMs ?? FIVE_MIN,
+})
+
 /** The list with one more, the oldest finished dropped first past MAX_SOLO. */
 export function withSolo(list: Agent[], agent: Agent): Agent[] {
   let extra = list.length + 1 - MAX_SOLO
@@ -719,11 +734,15 @@ export const isMoving = (a: Agent, t: number): boolean =>
  * a plain subagent's tool runs (its bar's highlight travels), 150 ms during a transition, the steps' own cycle while
  * the model works on an active step (`stepMs`, 0 when it does not). A finished run still on screen (`isKept`) is a
  * frame that stands: the pane is drawn once more when it leaves. '' when nothing moves: nothing is drawn.
+ * While the bubble map shows, the main session's time and cache expiry move with nothing running: `mapLeft` is what
+ * its cache has left (0 or less once gone), and the pane is drawn each minute, each ten seconds under ten minutes left.
  */
-export function frameOf(o: { isLive: boolean; solo: readonly Agent[]; stepMs: number; t: number; isKept?: boolean }): string {
+export function frameOf(o: { isLive: boolean; solo: readonly Agent[]; stepMs: number; t: number; isKept?: boolean; mapLeft?: number }): string {
   const running = o.solo.filter(a => !isOver(a))
+  const isAtWork = o.isLive || running.length > 0
   return [
-    ...(o.isLive || running.length > 0 ? [Math.floor(o.t / 450), Math.floor(o.t / 1000)] : []),
+    ...(isAtWork ? [Math.floor(o.t / 450), Math.floor(o.t / 1000)] : []),
+    ...(o.mapLeft === undefined || isAtWork ? [] : [`x${Math.floor(o.t / (o.mapLeft > 0 && o.mapLeft < 600_000 ? 10_000 : 60_000))}`]),
     ...(running.some(a => a.calls.length > 0) ? [`t${Math.floor(o.t / TOOL_MS)}`] : []),
     ...(o.solo.some(a => isMoving(a, o.t)) ? [`m${Math.floor(o.t / 150)}`] : []),
     ...(o.stepMs > 0 ? [`s${Math.floor(o.t / o.stepMs)}`] : []),

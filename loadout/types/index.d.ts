@@ -84,7 +84,17 @@ export type Agent = {
   flashBad?: boolean
   /** A plain subagent only: it ended by an interruption, not by an answer or an error. */
   stopped?: boolean
+  /** Its last model request: what the bubble map's tokens, cache share and cache expiry are read from. Absent before the first. */
+  ask?: Ask
+  /** A plain subagent only: its turn ended while it waits for background work of its own, so it is not over. */
+  waiting?: boolean
 }
+
+/**
+ * One model request of an agent: when it was sent, its input by where it came from (`fresh` sent in full,
+ * `read` from the prompt cache, `wrote` to it again) and how long the cache then holds what it wrote.
+ */
+export type Ask = { at: number; fresh: number; read: number; wrote: number; ttlMs: number }
 
 export type Run = {
   /** The run's id (wf_...), '' until the Workflow call answered. */
@@ -228,6 +238,8 @@ declare module 'claude-code' {
       modsBand: number
       // flow
       runs: Run[]; plan: Plan | null; now: number; view: View; way: Way; map: WayMap | null; hist: History; flowTheme: string; solo: Agent[]; packs: { sig: string; list: Pack[] }
+      /** The main session, followed as any agent is: the bubble on top of the bubble map. */
+      main: Agent
       // frames
       isOn: boolean
       /** The working line's icon: beats counted while a turn runs. */
