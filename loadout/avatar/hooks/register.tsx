@@ -2,7 +2,6 @@ import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, SessionMeasureInput } from 'claude-code'
 
 import { ASSUMED, sourceOf } from './canvas'
-import type { Cell } from './canvas'
 import { beatAfter, heroCanvas, heroGrid, isAtRest } from './cyber'
 import { CAST, frameAt, playedOf, reelOf, slotOf, SLOTS } from './reel'
 import type { Reel, Slot } from './reel'
@@ -30,6 +29,7 @@ import { BUILT_IN, LIVE, askOf, builtInOffer, customOffer, findTheme, isLive, li
 import type { Disk, Offer } from './themes'
 import type { Mood } from './mascot'
 import { alone } from '../../hooks/part'
+import { look, measure, refuse, RETRY_MS, screen } from '../../hooks/screen'
 import type { Part } from '../../hooks/part'
 import { FLOW_PANE, TICKETS_PANE, VIEW as FLOW_VIEW } from '../../flow/hooks/register'
 import type { KirbyHudCall, KirbyHudHelper, KirbyHudLimit, KirbyHudUsage } from '../../types'
@@ -404,24 +404,8 @@ let shape = '' // the pane's size when the cell was last measured
 
 // --- the terminal ------------------------------------------------------------
 
-// Whether this terminal draws pictures: kitty and Ghostty do, a multiplexer passes none through. Unknown
-// until asked; a blit told "an Image draws its alt here" turns it off for a while, not for good:
-// the engine says so too while it is still asking the terminal, or is out of image ids.
-let canPicture: boolean | undefined
-const RETRY_MS = 15_000 // after the first such denial; doubled by each one in a row
-const RETRY_MAX_MS = 10 * 60_000
-let retryMs = RETRY_MS
-let retryAt = 0 // when pictures are tried again, 0 for no retry due
-// A cell in device pixels, null while nobody could measure it.
-let cell: Cell | null = null
-
 async function detect($: EngineInterface) {
-  const read = (value: Promise<string | undefined>) => value.catch(() => undefined)
-  const [term, program, kitty] = [await read($.env.get('TERM')), await read($.env.get('TERM_PROGRAM')), await read($.env.get('KITTY_WINDOW_ID'))]
-  // A multiplexer between the session and the terminal: tmux, screen or zellij here, or one reached over ssh, told by the TERM it sets.
-  const muxes = [await read($.env.get('TMUX')), await read($.env.get('STY')), await read($.env.get('ZELLIJ'))]
-  const isMuxed = /^(screen|tmux)/.test(term ?? '') || muxes.some(value => value !== undefined)
-  canPicture = !isMuxed && (kitty !== undefined || /kitty|ghostty/i.test(`${term ?? ''} ${program ?? ''}`))
+  const { term, isMuxed } = await look($)
   // A terminal that can be told its colours: not a multiplexer's pane (the pty is the multiplexer's, which keeps its own), not the console, not no terminal at all.
   isColourable = !isMuxed && term !== undefined && !/^(dumb|linux)?$/.test(term)
 }
@@ -599,38 +583,6 @@ async function untint($: EngineInterface) {
   await written($, tty, '')
 }
 
-// The terminal's size in cells and in pixels, asked of the pty the session runs on: the engine
-// has no word for it, and a child has no terminal of its own, so it looks up its parents' (Linux).
-const PROBE = `import fcntl, os, struct, termios
-pid = os.getpid()
-for _ in range(16):
-    for fd in (0, 1, 2):
-        try:
-            path = os.readlink(f'/proc/{pid}/fd/{fd}')
-            if path.startswith('/dev/pts/'):
-                size = fcntl.ioctl(os.open(path, os.O_RDONLY | os.O_NOCTTY), termios.TIOCGWINSZ, bytes(8))
-                print(*struct.unpack('HHHH', size))
-                raise SystemExit
-        except OSError:
-            pass
-    try:
-        pid = int(open(f'/proc/{pid}/stat').read().rsplit(')', 1)[1].split()[1])
-    except (OSError, ValueError):
-        break
-`
-
-/** Measures a cell; resolves true when it changed. Where it cannot, the cell stays unknown and is taken for one by two. */
-async function measure($: EngineInterface): Promise<boolean> {
-  const got = await $.process.run(['python3', '-I', '-c', PROBE], { timeoutMs: 3000 }).catch(() => null)
-  const [rows = 0, columns = 0, x = 0, y = 0] = (got?.stdout ?? '').trim().split(/\s+/).map(Number)
-  const next = { w: Math.round(x / columns), h: Math.round(y / rows) }
-  const found = next.w >= 4 && next.w <= 64 && next.h >= next.w && next.h <= 160 ? next : null
-  const isNew = JSON.stringify(found) !== JSON.stringify(cell)
-  cell = found
-
-  return isNew
-}
-
 /** Re-reads the engine's figures; writes (and so redraws) only when they moved. */
 async function refresh($: EngineInterface) {
   const live = await $.session.usage()
@@ -694,8 +646,8 @@ async function slow($: EngineInterface) {
   await sync($)
   if (isRepacked || isReoffered) $.ui.invalidate('ui.render')
   await quiet(prune($))
-  if (retryAt !== 0 && (await $.clock.now()) >= retryAt) {
-    retryAt = 0
+  if (screen.retryAt !== 0 && (await $.clock.now()) >= screen.retryAt) {
+    screen.retryAt = 0
     await quiet(detect($))
   }
   // A pane behind another tab, or closed, is not drawn: its frames stop, and nothing asks for a
@@ -733,7 +685,7 @@ async function put($: EngineInterface, key: string, box: { columns: number; rows
   sent.set(key, printOf(picture))
   const got = await $.ui.blit({ requestId: PANE, key, ...picture, columns: box.columns, rows: box.rows })
   if (got.deny === undefined) {
-    if ('source' in picture) retryMs = RETRY_MS
+    if ('source' in picture) screen.retryMs = RETRY_MS
     refused.delete(key)
 
     return
@@ -743,9 +695,7 @@ async function put($: EngineInterface, key: string, box: { columns: number; rows
   refused.set(key, { until: frames + wait, wait })
   // An Image drawing its alt: no pictures here for now, the cell blocks take over until the retry.
   if ('source' in picture && /placeholder|\balt\b/i.test(got.deny)) {
-    canPicture = false
-    retryAt = (await $.clock.now()) + retryMs
-    retryMs = Math.min(RETRY_MAX_MS, retryMs * 2)
+    await refuse($)
     $.ui.invalidate('ui.render')
   }
 }
@@ -1651,7 +1601,7 @@ export const register: Register = on => {
     startTicking($)
     const { Box, Button, Text } = $.ui.resolve(e)
     const table = e.surface === 'terminal' ? $.ui.resolve(e) : undefined
-    if (canPicture === undefined) await quiet(detect($))
+    if (screen.canPicture === undefined) await quiet(detect($))
     const u = await read($, usage)
     const now = await $.clock.now()
     const width = e.props.bodyColumns
@@ -1677,10 +1627,10 @@ export const register: Register = on => {
     const feed = slot !== undefined && hasPictures(slot) && look.pack?.film !== false ? slot : undefined
     if (slot !== undefined && 'skin' in wanted.family && isHalo(wanted.family.skin) && !drawnTried.has(slot)) void loadDrawn($, slot).then(() => $.ui.invalidate('ui.render')).catch(() => {})
     // A world with cars is theirs wherever its feed does not play: they are drawn as any sprite family, never the mask.
-    const cars = 'skin' in wanted.family && !(canPicture === true && table !== undefined && style !== 'text' && feed !== undefined) ? wanted.family.cars : undefined
+    const cars = 'skin' in wanted.family && !(screen.canPicture === true && table !== undefined && style !== 'text' && feed !== undefined) ? wanted.family.cars : undefined
     const session = cars === undefined ? wanted : { family: cars, form: wanted.form }
     const hero = 'skin' in session.family && session.form === 'opus' ? session.family.hero : undefined
-    const isArt = canPicture === true && table !== undefined && ('skin' in session.family ? style !== 'text' && (hero !== undefined || feed !== undefined) : true)
+    const isArt = screen.canPicture === true && table !== undefined && ('skin' in session.family ? style !== 'text' && (hero !== undefined || feed !== undefined) : true)
     if (isArt && shape !== `${width}x${bodyRows}`) {
       shape = `${width}x${bodyRows}`
       void measure($).then(isNew => isNew && $.ui.invalidate('ui.render')).catch(() => {})
@@ -1688,8 +1638,8 @@ export const register: Register = on => {
     const { family, form } = session
     /** What a pane of `rows` rows draws: pure, so the picker asks it what it would leave the mascot. */
     const laid = (rows: number): Layout => ('skin' in family ? laidOutText({ skin: family.skin, form }, width, rows, table !== undefined, hero === undefined && !(isArt && feed !== undefined) ? undefined
-      : { ...(hero === undefined ? {} : { who: hero.who }), ...(isArt ? { cell: cell ?? ASSUMED, ...(feed === undefined ? {} : { feed }) } : {}) })
-      : canPicture === true && table !== undefined ? laidOutArt({ family, form }, width, rows, cell ?? ASSUMED)
+      : { ...(hero === undefined ? {} : { who: hero.who }), ...(isArt ? { cell: screen.cell ?? ASSUMED, ...(feed === undefined ? {} : { feed }) } : {}) })
+      : screen.canPicture === true && table !== undefined ? laidOutArt({ family, form }, width, rows, screen.cell ?? ASSUMED)
       : laidOut({ family, form }, width, rows))
     // The /clear line over the avatar, where it is due: one row, and never one the avatar's own frame cannot do
     // without (the Loadouts line, its chrome and its smallest mascot).
